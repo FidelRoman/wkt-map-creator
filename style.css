@@ -17,6 +17,27 @@
 body {
     font-family: 'Outfit', sans-serif;
     overflow: hidden;
+}
+
+:root {
+    --primary-color: #6366f1;
+    --primary-hover: #4f46e5;
+    --bg-glass: rgba(255, 255, 255, 0.9);
+    --text-main: #1e293b;
+    --text-secondary: #64748b;
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    --radius-lg: 16px;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Outfit', sans-serif;
+    overflow: hidden;
     height: 100vh;
     width: 100vw;
     margin: 0;
@@ -26,6 +47,125 @@ body {
 #app-container {
     position: relative;
     width: 100%;
+    height: 100%;
+    display: flex;
+    /* Use flexbox for layout */
+}
+
+#sidebar {
+    width: 300px;
+    background: white;
+    border-right: 1px solid #e2e8f0;
+    display: flex;
+    flex-direction: column;
+    z-index: 2;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.05);
+}
+
+.sidebar-header {
+    padding: 20px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.sidebar-header h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+.sidebar-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+#polygon-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.polygon-item {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.2s;
+}
+
+.polygon-item:hover {
+    border-color: var(--primary-color);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.polygon-color {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    background: none;
+}
+
+.polygon-color::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+.polygon-color::-webkit-color-swatch {
+    border: none;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.polygon-name {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--text-main);
+    padding: 4px 0;
+    width: 100%;
+}
+
+.polygon-name:focus {
+    outline: none;
+    border-bottom: 2px solid var(--primary-color);
+}
+
+.polygon-delete {
+    color: #ef4444;
+    background: none;
+    border: none;
+    padding: 6px;
+    border-radius: 6px;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: all 0.2s;
+}
+
+.polygon-delete:hover {
+    background: #fee2e2;
+    opacity: 1;
+}
+
+.empty-state {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    padding: 40px 0;
+    font-style: italic;
+}
+
+#main-content {
+    flex: 1;
+    position: relative;
     height: 100%;
 }
 
@@ -228,12 +368,30 @@ button {
 
 /* Mobile responsiveness */
 @media (max-width: 600px) {
+    #app-container {
+        flex-direction: column;
+    }
+
+    #sidebar {
+        width: 100%;
+        height: 40%;
+        border-right: none;
+        border-top: 1px solid #e2e8f0;
+        order: 2;
+    }
+
+    #main-content {
+        height: 60%;
+        order: 1;
+    }
+
     .ui-overlay {
         top: auto;
         bottom: 20px;
         left: 20px;
         right: 20px;
         width: auto;
+        align-items: center;
     }
 
     .app-header,

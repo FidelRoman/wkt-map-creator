@@ -45,9 +45,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // UI Elements
     const polygonCountEl = document.getElementById('polygon-count');
     const clearBtn = document.getElementById('clear-btn');
+    const polygonListEl = document.getElementById('polygon-list');
 
     // State
-    let layerCount = 0;
+    let polygons = [];
 
     // Context Menu Logic
     let activeLayer = null;
@@ -65,13 +66,26 @@ document.addEventListener('DOMContentLoaded', () => {
         e.stopPropagation();
     });
 
-    // Delete Action
+    // Delete Action (Context Menu)
+    // Delete Action (Context Menu)
     deleteBtn.addEventListener('click', () => {
         if (!activeLayer) return;
+
+        // 1. Quitar del mapa
         drawnItems.removeLayer(activeLayer);
+
+        // 2. Quitar del array de estado
+        polygons = polygons.filter(p => p.layer !== activeLayer);
+
+        // 3. Limpiar referencia y cerrar menú
+        activeLayer = null;
         contextMenu.style.display = 'none';
+
+        // 4. Refrescar sidebar
+        renderPolygonList();
         updateStats();
     });
+
 
     // Copy Action
     copyBtn.addEventListener('click', () => {
@@ -101,7 +115,22 @@ document.addEventListener('DOMContentLoaded', () => {
     // Event Handlers
     map.on(L.Draw.Event.CREATED, function (e) {
         const layer = e.layer;
+        const id = Date.now().toString(); // Simple ID generation
+        layer._leaflet_id = id; // Force ID for easier tracking
+
+        const defaultColor = '#6366f1';
+        const name = `Polígono ${polygons.length + 1}`;
+
+        // Add to map
         drawnItems.addLayer(layer);
+
+        // Add to state
+        polygons.push({
+            id: id,
+            layer: layer,
+            name: name,
+            color: defaultColor
+        });
 
         // Add right-click event to show custom menu
         layer.on('contextmenu', function (e) {
@@ -121,27 +150,89 @@ document.addEventListener('DOMContentLoaded', () => {
             menuItem.classList.remove('copied');
         });
 
+        renderPolygonList();
         updateStats();
     });
 
     map.on(L.Draw.Event.DELETED, function (e) {
+        const layers = e.layers;
+        layers.eachLayer(function (layer) {
+            // Remove from state
+            polygons = polygons.filter(p => p.layer !== layer);
+        });
+        renderPolygonList();
         updateStats();
     });
 
     map.on(L.Draw.Event.EDITED, function (e) {
-        // No count change
+        // No count change, but maybe update WKT if we were showing it live
     });
 
     function updateStats() {
-        layerCount = drawnItems.getLayers().length;
-        polygonCountEl.textContent = layerCount;
+        polygonCountEl.textContent = polygons.length;
+    }
+
+    function renderPolygonList() {
+        polygonListEl.innerHTML = '';
+
+        if (polygons.length === 0) {
+            polygonListEl.innerHTML = '<li class="empty-state">No hay polígonos creados</li>';
+            return;
+        }
+
+        polygons.forEach(poly => {
+            const li = document.createElement('li');
+            li.className = 'polygon-item';
+
+            // Color Input
+            const colorInput = document.createElement('input');
+            colorInput.type = 'color';
+            colorInput.className = 'polygon-color';
+            colorInput.value = poly.color;
+            colorInput.addEventListener('input', (e) => {
+                const newColor = e.target.value;
+                poly.color = newColor;
+                poly.layer.setStyle({ color: newColor });
+            });
+
+            // Name Input
+            const nameInput = document.createElement('input');
+            nameInput.type = 'text';
+            nameInput.className = 'polygon-name';
+            nameInput.value = poly.name;
+            nameInput.addEventListener('change', (e) => {
+                poly.name = e.target.value;
+            });
+
+            // Delete Button
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'polygon-delete';
+            deleteBtn.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+            `;
+            deleteBtn.addEventListener('click', () => {
+                drawnItems.removeLayer(poly.layer);
+                polygons = polygons.filter(p => p.id !== poly.id);
+                renderPolygonList();
+                updateStats();
+            });
+
+            li.appendChild(colorInput);
+            li.appendChild(nameInput);
+            li.appendChild(deleteBtn);
+            polygonListEl.appendChild(li);
+        });
     }
 
     // Clear All
     clearBtn.addEventListener('click', () => {
         drawnItems.clearLayers();
+        polygons = [];
+        renderPolygonList();
         updateStats();
     });
-
 
 });
