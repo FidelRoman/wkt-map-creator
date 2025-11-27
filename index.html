@@ -37,14 +37,21 @@
             </div>
         </aside>
 
-        <div id="map"></div>
+        <div id="map">
+            <div class="search-container">
+                <input type="text" id="search-input" placeholder="Buscar dirección...">
+                <button id="search-btn" class="btn-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                </button>
+                <ul id="search-suggestions" class="suggestions-list"></ul>
+            </div>
+        </div>
 
         <div class="ui-overlay">
-            <header class="app-header">
-                <h1>WKT Map Creator</h1>
-                <p>Dibuja polígonos y copialos en formato WKT</p>
-            </header>
-
             <div class="controls-panel">
                 <div class="stats">
                     <span id="polygon-count">0</span> polígonos dibujados

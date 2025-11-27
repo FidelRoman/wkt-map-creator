@@ -3,10 +3,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const map = L.map('map').setView([-12.04318, -77.02824], 10);
 
     // Add OpenStreetMap Tile Layer
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-        subdomains: 'abcd',
-        maxZoom: 15
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 20
     }).addTo(map);
 
     // FeatureGroup to store editable layers
@@ -30,7 +29,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     fillOpacity: 0.2
                 }
             },
-            circle: false,
+            circle: {
+                shapeOptions: {
+                    color: '#6366f1',
+                    fillOpacity: 0.2
+                },
+                showRadius: true,
+                metric: true,
+                feet: false,
+                nautic: false
+            },
             circlemarker: false,
             marker: false,
             polyline: false
@@ -112,9 +120,42 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // Helper to create a polygon from a circle
+    function createCirclePolygon(center, radiusInMeters, sides = 64) {
+        const points = [];
+        const earthRadius = 6378137; // Earth's radius in meters
+
+        for (let i = 0; i < sides; i++) {
+            const angle = (i * 360 / sides) * (Math.PI / 180);
+            const dLat = (radiusInMeters / earthRadius) * (180 / Math.PI);
+            const dLon = (radiusInMeters / earthRadius) * (180 / Math.PI) / Math.cos(center.lat * Math.PI / 180);
+
+            const pointLat = center.lat + dLat * Math.cos(angle);
+            const pointLon = center.lng + dLon * Math.sin(angle);
+
+            points.push([pointLat, pointLon]);
+        }
+        return points;
+    }
+
     // Event Handlers
     map.on(L.Draw.Event.CREATED, function (e) {
-        const layer = e.layer;
+        let layer = e.layer;
+        const type = e.layerType;
+
+        // If it's a circle, convert to polygon
+        if (type === 'circle') {
+            const center = layer.getLatLng();
+            const radius = layer.getRadius();
+            const polygonPoints = createCirclePolygon(center, radius);
+
+            // Create a new polygon layer
+            layer = L.polygon(polygonPoints, {
+                color: '#6366f1',
+                fillOpacity: 0.2
+            });
+        }
+
         const id = Date.now().toString(); // Simple ID generation
         layer._leaflet_id = id; // Force ID for easier tracking
 
@@ -233,6 +274,123 @@ document.addEventListener('DOMContentLoaded', () => {
         polygons = [];
         renderPolygonList();
         updateStats();
+    });
+
+    // --- Search Functionality ---
+    const searchInput = document.getElementById('search-input');
+    const searchBtn = document.getElementById('search-btn');
+    const suggestionsList = document.getElementById('search-suggestions');
+    let debounceTimer;
+
+    // Debounce utility
+    function debounce(func, delay) {
+        return function (...args) {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => func.apply(this, args), delay);
+        };
+    }
+
+    // Search API (Nominatim)
+    async function searchAddress(query) {
+        if (!query || query.length < 3) {
+            suggestionsList.classList.remove('visible');
+            return;
+        }
+
+        // const params = new URLSearchParams({
+        //     format: 'json',
+        //     q: query,
+        //     countrycodes: 'pe',
+        //     addressdetails: '4'
+        // });
+
+        const params = new URLSearchParams({
+            format: 'jsonv2',        // formato más completo
+            q: query,
+            countrycodes: 'pe',      // Perú
+            addressdetails: '1',     // desglose de la dirección
+            extratags: '1',          // tags extra si existen
+            namedetails: '1',        // nombres alternativos
+            polygon_geojson: '1',    // geometría en GeoJSON
+            limit: '6',             // número máx. de resultados
+            'accept-language': 'es'  // priorizar español
+        });
+
+        try {
+            const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`);
+            const results = await response.json();
+            renderSuggestions(results);
+        } catch (error) {
+            console.error('Error searching address:', error);
+        }
+    }
+
+    // Render suggestions
+    function renderSuggestions(results) {
+        suggestionsList.innerHTML = '';
+        if (results.length === 0) {
+            suggestionsList.classList.remove('visible');
+            return;
+        }
+
+        results.forEach(result => {
+            const li = document.createElement('li');
+            li.className = 'suggestion-item';
+            li.textContent = result.display_name;
+            li.addEventListener('click', () => {
+                selectLocation(result.lat, result.lon);
+            });
+            suggestionsList.appendChild(li);
+        });
+
+        suggestionsList.classList.add('visible');
+    }
+
+    // Select location
+    function selectLocation(lat, lon) {
+        const latLng = [parseFloat(lat), parseFloat(lon)];
+        map.setView(latLng, 16);
+        suggestionsList.classList.remove('visible');
+        searchInput.value = ''; // Optional: clear input or keep it
+    }
+
+    // Input event listener
+    searchInput.addEventListener('input', debounce((e) => {
+        searchAddress(e.target.value);
+    }, 300));
+
+    // Button click listener (select first result)
+    searchBtn.addEventListener('click', async () => {
+        const query = searchInput.value;
+        if (!query) return;
+
+        // If suggestions are already there, pick the first one
+        if (suggestionsList.children.length > 0) {
+            suggestionsList.children[0].click();
+        } else {
+            // Otherwise perform a search and pick first
+            try {
+                const params = new URLSearchParams({
+                    format: 'json',
+                    q: query,
+                    countrycodes: 'pe'
+                });
+                const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`);
+                const results = await response.json();
+                if (results.length > 0) {
+                    selectLocation(results[0].lat, results[0].lon);
+                }
+            } catch (error) {
+                console.error('Error searching address:', error);
+            }
+        }
+    });
+
+    // Close suggestions when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!searchInput.contains(e.target) && !suggestionsList.contains(e.target)) {
+            suggestionsList.classList.remove('visible');
+        }
     });
 
 });
