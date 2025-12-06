@@ -37,37 +37,22 @@ function ProjectApp() {
     const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
 
     const handleSelectionChange = (index: number, multi: boolean) => {
-        const newSet = new Set(multi ? selectedIndices : []);
-        if (newSet.has(index)) {
-            if (multi) newSet.delete(index);
-            // If single click on selected, maybe allow deselect? Or keep selected?
-            // Usually single click selects ONLY that one.
-            // If it was already selected and we single clicked, we just keep it (and clear others).
-            // But valid logic is: single click = set to just this one.
-            // So `newSet = new Set([index])` is covered by `new Set(multi ? ... : [])` then add.
-        } else {
-            newSet.add(index);
-        }
-        // Actually, let's refine:
-        // Single click: Clear all, then select target.
-        // Multi click: Toggle target.
-        if (!multi) {
-            const next = new Set<number>();
-            if (!selectedIndices.has(index) || selectedIndices.size > 1) {
+        setSelectedIndices(prev => {
+            if (!multi) {
+                // Single select: if clicking one of many, select just it.
+                // If clicking the only selected one, keep it.
+                // Standard behavior: clear others, set this one.
+                const next = new Set<number>();
                 next.add(index);
+                return next;
             } else {
-                // If clicking the ONLY selected item again, typically we don't deselect in lists, 
-                // but user might want toggle. Let's stick to standard "Select" behavior.
-                // Just keeping it selected is fine.
-                next.add(index);
+                // Multi select trigger
+                const next = new Set(prev);
+                if (next.has(index)) next.delete(index);
+                else next.add(index);
+                return next;
             }
-            setSelectedIndices(next);
-        } else {
-            const next = new Set(selectedIndices);
-            if (next.has(index)) next.delete(index);
-            else next.add(index);
-            setSelectedIndices(next);
-        }
+        });
     };
 
     // Clear selection when changing layers

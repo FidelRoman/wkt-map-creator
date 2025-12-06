@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { MapContainer, TileLayer, FeatureGroup, useMap, GeoJSON } from 'react-leaflet';
 import { EditControl } from 'react-leaflet-draw';
 import L from 'leaflet';
+import * as turf from '@turf/turf';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import { generateColor, stringifyWKT } from '@/lib/map-utils';
@@ -25,6 +26,9 @@ interface MapProps {
     requestDraw?: { type: 'polygon' | 'point', id: number } | null;
     requestFlyTo?: any | null;
     onShowToast?: (message: string) => void;
+    selectedIndices?: Set<number>;
+    onToggleSelection?: (index: number, multi: boolean) => void;
+    onClearSelection?: () => void;
 }
 
 function FeatureHandler({ layers, activeLayerId, onUpdateLayer }: MapProps) {
@@ -67,15 +71,237 @@ function FeatureHandler({ layers, activeLayerId, onUpdateLayer }: MapProps) {
 }
 
 // Wrapper for the Active Layer to enable Drawing
-function ActiveLayerEditor({ layers, activeLayerId, onUpdateLayer, requestDraw, requestFlyTo, onShowToast }: MapProps) {
+function ActiveLayerEditor({ layers, activeLayerId, onUpdateLayer, requestDraw, requestFlyTo, onShowToast, selectedIndices = new Set(), onToggleSelection, onClearSelection }: MapProps) {
     const featureGroupRef = useRef<L.FeatureGroup>(null);
-    const [mounted, setMounted] = useState(false);
+    const [menu, setMenu] = useState<{ x: number, y: number, layer: L.Layer | null, index: number } | null>(null);
+    const [editingLayer, setEditingLayer] = useState<L.Layer | null>(null);
     const map = useMap();
 
-    useEffect(() => {
-        setMounted(true);
-    }, []);
+    // --- Selection Logic ---
+    const toggleSelection = (layer: L.Layer, multi: boolean) => {
+        if (!featureGroupRef.current || !onToggleSelection) return;
 
+        const allLayers = featureGroupRef.current.getLayers();
+        const index = allLayers.indexOf(layer);
+
+        if (index !== -1) {
+            onToggleSelection(index, multi);
+        }
+    };
+
+    const updateSelectionStyles = () => {
+        if (!featureGroupRef.current) return;
+        const allLayers = featureGroupRef.current.getLayers();
+
+        allLayers.forEach((l: any, index: number) => {
+            if (selectedIndices.has(index)) {
+                if (typeof l.setStyle === 'function') {
+                    l.setStyle({ dashArray: '10, 10', weight: 4, color: '#f59e0b' });
+                }
+            } else {
+                if (typeof l.setStyle === 'function') {
+                    l.setStyle({ dashArray: null, weight: 2, color: l.feature?.properties?.color || '#3388ff' });
+                }
+            }
+        });
+    };
+
+    // Re-apply styles when selection changes
+    useEffect(() => {
+        updateSelectionStyles();
+    }, [selectedIndices]); // Re-run when set changes
+
+    // Clear selection on map click
+    useEffect(() => {
+        if (!map) return;
+        const handleMapClick = () => {
+            if (onClearSelection) onClearSelection();
+        };
+        map.on('click', handleMapClick);
+        return () => { map.off('click', handleMapClick); };
+    }, [map, onClearSelection]);
+
+
+    // --- Context Menu & Operations ---
+
+    const handleContextMenu = (e: any, layer: L.Layer) => {
+        L.DomEvent.stopPropagation(e);
+        e.originalEvent.preventDefault();
+
+        let index = -1;
+        if (featureGroupRef.current) {
+            index = featureGroupRef.current.getLayers().indexOf(layer);
+        }
+
+        setMenu({ x: e.originalEvent.clientX, y: e.originalEvent.clientY, layer: layer, index });
+
+        // Auto-select on right click if not already selected?
+        // Vanilla behavior: sets it as activeLayer.
+        // We should probably ensure it's selected or at least tracked.
+        // Let's just set the menu.
+    };
+
+    const handleSubtract = () => {
+        if (!menu?.layer || selectedIndices.size !== 2 || menu.index === -1) return;
+
+        const subjectIndex = menu.index;
+        // Find the other index
+        const otherIndex = Array.from(selectedIndices).find(i => i !== subjectIndex);
+
+        if (otherIndex === undefined || !featureGroupRef.current) return;
+
+        const allLayers = featureGroupRef.current.getLayers();
+        const subjectLayer = allLayers[subjectIndex];
+        const clipLayer = allLayers[otherIndex];
+
+        if (subjectLayer && clipLayer) {
+            try {
+                // @ts-ignore
+                const sG = subjectLayer.toGeoJSON();
+                // @ts-ignore
+                const cG = clipLayer.toGeoJSON();
+
+                const difference = turf.difference(turf.featureCollection([sG, cG]));
+
+                if (!difference) {
+                    alert("No hay intersección o el resultado es vacío.");
+                    return;
+                }
+
+                // Update Data
+                // We need to modify the features array.
+                // It's cleaner to produce a new GeoJSON and update the layer via callback.
+
+                // Get current GeoJSON
+                const currentGeoJSON = featureGroupRef.current.toGeoJSON() as any;
+                const features = currentGeoJSON.features;
+
+                // Remove subject.
+                // Filter by index.
+
+                const newFeatures = features.filter((_: any, i: number) => i !== subjectIndex);
+
+                // Add new feature
+                // @ts-ignore
+                if (difference) {
+                    newFeatures.push(difference);
+                }
+
+                // Construct new collection
+                const newCollection = { ...currentGeoJSON, features: newFeatures };
+
+                if (activeLayerId) {
+                    onUpdateLayer(activeLayerId, newCollection);
+                }
+
+                setMenu(null);
+                if (onClearSelection) onClearSelection();
+
+            } catch (e) {
+                console.error("Error subtracting", e);
+                alert("Error al restar polígonos.");
+            }
+        }
+    };
+
+
+    // --- Event Binding Helper ---
+    const setupLayerEvents = (layer: any) => {
+        layer.off('click');
+        layer.off('contextmenu');
+
+        layer.on('click', (e: any) => {
+            L.DomEvent.stopPropagation(e);
+            toggleSelection(layer, e.originalEvent.ctrlKey || e.originalEvent.metaKey);
+        });
+
+        layer.on('contextmenu', (e: any) => {
+            handleContextMenu(e, layer);
+        });
+    }
+
+    const _onCreated = (e: any) => {
+        const layer = e.layer;
+        if (activeLayerId && featureGroupRef.current) {
+            // Setup events
+            setupLayerEvents(layer);
+
+            // To update parent, we take current group state.
+            // Note: EditControl adds the layer to featureGroup BEFORE this fires? Yes.
+            // So getLayers() includes it.
+
+            const geojson = featureGroupRef.current.toGeoJSON();
+            onUpdateLayer(activeLayerId, geojson);
+
+            // Should we select the new layer?
+            // Maybe.
+        }
+    };
+
+    const _onEdited = () => {
+        if (activeLayerId && featureGroupRef.current) {
+            onUpdateLayer(activeLayerId, featureGroupRef.current.toGeoJSON());
+        }
+    };
+
+    const _onDeleted = () => {
+        if (activeLayerId && featureGroupRef.current) {
+            if (onClearSelection) onClearSelection(); // Clear selection on delete to avoid phantom indices
+            onUpdateLayer(activeLayerId, featureGroupRef.current.toGeoJSON());
+        }
+    };
+
+    // Handle manual draw events
+    useEffect(() => {
+        if (!map) return;
+        const handleManual = (e: any) => {
+            if (e.layerType === 'polygon' || e.layerType === 'marker') {
+                if (featureGroupRef.current && !featureGroupRef.current.hasLayer(e.layer)) {
+                    featureGroupRef.current.addLayer(e.layer);
+                    setupLayerEvents(e.layer);
+                    if (activeLayerId) {
+                        onUpdateLayer(activeLayerId, featureGroupRef.current.toGeoJSON());
+                    }
+                }
+            }
+        };
+        map.on('draw:created', handleManual);
+        return () => { map.off('draw:created', handleManual); };
+    }, [map, activeLayerId]);
+
+
+    // FlyTo & Draw Requests
+    useEffect(() => {
+        if (requestFlyTo && map) {
+            try {
+                const bounds = L.geoJSON(requestFlyTo).getBounds();
+                if (bounds.isValid()) map.flyToBounds(bounds, { padding: [50, 50], duration: 1.5 });
+            } catch (e) { console.error(e); }
+        }
+    }, [requestFlyTo, map]);
+
+    useEffect(() => {
+        if (!requestDraw || !map) return;
+        // @ts-ignore
+        if (requestDraw.type === 'polygon' && L.Draw && L.Draw.Polygon) new L.Draw.Polygon(map).enable();
+        // @ts-ignore
+        else if (requestDraw.type === 'point' && L.Draw && L.Draw.Marker) new L.Draw.Marker(map).enable();
+    }, [requestDraw, map]);
+
+
+    // Keyboard (Escape)
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                if (editingLayer) handleStopEdit();
+                else if (onClearSelection) onClearSelection();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [editingLayer, onClearSelection]);
+
+    // Close menu
     useEffect(() => {
         const handleClick = () => setMenu(null);
         window.addEventListener('click', handleClick);
@@ -83,214 +309,52 @@ function ActiveLayerEditor({ layers, activeLayerId, onUpdateLayer, requestDraw, 
     }, []);
 
 
-    // Fly to bounds trigger
-    useEffect(() => {
-        if (requestFlyTo && map) {
-            try {
-                // Check if bounds valid?
-                const bounds = L.geoJSON(requestFlyTo).getBounds();
-                if (bounds.isValid()) {
-                    map.flyToBounds(bounds, { padding: [50, 50], duration: 1.5 });
-                }
-            } catch (e) {
-                console.error("FlyTo error", e);
-            }
-        }
-    }, [requestFlyTo, map]);
-
-
-    // Handle Programmatic Draw Trigger
-    useEffect(() => {
-        if (!requestDraw || !map) return;
-
-        // @ts-ignore
-        if (requestDraw.type === 'polygon' && L.Draw && L.Draw.Polygon) {
-            // @ts-ignore
-            new L.Draw.Polygon(map).enable();
-        }
-        // @ts-ignore
-        else if (requestDraw.type === 'point' && L.Draw && L.Draw.Marker) {
-            // @ts-ignore
-            new L.Draw.Marker(map).enable();
-        }
-    }, [requestDraw, map]);
-
-
-    // When active layer changes, we need to clear the feature group and load the new features.
-    // React-Leaflet's FeatureGroup doesn't auto-update children easily if unmanaged.
-    // We will use a ref to set the content manually or rely on `key` to force remount.
-
-    const activeLayer = layers.find(l => l.id === activeLayerId);
-
-    const [menu, setMenu] = useState<{ x: number, y: number, layer: L.Layer | null } | null>(null);
-    const [editingLayer, setEditingLayer] = useState<L.Layer | null>(null);
-
-    const _onCreated = (e: any) => {
-        const layer = e.layer;
-
-        // Attach context menu to new layer
-        layer.on('contextmenu', (e: any) => {
-            setMenu({ x: e.originalEvent.clientX, y: e.originalEvent.clientY, layer: layer });
-        });
-
-        // Add to feature group if not added by EditControl (EditControl usually adds it)
-        // Check if it's already there? EditControl adds it to the FeatureGroup it wraps.
-        // BUT if we trigger draw manually via L.Draw.Polygon(map), does it add to this FeatureGroup?
-        // NO. L.Draw via map adds it to map (or nothing?). It fires draw:created.
-        // We need to catch draw:created globally or from map if we trigger it manually?
-        // Actually EditControl listens to map 'draw:created'.
-        // Let's verify if EditControl picks it up. 
-        // If not, we might need a map event listener here too.
-
-        if (activeLayerId && featureGroupRef.current) {
-            // Wait for next tick to ensure layer is added?
-            // Actually _onCreated is called by EditControl.
-            // If we use manual draw, we should ensure the result goes into our Update loop.
-
-            // If manual draw fires map event, EditControl might NOT pick it up if it didn't initiate it?
-            // "The created layer is added to the map by default" -> No, L.Draw doesn't add.
-            // We need to listen to map.on('draw:created') for manual triggers.
-        }
-
-        if (activeLayerId && featureGroupRef.current) {
-            // The layer is already added by EditControl if it originated there.
-            // If manual, we need to add it manually to featureGroupRef.
-            featureGroupRef.current.addLayer(layer);
-
-            const geojson = featureGroupRef.current.toGeoJSON();
-            onUpdateLayer(activeLayerId, geojson);
-        }
-    };
-
-    // Listen for manual draw creation which bypasses EditControl's onCreate sometimes
-    useEffect(() => {
-        if (!map) return;
-
-        const handleManualCreated = (e: any) => {
-            // Need to distinguish if EditControl handled it?
-            // EditControl binds to draw:created too.
-            // If we add it twice, it might be bad.
-            // Let's see. If I use `new L.Draw.Polygon`, the type is 'polygon'.
-            // EditControl props `onCreated` might only fire for its own toolbar.
-
-            if (e.layerType === 'polygon' || e.layerType === 'marker') {
-                // Add to our group
-                if (featureGroupRef.current) {
-                    // Check if already has layer? Leaflet IDs.
-                    if (!featureGroupRef.current.hasLayer(e.layer)) {
-                        featureGroupRef.current.addLayer(e.layer);
-
-                        // Attach simple events
-                        e.layer.on('contextmenu', (evt: any) => {
-                            setMenu({ x: evt.originalEvent.clientX, y: evt.originalEvent.clientY, layer: e.layer });
-                        });
-
-                        // Update
-                        if (activeLayerId) {
-                            const geojson = featureGroupRef.current.toGeoJSON();
-                            onUpdateLayer(activeLayerId, geojson);
-                        }
-                    }
-                }
-            }
-        };
-
-        map.on('draw:created', handleManualCreated);
-        return () => {
-            map.off('draw:created', handleManualCreated);
-        };
-    }, [map, activeLayerId]);
-
-
-    const _onEdited = (e: any) => {
-        if (activeLayerId && featureGroupRef.current) {
-            const geojson = featureGroupRef.current.toGeoJSON();
-            onUpdateLayer(activeLayerId, geojson);
-        }
-    };
-
-    const _onDeleted = (e: any) => {
-        if (activeLayerId && featureGroupRef.current) {
-            const geojson = featureGroupRef.current.toGeoJSON();
-            onUpdateLayer(activeLayerId, geojson);
-        }
-    };
-
-    // Handler passed to InitialDataLoader
-    const handleContextMenu = (e: any, layer: L.Layer) => {
-        setMenu({ x: e.originalEvent.clientX, y: e.originalEvent.clientY, layer: layer });
-    };
-
-    const handleCopyWKT = () => {
-        if (menu?.layer) {
-            // @ts-ignore
-            const geojson = menu.layer.toGeoJSON();
-            const wkt = stringifyWKT(geojson);
-            navigator.clipboard.writeText(wkt);
-            if (onShowToast) {
-                onShowToast("WKT copiado al portapapeles");
-            } else {
-                alert("WKT copiado al portapapeles");
-            }
-        }
-        setMenu(null);
-    };
-
-    const handleDelete = () => {
-        if (menu?.layer && featureGroupRef.current) {
-            featureGroupRef.current.removeLayer(menu.layer);
-            // Trigger update
-            const geojson = featureGroupRef.current.toGeoJSON();
-            if (activeLayerId) onUpdateLayer(activeLayerId, geojson);
-        }
-        setMenu(null);
-    };
-
+    // Menu Actions
     const handleStopEdit = () => {
         if (editingLayer) {
             // @ts-ignore
-            if (editingLayer.editing) {
-                // @ts-ignore
-                editingLayer.editing.disable();
-                // Trigger update manually to ensure changes are saved
-                if (activeLayerId && featureGroupRef.current) {
-                    const geojson = featureGroupRef.current.toGeoJSON();
-                    onUpdateLayer(activeLayerId, geojson);
-                }
+            if (editingLayer.editing) editingLayer.editing.disable();
+            if (activeLayerId && featureGroupRef.current) {
+                onUpdateLayer(activeLayerId, featureGroupRef.current.toGeoJSON());
             }
             setEditingLayer(null);
             setMenu(null);
         }
     };
-
     const handleEdit = () => {
-        const layerToEdit = menu?.layer;
-        if (layerToEdit) {
+        if (menu?.layer) {
             // @ts-ignore
-            if (layerToEdit.editing) {
+            if (menu.layer.editing) {
                 // @ts-ignore
-                layerToEdit.editing.enable();
-                setEditingLayer(layerToEdit);
+                menu.layer.editing.enable();
+                setEditingLayer(menu.layer);
                 setMenu(null);
             }
         }
     };
+    const handleDelete = () => {
+        if (menu?.layer && featureGroupRef.current) {
+            featureGroupRef.current.removeLayer(menu.layer);
+            _onDeleted();
+        }
+        setMenu(null);
+    };
+    const handleCopyWKT = () => {
+        if (menu?.layer) {
+            // @ts-ignore
+            const wkt = stringifyWKT(menu.layer.toGeoJSON());
+            navigator.clipboard.writeText(wkt);
+            if (onShowToast) onShowToast("WKT Copiado"); else alert("WKT Copiado");
+        }
+        setMenu(null);
+    };
 
-    // Listen for Escape key to stop editing
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') {
-                handleStopEdit();
-            }
-        };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [editingLayer, activeLayerId]); // tracking editingLayer to have closure access if needed, though state is fresh.
 
+    if (!layers.find(l => l.id === activeLayerId)?.visible) return null;
+    const activeLayerData = layers.find(l => l.id === activeLayerId)?.features;
 
-    if (!activeLayer || !activeLayer.visible) return null;
-
-
+    // Derived state for Subtract Button
+    const showSubtract = menu && selectedIndices.has(menu.index) && selectedIndices.size === 2;
 
     return (
         <>
@@ -301,139 +365,48 @@ function ActiveLayerEditor({ layers, activeLayerId, onUpdateLayer, requestDraw, 
                     onEdited={_onEdited}
                     onDeleted={_onDeleted}
                     draw={{
-                        rectangle: true,
-                        polygon: true,
-                        circle: false,
-                        circlemarker: false,
-                        marker: true,
-                        polyline: true,
+                        rectangle: true, polygon: true, circle: false, circlemarker: false, marker: true, polyline: true
                     }}
                 />
-                <InitialDataLoader data={activeLayer.features} groupRef={featureGroupRef} onContextMenu={handleContextMenu} />
+                <InitialDataLoader
+                    data={activeLayerData}
+                    groupRef={featureGroupRef}
+                    setupLayerEvents={setupLayerEvents}
+                />
             </FeatureGroup>
 
             {menu && (
                 <div
                     className="context-menu"
-                    style={{
-                        position: 'fixed', // usamos fixed para respetar clientX/clientY
-                        top: menu.y,
-                        left: menu.x,
-                        display: 'block', // sobrescribe el display:none del CSS
-                    }}
-                    onClick={(e) => e.stopPropagation()}
+                    style={{ position: 'fixed', top: menu.y, left: menu.x, display: 'block', zIndex: 9999, background: 'white', padding: '6px', borderRadius: '12px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
+                    onClick={e => e.stopPropagation()}
                 >
-                    {/* Copiar WKT */}
-                    <div
-                        onClick={handleCopyWKT}
-                        className="menu-item"
-                    >
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                        >
-                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                        </svg>
+                    <div onClick={handleCopyWKT} className="menu-item" style={{ display: 'flex', gap: '10px', padding: '10px', cursor: 'pointer', alignItems: 'center' }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
                         <span>Copiar WKT</span>
-                        <svg
-                            className="check-icon"
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                        >
-                            <polyline points="20 6 9 17 4 12" />
-                        </svg>
                     </div>
-                    {/* Restar selección (visible sólo si luego lo usas) */}
-                    <div
-                        className="menu-item"
-                        style={{ display: 'none' }}
-                    >
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                        >
-                            <path d="M5 12h14" />
-                        </svg>
-                        <span>Restar selección</span>
-                    </div>
-                    {/* Editar / Terminar Edición */}
+
+                    {showSubtract ? (
+                        <div onClick={handleSubtract} className="menu-item" style={{ display: 'flex', gap: '10px', padding: '10px', cursor: 'pointer', alignItems: 'center' }}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M5 12h14" /></svg>
+                            <span>Restar selección</span>
+                        </div>
+                    ) : null}
+
                     {editingLayer === menu.layer ? (
-                        <div
-                            onClick={handleStopEdit}
-                            className="menu-item"
-                            style={{ color: '#f59e0b' }}
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <circle cx="12" cy="12" r="10"></circle>
-                                <line x1="15" y1="9" x2="9" y2="15"></line>
-                                <line x1="9" y1="9" x2="15" y2="15"></line>
-                            </svg>
+                        <div onClick={handleStopEdit} className="menu-item" style={{ color: '#f59e0b', display: 'flex', gap: '10px', padding: '10px', cursor: 'pointer', alignItems: 'center' }}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>
                             <span>Terminar edición</span>
                         </div>
                     ) : (
-                        <div
-                            onClick={handleEdit}
-                            className="menu-item"
-                        >
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                width="16"
-                                height="16"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth={2}
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                            >
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4L18.5 2.5z" />
-                            </svg>
+                        <div onClick={handleEdit} className="menu-item" style={{ display: 'flex', gap: '10px', padding: '10px', cursor: 'pointer', alignItems: 'center' }}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4L18.5 2.5z" /></svg>
                             <span>Editar</span>
                         </div>
                     )}
-                    {/* Eliminar */}
-                    <div
-                        onClick={handleDelete}
-                        className="menu-item"
-                        style={{ color: '#ef4444' }}
-                    >
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                        >
-                            <polyline points="3 6 5 6 21 6" />
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                        </svg>
+
+                    <div onClick={handleDelete} className="menu-item" style={{ color: '#ef4444', display: 'flex', gap: '10px', padding: '10px', cursor: 'pointer', alignItems: 'center' }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
                         <span>Eliminar</span>
                     </div>
                 </div>
@@ -442,14 +415,11 @@ function ActiveLayerEditor({ layers, activeLayerId, onUpdateLayer, requestDraw, 
     );
 }
 
-// Helper to hydrate the FeatureGroup with existing GeoJSON
-function InitialDataLoader({ data, groupRef, onContextMenu }: { data: any, groupRef: any, onContextMenu?: any }) {
+// Helper to hydrate the FeatureGroup with existing GeoJSON and bind events
+function InitialDataLoader({ data, groupRef, setupLayerEvents }: { data: any, groupRef: any, setupLayerEvents: (l: any) => void }) {
     useEffect(() => {
         if (!groupRef.current || !data) return;
-
-        // Clear existing layers in this group (should be empty on remount but safe to check)
         groupRef.current.clearLayers();
-
         if (data.type === 'FeatureCollection') {
             L.geoJSON(data, {
                 style: (feature: any) => ({
@@ -458,20 +428,12 @@ function InitialDataLoader({ data, groupRef, onContextMenu }: { data: any, group
                     weight: 2
                 }),
                 onEachFeature: (feature: any, layer: L.Layer) => {
-                    // @ts-ignore
-                    layer.on('contextmenu', (e) => {
-                        // @ts-ignore
-                        if (onContextMenu) {
-                            // @ts-ignore
-                            onContextMenu(e, layer);
-                        }
-                    });
+                    setupLayerEvents(layer);
                     groupRef.current?.addLayer(layer);
                 }
             });
         }
-
-    }, [data, groupRef]);
+    }, [data, groupRef]); // Dependency on setupLayerEvents OK if stable
     return null;
 }
 
