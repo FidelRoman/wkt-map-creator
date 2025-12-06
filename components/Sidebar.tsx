@@ -37,6 +37,7 @@ interface SidebarProps {
     onExportProject: () => void;
     selectedIndices: Set<number>;
     onToggleSelection: (index: number, multi: boolean) => void;
+    onClearSelection: () => void;
 }
 
 export default function Sidebar({
@@ -55,7 +56,8 @@ export default function Sidebar({
     onFocusFeature,
     onExportProject,
     selectedIndices,
-    onToggleSelection
+    onToggleSelection,
+    onClearSelection
 }: SidebarProps) {
     const { user } = useAuth();
     const [projectListOpen, setProjectListOpen] = useState(false);
@@ -93,6 +95,7 @@ export default function Sidebar({
         const activeLayer = layers.find(l => l.id === activeLayerId);
         if (!activeLayer) return;
 
+        onClearSelection(); // Clear selection to avoid index mismatch
         const newFeatures = [...(activeLayer.features?.features || [])];
         newFeatures.splice(index, 1);
 
@@ -305,15 +308,6 @@ export default function Sidebar({
                                     key={index}
                                     onClick={(e) => {
                                         onToggleSelection(index, e.metaKey || e.ctrlKey);
-                                        if (!selectedIndices.has(index)) onFocusFeature(feature); // Only focus if not already selected? Or always? Original logic focus on click.
-                                        // Wait, original: `toggleSelection(index); onFocusFeature(feature);`
-                                        // User request: "quiero que se implemente... aplica lo de toggleselection"
-                                        // The provided snippet has `toggleSelection(layer, e.ctrlKey || e.metaKey)`
-                                        // And `li.addEventListener('click', ...)`
-                                        // So we should replicate that.
-
-                                        // We should focus only if we are selecting it?
-                                        // "fly to" is nice.
                                         onFocusFeature(feature);
                                     }}
                                     className={`flex items-center p-3 mb-2 rounded-xl border transition-all cursor-pointer ${isSelected ? 'bg-blue-50 border-blue-200 shadow-sm' : 'bg-white border-slate-100'}`}

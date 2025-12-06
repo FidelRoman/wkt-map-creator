@@ -268,6 +268,7 @@ function ProjectApp() {
                 // Selection
                 selectedIndices={selectedIndices}
                 onToggleSelection={handleSelectionChange}
+                onClearSelection={() => setSelectedIndices(new Set())}
             />
             <div className="flex-1 relative">
                 <Map

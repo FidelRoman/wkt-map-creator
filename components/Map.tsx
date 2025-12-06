@@ -161,33 +161,43 @@ function ActiveLayerEditor({ layers, activeLayerId, onUpdateLayer, requestDraw, 
                 // @ts-ignore
                 const cG = clipLayer.toGeoJSON();
 
-                const difference = turf.difference(turf.featureCollection([sG, cG]));
+                // Validate Geometries (must be Polygon or MultiPolygon)
+                const validTypes = ['Polygon', 'MultiPolygon'];
+                if (!validTypes.includes(sG.geometry.type) || !validTypes.includes(cG.geometry.type)) {
+                    alert("La operación de resta solo es válida para Polígonos.");
+                    return;
+                }
+
+                // Turf v7 difference expects a FeatureCollection usually, or (poly1, poly2). 
+                // Documentation says difference(features).
+                let difference;
+                try {
+                    difference = turf.difference(turf.featureCollection([sG, cG]));
+                } catch (err) {
+                    console.error("Turf difference error:", err);
+                    alert("Error calculando la diferencia. Verifica las geometrías.");
+                    return;
+                }
 
                 if (!difference) {
-                    alert("No hay intersección o el resultado es vacío.");
+                    alert("No hay intersección o el resultado es vacío (geometría eliminada por completo).");
+                    // If result is null, it means subject was fully inside clip? 
+                    // In that case, we should probably just remove the subject.
+                    // But usually returning null implies "nothing left".
+                    // For now, alert and do nothing is safer.
                     return;
                 }
 
                 // Update Data
-                // We need to modify the features array.
-                // It's cleaner to produce a new GeoJSON and update the layer via callback.
-
-                // Get current GeoJSON
                 const currentGeoJSON = featureGroupRef.current.toGeoJSON() as any;
                 const features = currentGeoJSON.features;
 
-                // Remove subject.
-                // Filter by index.
-
+                // Remove subject layer from features list
                 const newFeatures = features.filter((_: any, i: number) => i !== subjectIndex);
 
-                // Add new feature
-                // @ts-ignore
-                if (difference) {
-                    newFeatures.push(difference);
-                }
+                // Add the result of the difference
+                newFeatures.push(difference);
 
-                // Construct new collection
                 const newCollection = { ...currentGeoJSON, features: newFeatures };
 
                 if (activeLayerId) {
@@ -198,8 +208,8 @@ function ActiveLayerEditor({ layers, activeLayerId, onUpdateLayer, requestDraw, 
                 if (onClearSelection) onClearSelection();
 
             } catch (e) {
-                console.error("Error subtracting", e);
-                alert("Error al restar polígonos.");
+                console.error("Error in subtract operation", e);
+                alert("Ocurrió un error inesperado al restar.");
             }
         }
     };
