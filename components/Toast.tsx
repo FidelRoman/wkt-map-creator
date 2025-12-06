@@ -16,7 +16,7 @@ export default function Toast({ message, onClose, duration = 3000 }: ToastProps)
     }, [duration, onClose]);
 
     return (
-        <div className="fixed bottom-5 right-5 bg-slate-800 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 z-[9999] animate-fade-in-up">
+        <div className="fixed bottom-5 right-5 bg-slate-800 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 z-9999 animate-fade-in-up">
             <span>{message}</span>
         </div>
     );

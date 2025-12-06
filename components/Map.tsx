@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from 'react';
-import { MapContainer, TileLayer, FeatureGroup, useMap, GeoJSON } from 'react-leaflet';
+import { MapContainer, TileLayer, FeatureGroup, useMap, useMapEvents, GeoJSON } from 'react-leaflet';
 import { EditControl } from 'react-leaflet-draw';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import { generateColor, stringifyWKT } from '@/lib/map-utils';
+import { difference, featureCollection } from '@turf/turf';
 import { Layer } from '@/lib/firebase';
 
 // Fix Leaflet icons
@@ -25,6 +26,9 @@ interface MapProps {
     requestDraw?: { type: 'polygon' | 'point', id: number } | null;
     requestFlyTo?: any | null;
     onShowToast?: (message: string) => void;
+    selectedIndices?: Set<number>;
+    onToggleSelection?: (index: number, multi: boolean) => void;
+    onClearSelection?: () => void;
 }
 
 function FeatureHandler({ layers, activeLayerId, onUpdateLayer }: MapProps) {
@@ -67,7 +71,7 @@ function FeatureHandler({ layers, activeLayerId, onUpdateLayer }: MapProps) {
 }
 
 // Wrapper for the Active Layer to enable Drawing
-function ActiveLayerEditor({ layers, activeLayerId, onUpdateLayer, requestDraw, requestFlyTo, onShowToast }: MapProps) {
+function ActiveLayerEditor({ layers, activeLayerId, onUpdateLayer, requestDraw, requestFlyTo, onShowToast, selectedIndices, onToggleSelection, onClearSelection }: MapProps) {
     const featureGroupRef = useRef<L.FeatureGroup>(null);
     const [mounted, setMounted] = useState(false);
     const map = useMap();
@@ -154,7 +158,17 @@ function ActiveLayerEditor({ layers, activeLayerId, onUpdateLayer, requestDraw, 
 
         if (activeLayerId && featureGroupRef.current) {
             // The layer is already added by EditControl if it originated there.
-            // If manual, we need to add it manually to featureGroupRef.
+            // If manual, we need to add        // Click for selection
+            // @ts-ignore
+            layer.on('click', (e) => {
+                L.DomEvent.stopPropagation(e);
+                if (onToggleSelection && featureGroupRef.current) {
+                    const idx = featureGroupRef.current.getLayers().indexOf(layer);
+                    onToggleSelection(idx, e.originalEvent.metaKey || e.originalEvent.ctrlKey);
+                }
+            });
+
+            // Add to feature group
             featureGroupRef.current.addLayer(layer);
 
             const geojson = featureGroupRef.current.toGeoJSON();
@@ -246,21 +260,114 @@ function ActiveLayerEditor({ layers, activeLayerId, onUpdateLayer, requestDraw, 
         setMenu(null);
     };
 
+    const handleSubtract = () => {
+        // console.log("handleSubtract called");
+        if (!menu?.layer || !selectedIndices || selectedIndices.size !== 2 || !featureGroupRef.current || !activeLayerId) {
+            console.log("Subtract guards failed", { menuLayer: !!menu?.layer, selectedSize: selectedIndices?.size, ref: !!featureGroupRef.current });
+            return;
+        }
+
+        // "Active" layer (clicked) is the Subject
+        // The other selected layer is the Clip
+        const layersArr = featureGroupRef.current.getLayers();
+        const subjectIndex = layersArr.indexOf(menu.layer);
+
+        console.log("Subject Index:", subjectIndex);
+
+        if (subjectIndex === -1) return;
+
+        const otherIndex = Array.from(selectedIndices).find(i => i !== subjectIndex);
+        console.log("Other Index:", otherIndex);
+
+        if (otherIndex === undefined) return;
+
+        const subjectLayer = menu.layer;
+        const clipLayer = layersArr[otherIndex];
+
+        console.log("Subject Layer:", subjectLayer);
+        console.log("Clip Layer:", clipLayer);
+
+        if (!clipLayer) return;
+
+        try {
+            // @ts-ignore
+            const sG = subjectLayer.toGeoJSON();
+            // @ts-ignore
+            const cG = clipLayer.toGeoJSON();
+
+            console.log("Subject GeoJSON:", sG);
+            console.log("Clip GeoJSON:", cG);
+
+            const diff = difference(featureCollection([sG, cG]));
+
+            console.log("Diff Result:", diff);
+
+            if (!diff) {
+                if (onShowToast) onShowToast("La resta no produjo resultado (geometrías disjuntas o invalida)");
+                else alert("Restar: Sin resultado");
+                return;
+            }
+
+            // Update Features
+            // We want to replace the Subject with the Result.
+            // AND we optionally keep the Clip? Vanilla script:
+            // "drawnItems.removeLayer(subj); drawnItems.addLayer(newL);"
+            // Clip remains.
+
+            // We need to construct new feature collection.
+            // We have the raw features in `activeLayer.features`.
+            // But we can also rebuild from `featureGroupRef` logic or just map activeLayer.features.
+            if (!activeLayer) return; // Defined in outer scope
+
+            // Deep clone to be safe
+            // const newFeaturesList = JSON.parse(JSON.stringify(activeLayer.features.features));
+            // Actually, simply mapping is cleaner
+            const newFeaturesList = activeLayer.features.features.map((f: any, i: number) => {
+                if (i === subjectIndex) {
+                    // Replace subject with diff
+                    // Preserve properties?
+                    return {
+                        ...diff,
+                        properties: { ...f.properties, ...diff.properties }
+                    };
+                }
+                return f;
+            });
+
+            // Update layer
+            onUpdateLayer(activeLayerId, { type: 'FeatureCollection', features: newFeaturesList });
+            if (onShowToast) onShowToast("Resta realizada con éxito");
+
+        } catch (e) {
+            console.error(e);
+            if (onShowToast) onShowToast("Error calculando resta");
+        }
+        setMenu(null);
+    };
+
     const handleStopEdit = () => {
         if (editingLayer) {
             // @ts-ignore
-            if (editingLayer.editing) {
-                // @ts-ignore
-                editingLayer.editing.disable();
-                // Trigger update manually to ensure changes are saved
-                if (activeLayerId && featureGroupRef.current) {
-                    const geojson = featureGroupRef.current.toGeoJSON();
-                    onUpdateLayer(activeLayerId, geojson);
-                }
+            editingLayer.editing.disable();
+            // Trigger update? editing disabled event should trigger?
+            // "drawnItems.toGeoJSON()" needs to be called.
+            // `L.Draw.Event.EDITED` listener in Page? No, Map handles it?
+            // Leaflet.draw fires: 'draw:edited', 'draw:created', 'draw:deleted'.
+            // But we are manually enabling edit.
+            // When we disable, we should save.
+
+            // Re-fetch GeoJSON and update
+            if (featureGroupRef.current && activeLayerId) {
+                const geojson = featureGroupRef.current.toGeoJSON();
+                onUpdateLayer(activeLayerId, geojson);
             }
+
             setEditingLayer(null);
-            setMenu(null);
+        } else {
+            // If NOT editing, Escape should Clear Selection
+            if (onClearSelection) onClearSelection();
         }
+        setMenu(null);
     };
 
     const handleEdit = () => {
@@ -279,13 +386,24 @@ function ActiveLayerEditor({ layers, activeLayerId, onUpdateLayer, requestDraw, 
     // Listen for Escape key to stop editing
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') {
-                handleStopEdit();
-            }
+            if (e.key === 'Escape') handleStopEdit();
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [editingLayer, activeLayerId]); // tracking editingLayer to have closure access if needed, though state is fresh.
+    }, [editingLayer, onClearSelection, activeLayerId]); // tracking editingLayer to have closure access if needed, though state is fresh.
+
+    // Listen for Map Click (Empty space)
+    useMapEvents({
+        click: (e) => {
+            // If we clicked on a layer, the event propagation should have been stopped by the layer click handler.
+            // So if this fires, it means we clicked empty map.
+            if (!editingLayer && onClearSelection) {
+                onClearSelection();
+            }
+            // Close context menu if open
+            setMenu(null);
+        }
+    });
 
 
     if (!activeLayer || !activeLayer.visible) return null;
@@ -309,7 +427,13 @@ function ActiveLayerEditor({ layers, activeLayerId, onUpdateLayer, requestDraw, 
                         polyline: true,
                     }}
                 />
-                <InitialDataLoader data={activeLayer.features} groupRef={featureGroupRef} onContextMenu={handleContextMenu} />
+                <InitialDataLoader
+                    data={activeLayer.features}
+                    groupRef={featureGroupRef}
+                    onContextMenu={handleContextMenu}
+                    selectedIndices={selectedIndices}
+                    onToggleSelection={onToggleSelection}
+                />
             </FeatureGroup>
 
             {menu && (
@@ -358,26 +482,28 @@ function ActiveLayerEditor({ layers, activeLayerId, onUpdateLayer, requestDraw, 
                             <polyline points="20 6 9 17 4 12" />
                         </svg>
                     </div>
-                    {/* Restar selección (visible sólo si luego lo usas) */}
-                    <div
-                        className="menu-item"
-                        style={{ display: 'none' }}
-                    >
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
+                    {/* Restar selección (visible sólo si 2 items seleccionados) */}
+                    {selectedIndices && selectedIndices.size === 2 && menu.layer && selectedIndices.has(featureGroupRef.current?.getLayers().indexOf(menu.layer) ?? -1) && (
+                        <div
+                            onClick={handleSubtract}
+                            className="menu-item"
                         >
-                            <path d="M5 12h14" />
-                        </svg>
-                        <span>Restar selección</span>
-                    </div>
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                            >
+                                <path d="M5 12h14" />
+                            </svg>
+                            <span>Restar selección</span>
+                        </div>
+                    )}
                     {/* Editar / Terminar Edición */}
                     {editingLayer === menu.layer ? (
                         <div
@@ -443,35 +569,94 @@ function ActiveLayerEditor({ layers, activeLayerId, onUpdateLayer, requestDraw, 
 }
 
 // Helper to hydrate the FeatureGroup with existing GeoJSON
-function InitialDataLoader({ data, groupRef, onContextMenu }: { data: any, groupRef: any, onContextMenu?: any }) {
+function InitialDataLoader({
+    data,
+    groupRef,
+    onContextMenu,
+    selectedIndices,
+    onToggleSelection
+}: {
+    data: any,
+    groupRef: any,
+    onContextMenu?: any,
+    selectedIndices?: Set<number>,
+    onToggleSelection?: any
+}) {
+    // Effect 1: Load Data (run only when data or handlers change, NOT on selection change)
     useEffect(() => {
         if (!groupRef.current || !data) return;
 
-        // Clear existing layers in this group (should be empty on remount but safe to check)
+        // Clear existing layers to prevent duplication/stale state
         groupRef.current.clearLayers();
 
         if (data.type === 'FeatureCollection') {
             L.geoJSON(data, {
+                // We don't set style here based on selection, we do it in the next effect.
+                // Or set default style.
                 style: (feature: any) => ({
                     color: feature?.properties?.color || '#3388ff',
                     fillColor: feature?.properties?.color || '#3388ff',
-                    weight: 2
+                    weight: 2,
+                    fillOpacity: 0.2
                 }),
                 onEachFeature: (feature: any, layer: L.Layer) => {
-                    // @ts-ignore
-                    layer.on('contextmenu', (e) => {
-                        // @ts-ignore
-                        if (onContextMenu) {
-                            // @ts-ignore
-                            onContextMenu(e, layer);
-                        }
-                    });
-                    groupRef.current?.addLayer(layer);
+                    // Empty onEachFeature
                 }
+            }).eachLayer((layer) => {
+                // Attach events
+                // @ts-ignore
+                layer.on('contextmenu', (e) => {
+                    L.DomEvent.stopPropagation(e);
+                    if (onContextMenu) onContextMenu(e, layer);
+                });
+                // @ts-ignore
+                layer.on('click', (e) => {
+                    L.DomEvent.stopPropagation(e);
+                    if (onToggleSelection && groupRef.current) {
+                        const idx = groupRef.current.getLayers().indexOf(layer);
+                        onToggleSelection(idx, e.originalEvent.metaKey || e.originalEvent.ctrlKey);
+                    }
+                });
+
+                groupRef.current.addLayer(layer);
             });
         }
 
-    }, [data, groupRef]);
+        // After loading data, we might need to apply selection styles immediately?
+        // The second effect will run after this render anyway?
+        // Yes, if selectedIndices is in deps of second effect.
+
+    }, [data, groupRef, onContextMenu, onToggleSelection]);
+
+    // Effect 2: Update Styles based on Selection (run when selectedIndices changes)
+    useEffect(() => {
+        if (!groupRef.current) return;
+
+        const layers = groupRef.current.getLayers();
+        layers.forEach((layer: any, index: number) => {
+            const isSelected = selectedIndices?.has(index);
+
+            // Re-apply style. We need references to original color.
+            // Fortunately `layer.feature` is attached by L.geoJSON usually.
+            // Or we check `layer.options` or `layer.feature.properties`.
+
+            // `L.geoJSON` attaches `feature` to `layer.feature`.
+            const color = layer.feature?.properties?.color || '#3388ff';
+
+            if (layer.setStyle) {
+                layer.setStyle({
+                    color: color,
+                    fillColor: color,
+                    weight: isSelected ? 4 : 2,
+                    dashArray: isSelected ? '10, 10' : undefined,
+                    fillOpacity: 0.2
+                });
+            }
+        });
+    }, [selectedIndices, groupRef, data]); // specific dependency on data ensures it runs after data load too?
+    // Actually, if `data` changes, Effect 1 runs. Effect 2 runs too because of `data` dep?
+    // Yes. Ideally we want Effect 2 to run AFTER Effect 1.
+
     return null;
 }
 
@@ -490,7 +675,7 @@ export default function MapComponent(props: MapProps) {
             })}
 
             {/* Active editing layer */}
-            <ActiveLayerEditor {...props} />
+            <ActiveLayerEditor {...props} selectedIndices={props.selectedIndices} />
         </MapContainer>
     );
 }

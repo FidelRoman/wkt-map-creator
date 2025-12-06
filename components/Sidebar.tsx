@@ -35,6 +35,8 @@ interface SidebarProps {
 
     // Legacy/Project actions
     onExportProject: () => void;
+    selectedIndices: Set<number>;
+    onToggleSelection: (index: number, multi: boolean) => void;
 }
 
 export default function Sidebar({
@@ -51,7 +53,9 @@ export default function Sidebar({
     onAddFeature,
     onCopyWkt,
     onFocusFeature,
-    onExportProject
+    onExportProject,
+    selectedIndices,
+    onToggleSelection
 }: SidebarProps) {
     const { user } = useAuth();
     const [projectListOpen, setProjectListOpen] = useState(false);
@@ -64,18 +68,7 @@ export default function Sidebar({
     const [inputValue, setInputValue] = useState("");
     const [layerToDelete, setLayerToDelete] = useState<string | null>(null);
 
-    // Feature Selection State
-    const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
-
-    const toggleSelection = (index: number) => {
-        const newSet = new Set(selectedIndices);
-        if (newSet.has(index)) {
-            newSet.delete(index);
-        } else {
-            newSet.add(index);
-        }
-        setSelectedIndices(newSet);
-    };
+    // Feature Selection State REMOVED (moved to parent)
 
     const updateFeatureColor = (index: number, color: string) => {
         const activeLayer = layers.find(l => l.id === activeLayerId);
@@ -310,7 +303,19 @@ export default function Sidebar({
                             return (
                                 <li
                                     key={index}
-                                    onClick={() => { toggleSelection(index); onFocusFeature(feature); }}
+                                    onClick={(e) => {
+                                        onToggleSelection(index, e.metaKey || e.ctrlKey);
+                                        if (!selectedIndices.has(index)) onFocusFeature(feature); // Only focus if not already selected? Or always? Original logic focus on click.
+                                        // Wait, original: `toggleSelection(index); onFocusFeature(feature);`
+                                        // User request: "quiero que se implemente... aplica lo de toggleselection"
+                                        // The provided snippet has `toggleSelection(layer, e.ctrlKey || e.metaKey)`
+                                        // And `li.addEventListener('click', ...)`
+                                        // So we should replicate that.
+
+                                        // We should focus only if we are selecting it?
+                                        // "fly to" is nice.
+                                        onFocusFeature(feature);
+                                    }}
                                     className={`flex items-center p-3 mb-2 rounded-xl border transition-all cursor-pointer ${isSelected ? 'bg-blue-50 border-blue-200 shadow-sm' : 'bg-white border-slate-100'}`}
                                 >
                                     <div

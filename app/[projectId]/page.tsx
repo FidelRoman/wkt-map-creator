@@ -33,6 +33,49 @@ function ProjectApp() {
     const [flyToRequest, setFlyToRequest] = useState<any | null>(null);
     const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+    // Selection State
+    const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
+
+    const handleSelectionChange = (index: number, multi: boolean) => {
+        const newSet = new Set(multi ? selectedIndices : []);
+        if (newSet.has(index)) {
+            if (multi) newSet.delete(index);
+            // If single click on selected, maybe allow deselect? Or keep selected?
+            // Usually single click selects ONLY that one.
+            // If it was already selected and we single clicked, we just keep it (and clear others).
+            // But valid logic is: single click = set to just this one.
+            // So `newSet = new Set([index])` is covered by `new Set(multi ? ... : [])` then add.
+        } else {
+            newSet.add(index);
+        }
+        // Actually, let's refine:
+        // Single click: Clear all, then select target.
+        // Multi click: Toggle target.
+        if (!multi) {
+            const next = new Set<number>();
+            if (!selectedIndices.has(index) || selectedIndices.size > 1) {
+                next.add(index);
+            } else {
+                // If clicking the ONLY selected item again, typically we don't deselect in lists, 
+                // but user might want toggle. Let's stick to standard "Select" behavior.
+                // Just keeping it selected is fine.
+                next.add(index);
+            }
+            setSelectedIndices(next);
+        } else {
+            const next = new Set(selectedIndices);
+            if (next.has(index)) next.delete(index);
+            else next.add(index);
+            setSelectedIndices(next);
+        }
+    };
+
+    // Clear selection when changing layers
+    const handleSetActiveLayerId = (id: string | null) => {
+        setActiveLayerId(id);
+        setSelectedIndices(new Set());
+    };
+
     // States for feedback
     const [isSaving, setIsSaving] = useState(false);
 
@@ -226,7 +269,7 @@ function ProjectApp() {
                 layers={layers}
                 setLayers={setLayers}
                 activeLayerId={activeLayerId}
-                setActiveLayerId={setActiveLayerId}
+                setActiveLayerId={handleSetActiveLayerId}
                 onLoadProject={loadProject}
                 isSaving={isSaving}
                 // New Props
@@ -234,8 +277,12 @@ function ProjectApp() {
                 onExportLayer={handleExportLayer}
                 onAddFeature={handleAddFeature}
                 onCopyWkt={handleCopyWkt}
-                onExportProject={handleExportProject}
                 onFocusFeature={handleFocusFeature}
+                // Legacy
+                onExportProject={() => { }}
+                // Selection
+                selectedIndices={selectedIndices}
+                onToggleSelection={handleSelectionChange}
             />
             <div className="flex-1 relative">
                 <Map
@@ -245,6 +292,9 @@ function ProjectApp() {
                     requestDraw={drawRequest}
                     requestFlyTo={flyToRequest}
                     onShowToast={(msg) => setToastMessage(msg)}
+                    selectedIndices={selectedIndices}
+                    onToggleSelection={handleSelectionChange}
+                    onClearSelection={() => setSelectedIndices(new Set())}
                 />
 
 
