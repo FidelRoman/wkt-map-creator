@@ -6,18 +6,18 @@ import { useAuth } from "@/components/AuthWrapper";
 import { signInWithPopup, signOut } from "firebase/auth";
 import { auth, googleProvider } from "@/lib/firebase";
 import {
-    ArrowLeftOnRectangleIcon,
     EyeIcon,
     EyeSlashIcon,
     TrashIcon,
     PlusIcon,
-    ArrowDownTrayIcon,
+    ShareIcon,
     ArrowUpTrayIcon,
     DocumentDuplicateIcon,
     FolderOpenIcon,
     ClipboardDocumentCheckIcon,
     PencilSquareIcon
 } from "@heroicons/react/24/outline";
+import ShareModal from "@/components/ShareModal";
 import { generateColor, parseWKT } from "@/lib/map-utils";
 
 interface SidebarProps {
@@ -41,6 +41,7 @@ interface SidebarProps {
     selectedIndices: Set<number>;
     onToggleSelection: (index: number, multi: boolean) => void;
     onClearSelection: () => void;
+    onUpdateProject?: (project: Project) => void;
 }
 
 export default function Sidebar({
@@ -60,10 +61,12 @@ export default function Sidebar({
     onExportProject,
     selectedIndices,
     onToggleSelection,
-    onClearSelection
+    onClearSelection,
+    onUpdateProject
 }: SidebarProps) {
     const { user } = useAuth();
     const [projectListOpen, setProjectListOpen] = useState(false);
+    const [shareModalOpen, setShareModalOpen] = useState(false);
 
     // File Input Ref
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -281,6 +284,13 @@ export default function Sidebar({
                         <a href="/" className="text-sm text-blue-600 hover:underline flex items-center gap-1">
                             &larr; Volver al Dashboard
                         </a>
+                        <button
+                            onClick={() => setShareModalOpen(true)}
+                            className="bg-blue-600 hover:bg-blue-700 text-white p-1.5 rounded-lg transition-colors shadow-sm"
+                            title="Compartir Proyecto"
+                        >
+                            <ShareIcon className="w-4 h-4" />
+                        </button>
                     </div>
 
                     <div className="flex items-center justify-between mb-1">
@@ -552,6 +562,17 @@ export default function Sidebar({
                     </p>
                 </div>
             </Modal>
+            {/* Share Modal */}
+            {currentProject && (
+                <ShareModal
+                    isOpen={shareModalOpen}
+                    onClose={() => setShareModalOpen(false)}
+                    project={currentProject}
+                    onUpdate={(updated) => {
+                        if (onUpdateProject) onUpdateProject(updated);
+                    }}
+                />
+            )}
         </>
     );
 }

@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
-import { getFirestore, collection, addDoc, serverTimestamp, query, where, orderBy, getDocs, doc, updateDoc, getDoc } from "firebase/firestore";
+import { getFirestore, collection, addDoc, serverTimestamp, query, where, orderBy, getDocs, doc, updateDoc, getDoc, deleteDoc } from "firebase/firestore";
 
 const firebaseConfig = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -35,6 +35,8 @@ export interface Project {
     id?: string;
     name: string;
     ownerId: string;
+    ownerName?: string;
+    ownerEmail?: string;
     createdAt?: any;
     updatedAt?: any;
     layers: Layer[];
@@ -43,11 +45,13 @@ export interface Project {
 }
 
 // Create a new project
-export async function createProject(name: string, ownerId: string): Promise<{ id: string; name: string }> {
+export async function createProject(name: string, ownerId: string, ownerName: string, ownerEmail: string): Promise<{ id: string; name: string }> {
     try {
         const docRef = await addDoc(collection(db, PROJECTS_COLLECTION), {
             name: name,
             ownerId: ownerId,
+            ownerName: ownerName,
+            ownerEmail: ownerEmail,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
             // New Layer Structure
@@ -102,6 +106,30 @@ export async function getUserProjects(userId: string): Promise<Project[]> {
     }
 }
 
+// Get projects shared with user
+export async function getSharedProjects(userEmail: string): Promise<Project[]> {
+    try {
+        const q = query(
+            collection(db, PROJECTS_COLLECTION),
+            where('collaborators', 'array-contains', userEmail),
+            orderBy('updatedAt', 'desc')
+        );
+        const snapshot = await getDocs(q);
+
+        return snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                layers: data.layers ? parseLayers(data.layers) : []
+            } as Project;
+        });
+    } catch (error) {
+        console.error("Error fetching shared projects:", error);
+        return [];
+    }
+}
+
 // Save/Update project layers
 export async function saveProjectLayers(projectId: string, layers: Layer[]) {
     if (!projectId) return;
@@ -134,6 +162,30 @@ export async function updateProjectSharing(projectId: string, isPublic: boolean,
         });
     } catch (error) {
         console.error("Error updating sharing:", error);
+        throw error;
+    }
+}
+
+// Rename Project
+export async function updateProjectName(projectId: string, newName: string) {
+    try {
+        const projectRef = doc(db, PROJECTS_COLLECTION, projectId);
+        await updateDoc(projectRef, {
+            name: newName,
+            updatedAt: serverTimestamp()
+        });
+    } catch (error) {
+        console.error("Error renaming project:", error);
+        throw error;
+    }
+}
+
+// Delete Project
+export async function deleteProject(projectId: string) {
+    try {
+        await deleteDoc(doc(db, PROJECTS_COLLECTION, projectId));
+    } catch (error) {
+        console.error("Error deleting project:", error);
         throw error;
     }
 }

@@ -1,22 +1,44 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import AuthWrapper, { useAuth } from '@/components/AuthWrapper';
-import { Project, getUserProjects, createProject } from '@/lib/firebase';
+import { Project, getUserProjects, getSharedProjects, createProject, deleteProject, updateProjectName } from '@/lib/firebase';
 import { auth, googleProvider } from '@/lib/firebase';
 import { signInWithPopup } from 'firebase/auth';
 import Modal from '@/components/Modal';
-import { PlusIcon, UserCircleIcon } from '@heroicons/react/24/outline';
+import ShareModal from '@/components/ShareModal';
+import { PlusIcon, UserCircleIcon, EllipsisVerticalIcon, TrashIcon, PencilIcon, ShareIcon } from '@heroicons/react/24/outline';
 
 function Dashboard() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
+  const [sharedProjects, setSharedProjects] = useState<Project[]>([]);
+
+  // Create State
   const [creating, setCreating] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
+
+  // Context Menu State
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+
+  // Action Modal States
+  const [actionProject, setActionProject] = useState<Project | null>(null);
+  const [renameModalOpen, setRenameModalOpen] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  // Close menu on click outside
+  useEffect(() => {
+    const handleClick = () => setMenuOpenId(null);
+    window.addEventListener('click', handleClick);
+    return () => window.removeEventListener('click', handleClick);
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -25,21 +47,60 @@ function Dashboard() {
   }, [user]);
 
   const loadProjects = async () => {
-    if (!user) return;
+    if (!user || !user.email) return;
     const pros = await getUserProjects(user.uid);
     setProjects(pros);
+    const shared = await getSharedProjects(user.email);
+    setSharedProjects(shared);
   };
 
   const handleCreateProject = async () => {
     if (!user || !newProjectName.trim()) return;
     setCreating(true);
     try {
-      const { id } = await createProject(newProjectName, user.uid);
+      const { id } = await createProject(
+        newProjectName,
+        user.uid,
+        user.displayName || "Usuario",
+        user.email || ""
+      );
       router.push(`/${id}`);
     } catch (e) {
       console.error(e);
       alert("Error al crear proyecto");
       setCreating(false);
+    }
+  };
+
+  const handleRename = async () => {
+    if (!actionProject || !renameValue.trim()) return;
+    setActionLoading(true);
+    try {
+      await updateProjectName(actionProject.id!, renameValue);
+      setRenameModalOpen(false);
+      loadProjects(); // Refresh list
+    } catch (e) {
+      console.error(e);
+      alert("Error al renombrar");
+    } finally {
+      setActionLoading(false);
+      setActionProject(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!actionProject) return;
+    setActionLoading(true);
+    try {
+      await deleteProject(actionProject.id!);
+      setDeleteModalOpen(false);
+      loadProjects(); // Refresh list
+    } catch (e) {
+      console.error(e);
+      alert("Error al eliminar");
+    } finally {
+      setActionLoading(false);
+      setActionProject(null);
     }
   };
 
@@ -74,7 +135,7 @@ function Dashboard() {
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
-      <header className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center sticky top-0 z-10">
+      <header className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center sticky top-0 z-10 w-full">
         <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
           <svg className="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0121 18.382V7.618a1 1 0 01-.553-.894L15 4m0 13V4m0 0L9 7" />
@@ -127,36 +188,132 @@ function Dashboard() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {projects.map(project => (
-              <Link
-                href={`/${project.id}`}
-                key={project.id}
-                className="group bg-white rounded-2xl border border-slate-200 p-5 hover:border-blue-300 hover:shadow-md transition-all cursor-pointer flex flex-col h-48"
-              >
-                <div className="flex justify-between items-start mb-2">
-                  <div className="p-2 bg-blue-50 rounded-lg text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
+              <div key={project.id} className="relative group">
+                <Link
+                  href={`/${project.id}`}
+                  className="bg-white rounded-2xl border border-slate-200 p-5 hover:border-blue-300 hover:shadow-md transition-all cursor-pointer flex flex-col h-48"
+                >
+                  <div className="flex justify-between items-start mb-2 pr-8">
+                    <div className="p-2 bg-blue-50 rounded-lg text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <span className="text-xs font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded-md">
+                      {project.updatedAt ? new Date(project.updatedAt.seconds * 1000).toLocaleDateString() : 'Reciente'}
+                    </span>
                   </div>
-                  <span className="text-xs font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded-md">
-                    {project.updatedAt ? new Date(project.updatedAt.seconds * 1000).toLocaleDateString() : 'Reciente'}
-                  </span>
-                </div>
 
-                <h3 className="text-lg font-bold text-slate-800 group-hover:text-blue-600 mb-1">{project.name}</h3>
-                <p className="text-sm text-slate-500 line-clamp-2 flex-1">
-                  {project.layers?.length || 0} capas &bull; {project.layers?.reduce((acc, l) => acc + (l.features?.features?.length || 0), 0) || 0} objetos
-                </p>
+                  <h3 className="text-lg font-bold text-slate-800 group-hover:text-blue-600 mb-1 pr-6">{project.name}</h3>
+                  <p className="text-sm text-slate-500 line-clamp-2 flex-1">
+                    {project.layers?.length || 0} capas &bull; {project.layers?.reduce((acc, l) => acc + (l.features?.features?.length || 0), 0) || 0} objetos
+                  </p>
 
-                <div className="mt-auto pt-4 border-t border-slate-100 flex items-center text-sm text-blue-600 font-medium">
-                  Abrir Proyecto &rarr;
+                  <div className="mt-auto pt-4 border-t border-slate-100 flex items-center text-sm text-blue-600 font-medium">
+                    Abrir Proyecto &rarr;
+                  </div>
+                </Link>
+
+                {/* Context Menu Trigger */}
+                <div className="absolute top-4 right-4 z-10">
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setMenuOpenId(menuOpenId === project.id ? null : project.id!);
+                    }}
+                    className="p-1 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors"
+                  >
+                    <EllipsisVerticalIcon className="w-6 h-6" />
+                  </button>
+
+                  {/* Dropdown Menu */}
+                  {menuOpenId === project.id && (
+                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden z-20 animate-in fade-in zoom-in-95 duration-100">
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault(); e.stopPropagation();
+                          setActionProject(project);
+                          setRenameValue(project.name);
+                          setRenameModalOpen(true);
+                          setMenuOpenId(null);
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-2"
+                      >
+                        <PencilIcon className="w-4 h-4" />
+                        Cambiar nombre
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault(); e.stopPropagation();
+                          setActionProject(project);
+                          setShareModalOpen(true);
+                          setMenuOpenId(null);
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-2"
+                      >
+                        <ShareIcon className="w-4 h-4" />
+                        Compartir
+                      </button>
+                      <div className="h-px bg-slate-100 my-1"></div>
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault(); e.stopPropagation();
+                          setActionProject(project);
+                          setDeleteModalOpen(true);
+                          setMenuOpenId(null);
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                      >
+                        <TrashIcon className="w-4 h-4" />
+                        Eliminar
+                      </button>
+                    </div>
+                  )}
                 </div>
-              </Link>
+              </div>
             ))}
+          </div>
+        )}
+
+        {/* Shared Projects */}
+        {sharedProjects.length > 0 && (
+          <div className="mt-12">
+            <h2 className="text-3xl font-bold text-slate-900 mb-6">Compartidos Conmigo</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {sharedProjects.map(project => (
+                <Link
+                  href={`/${project.id}`}
+                  key={project.id}
+                  className="group bg-white rounded-2xl border border-slate-200 p-5 hover:border-blue-300 hover:shadow-md transition-all cursor-pointer flex flex-col h-48"
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="p-2 bg-green-50 rounded-lg text-green-600 group-hover:bg-green-600 group-hover:text-white transition-colors">
+                      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                      </svg>
+                    </div>
+                    <span className="text-xs font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded-md">
+                      {project.updatedAt ? new Date(project.updatedAt.seconds * 1000).toLocaleDateString() : 'Reciente'}
+                    </span>
+                  </div>
+
+                  <h3 className="text-lg font-bold text-slate-800 group-hover:text-blue-600 mb-1">{project.name}</h3>
+                  <p className="text-sm text-slate-500 line-clamp-2 flex-1">
+                    De: {project.ownerName ? `${project.ownerName} (${project.ownerEmail})` : (project.ownerEmail || project.ownerId)}
+                  </p>
+
+                  <div className="mt-auto pt-4 border-t border-slate-100 flex items-center text-sm text-green-600 font-medium">
+                    Abrir Compartido &rarr;
+                  </div>
+                </Link>
+              ))}
+            </div>
           </div>
         )}
       </main>
 
+      {/* Create Modal */}
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -197,6 +354,58 @@ function Dashboard() {
           />
         </div>
       </Modal>
+
+      {/* Rename Modal */}
+      <Modal
+        isOpen={renameModalOpen}
+        onClose={() => setRenameModalOpen(false)}
+        title="Cambiar nombre"
+        footer={
+          <>
+            <button onClick={() => setRenameModalOpen(false)} className="btn-outline">Cancelar</button>
+            <button onClick={handleRename} disabled={actionLoading} className="btn-primary">
+              {actionLoading ? 'Guardando...' : 'Guardar'}
+            </button>
+          </>
+        }
+      >
+        <input
+          type="text"
+          value={renameValue}
+          onChange={e => setRenameValue(e.target.value)}
+          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          autoFocus
+        />
+      </Modal>
+
+      {/* Delete Modal */}
+      <Modal
+        isOpen={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        title="Eliminar Proyecto"
+        footer={
+          <>
+            <button onClick={() => setDeleteModalOpen(false)} className="btn-outline">Cancelar</button>
+            <button onClick={handleDelete} disabled={actionLoading} className="btn-primary bg-red-600 hover:bg-red-700">
+              {actionLoading ? 'Eliminando...' : 'Eliminar'}
+            </button>
+          </>
+        }
+      >
+        <p className="text-slate-600">
+          ¿Estás seguro de que quieres eliminar <b>{actionProject?.name}</b>? Esta acción no se puede deshacer.
+        </p>
+      </Modal>
+
+      {/* Share Modal */}
+      {actionProject && (
+        <ShareModal
+          isOpen={shareModalOpen}
+          onClose={() => setShareModalOpen(false)}
+          project={actionProject}
+          onUpdate={() => loadProjects()}
+        />
+      )}
     </div>
   );
 }
