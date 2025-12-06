@@ -14,8 +14,11 @@ import {
     ArrowDownTrayIcon,
     ArrowUpTrayIcon,
     DocumentDuplicateIcon,
-    FolderOpenIcon
+    FolderOpenIcon,
+    ClipboardDocumentCheckIcon,
+    PencilSquareIcon
 } from "@heroicons/react/24/outline";
+import { generateColor, parseWKT } from "@/lib/map-utils";
 
 interface SidebarProps {
     projects: Project[];
@@ -70,7 +73,13 @@ export default function Sidebar({
     const [inputValue, setInputValue] = useState("");
     const [layerToDelete, setLayerToDelete] = useState<string | null>(null);
 
-    // Feature Selection State REMOVED (moved to parent)
+    // Paste WKT State
+    const [pasteModalOpen, setPasteModalOpen] = useState(false);
+    const [wktInput, setWktInput] = useState("");
+
+    // Rename State
+    const [renamingFeatureIndex, setRenamingFeatureIndex] = useState<number | null>(null);
+    const [renamingName, setRenamingName] = useState("");
 
     const updateFeatureColor = (index: number, color: string) => {
         const activeLayer = layers.find(l => l.id === activeLayerId);
@@ -151,6 +160,67 @@ export default function Sidebar({
 
         setModalAction(null);
         setInputValue("");
+    };
+
+    const startRenaming = (index: number, currentName: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setRenamingFeatureIndex(index);
+        setRenamingName(currentName || `Objeto ${index + 1}`);
+    };
+
+    const saveRename = (index: number) => {
+        if (!activeLayerId) return;
+        const activeLayer = layers.find(l => l.id === activeLayerId);
+        if (!activeLayer) return;
+
+        const newFeatures = [...(activeLayer.features?.features || [])];
+        if (newFeatures[index]) {
+            newFeatures[index] = {
+                ...newFeatures[index],
+                properties: {
+                    ...newFeatures[index].properties,
+                    name: renamingName
+                }
+            };
+            setLayers(prev => prev.map(l => l.id === activeLayerId ? { ...l, features: { ...l.features, features: newFeatures } } : l));
+        }
+        setRenamingFeatureIndex(null);
+        setRenamingName("");
+    };
+
+    const handlePasteWkt = () => {
+        if (!wktInput.trim()) return;
+        if (!activeLayerId) {
+            alert("Selecciona una capa primero");
+            return;
+        }
+
+        const geojson = parseWKT(wktInput);
+        if (!geojson) {
+            alert("WKT inválido o no soportado");
+            return;
+        }
+
+        const newFeature = {
+            type: "Feature",
+            properties: {
+                name: `Objeto WKT ${Date.now().toString().slice(-4)}`,
+                color: generateColor(),
+            },
+            geometry: geojson
+        };
+
+        const activeLayer = layers.find(l => l.id === activeLayerId);
+        if (activeLayer) {
+            const newFeatures = {
+                ...activeLayer.features,
+                features: [...(activeLayer.features.features || []), newFeature]
+            };
+            setLayers(prev => prev.map(l => l.id === activeLayerId ? { ...l, features: { ...l.features, features: newFeatures } } : l));
+        }
+
+        setWktInput("");
+        setPasteModalOpen(false);
     };
 
     const toggleLayerVisibility = (id: string) => {
@@ -286,6 +356,9 @@ export default function Sidebar({
                 <div className="layers-header" style={{ borderTop: 'none' }}>
                     <h2 style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>Objetos</h2>
                     <div className="layers-actions">
+                        <button onClick={() => setPasteModalOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', marginRight: '5px' }} title="Pegar WKT">
+                            <ClipboardDocumentCheckIcon style={{ width: 18, height: 18, color: '#64748b' }} />
+                        </button>
                         <button onClick={onAddFeature} style={{ background: 'none', border: 'none', cursor: 'pointer' }} title="Agregar Objeto">
                             <PlusIcon style={{ width: 18, height: 18, color: '#64748b' }} />
                         </button>
@@ -325,11 +398,34 @@ export default function Sidebar({
                                         />
                                     </div>
 
-                                    <span className={`flex-1 font-medium truncate ${isSelected ? 'text-blue-700' : 'text-slate-700'}`} title={feature.properties?.name}>
-                                        {feature.properties?.name || `Objeto ${index + 1}`}
-                                    </span>
+                                    {renamingFeatureIndex === index ? (
+                                        <input
+                                            type="text"
+                                            value={renamingName}
+                                            onChange={(e) => setRenamingName(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') saveRename(index);
+                                                if (e.key === 'Escape') setRenamingFeatureIndex(null);
+                                            }}
+                                            onBlur={() => saveRename(index)}
+                                            autoFocus
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="flex-1 px-2 py-1 mx-2 text-sm border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        />
+                                    ) : (
+                                        <span className={`flex-1 font-medium truncate ${isSelected ? 'text-blue-700' : 'text-slate-700'}`} title={feature.properties?.name}>
+                                            {feature.properties?.name || `Objeto ${index + 1}`}
+                                        </span>
+                                    )}
 
                                     <div className="flex items-center gap-1">
+                                        <button
+                                            onClick={(e) => startRenaming(index, feature.properties?.name, e)}
+                                            className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                                            title="Renombrar"
+                                        >
+                                            <PencilSquareIcon className="w-4 h-4" />
+                                        </button>
                                         <button
                                             onClick={(e) => { e.stopPropagation(); onCopyWkt(feature); }}
                                             className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
@@ -428,6 +524,33 @@ export default function Sidebar({
                         />
                     </div>
                 )}
+            </Modal>
+
+            {/* Paste WKT Modal */}
+            <Modal
+                isOpen={pasteModalOpen}
+                onClose={() => setPasteModalOpen(false)}
+                title="Pegar WKT"
+                footer={
+                    <>
+                        <button onClick={() => setPasteModalOpen(false)} className="btn-outline">Cancelar</button>
+                        <button onClick={handlePasteWkt} className="btn-primary">Pegar</button>
+                    </>
+                }
+            >
+                <div className="flex flex-col gap-2">
+                    <label className="text-sm font-medium text-slate-700">Texto WKT</label>
+                    <textarea
+                        value={wktInput}
+                        onChange={(e) => setWktInput(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[120px]"
+                        placeholder="POLYGON ((...))"
+                        autoFocus
+                    />
+                    <p className="text-xs text-slate-500">
+                        Pega aquí tu geometría en formato WKT (Well-Known Text).
+                    </p>
+                </div>
             </Modal>
         </>
     );

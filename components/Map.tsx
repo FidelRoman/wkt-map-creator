@@ -112,14 +112,8 @@ function ActiveLayerEditor({ layers, activeLayerId, onUpdateLayer, requestDraw, 
     }, [selectedIndices]); // Re-run when set changes
 
     // Clear selection on map click
-    useEffect(() => {
-        if (!map) return;
-        const handleMapClick = () => {
-            if (onClearSelection) onClearSelection();
-        };
-        map.on('click', handleMapClick);
-        return () => { map.off('click', handleMapClick); };
-    }, [map, onClearSelection]);
+    // Clear selection on map click - DISABLED per user request
+    // useEffect(() => { ... }, [map, onClearSelection]);
 
 
     // --- Context Menu & Operations ---
