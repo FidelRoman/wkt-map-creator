@@ -23,14 +23,15 @@ interface SidebarProps {
     layers: Layer[];
     setLayers: Dispatch<SetStateAction<Layer[]>>;
     activeLayerId: string | null;
-    setActiveLayerId: (id: string) => void;
+    setActiveLayerId: (id: string | null) => void;
     onLoadProject: (project: Project) => void;
+    isSaving: boolean;
     // Layer actions
     onImportCsv: (file: File) => void;
     onExportLayer: (layerId: string) => void;
-    // Object actions
     onAddFeature: () => void;
     onCopyWkt: (feature: any) => void;
+    onFocusFeature: (feature: any) => void;
 
     // Legacy/Project actions
     onExportProject: () => void;
@@ -44,10 +45,12 @@ export default function Sidebar({
     activeLayerId,
     setActiveLayerId,
     onLoadProject,
+    isSaving,
     onImportCsv,
     onExportLayer,
     onAddFeature,
     onCopyWkt,
+    onFocusFeature,
     onExportProject
 }: SidebarProps) {
     const { user } = useAuth();
@@ -57,8 +60,9 @@ export default function Sidebar({
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Modal States
-    const [modalAction, setModalAction] = useState<'newProject' | 'newLayer' | null>(null);
+    const [modalAction, setModalAction] = useState<'newProject' | 'newLayer' | 'deleteLayer' | null>(null);
     const [inputValue, setInputValue] = useState("");
+    const [layerToDelete, setLayerToDelete] = useState<string | null>(null);
 
     // Feature Selection State
     const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
@@ -158,10 +162,26 @@ export default function Sidebar({
         setLayers(newLayers);
     };
 
-    const deleteLayer = (id: string) => {
-        if (confirm("¿Eliminar capa?")) {
-            setLayers(layers.filter(l => l.id !== id));
+    const deleteLayer = (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        e.preventDefault();
+        setLayerToDelete(id);
+        setModalAction('deleteLayer');
+    };
+
+    const confirmDeleteLayer = () => {
+        if (!layerToDelete) return;
+        setLayers(prev => prev.filter(l => l.id !== layerToDelete));
+        if (activeLayerId === layerToDelete) {
+            const nextLayer = layers.find(l => l.id !== layerToDelete);
+            if (nextLayer) {
+                setActiveLayerId(nextLayer.id);
+            } else {
+                setActiveLayerId(null);
+            }
         }
+        setModalAction(null);
+        setLayerToDelete(null);
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -197,8 +217,26 @@ export default function Sidebar({
                         </a>
                     </div>
 
-                    <div className="font-bold text-slate-800 text-lg mb-1 truncate" title={currentProject?.name}>
-                        {currentProject ? currentProject.name : 'Cargando...'}
+                    <div className="flex items-center justify-between mb-1">
+                        <div className="font-bold text-slate-800 text-lg truncate flex-1" title={currentProject?.name}>
+                            {currentProject ? currentProject.name : 'Cargando...'}
+                        </div>
+                        <div className="text-xs font-medium ml-2">
+                            {isSaving ? (
+                                <span className="flex items-center gap-1 text-slate-400">
+                                    <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                </span>
+                            ) : (
+                                <span className="text-slate-300">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                </span>
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -236,10 +274,10 @@ export default function Sidebar({
                                     <span onClick={(e) => { e.stopPropagation(); onExportLayer(layer.id); }} style={{ cursor: 'pointer', color: '#94a3b8' }} title="Exportar Capa">
                                         <ArrowUpTrayIcon style={{ width: 14, height: 14 }} />
                                     </span>
-                                    <span onClick={(e) => { e.stopPropagation(); toggleLayerVisibility(layer.id); }} className={`layer-visibility ${!layer.visible ? 'hidden' : ''}`}>
+                                    <span onClick={(e) => { e.stopPropagation(); toggleLayerVisibility(layer.id); }} className="layer-visibility cursor-pointer text-slate-400 hover:text-blue-500">
                                         {layer.visible ? <EyeIcon style={{ width: 14, height: 14 }} /> : <EyeSlashIcon style={{ width: 14, height: 14 }} />}
                                     </span>
-                                    <span onClick={(e) => { e.stopPropagation(); deleteLayer(layer.id); }} style={{ cursor: 'pointer', color: '#94a3b8' }} className="hover:text-red-500">
+                                    <span onClick={(e) => deleteLayer(layer.id, e)} style={{ cursor: 'pointer', color: '#94a3b8' }} className="hover:text-red-500">
                                         <TrashIcon style={{ width: 14, height: 14 }} />
                                     </span>
                                 </div>
@@ -272,7 +310,7 @@ export default function Sidebar({
                             return (
                                 <li
                                     key={index}
-                                    onClick={() => toggleSelection(index)}
+                                    onClick={() => { toggleSelection(index); onFocusFeature(feature); }}
                                     className={`flex items-center p-3 mb-2 rounded-xl border transition-all cursor-pointer ${isSelected ? 'bg-blue-50 border-blue-200 shadow-sm' : 'bg-white border-slate-100'}`}
                                 >
                                     <div
@@ -315,46 +353,46 @@ export default function Sidebar({
 
                 {/* Footer Profile */}
                 <div className="user-profile">
-                  <img
-                    src={user.photoURL || "https://via.placeholder.com/36"}
-                    alt="Profile"
-                    className="user-avatar"
-                  />
-                  <div className="user-info">
-                    <span
-                      className="user-name"
-                      title={user.displayName || ""}
+                    <img
+                        src={user.photoURL || "https://via.placeholder.com/36"}
+                        alt="Profile"
+                        className="user-avatar"
+                    />
+                    <div className="user-info">
+                        <span
+                            className="user-name"
+                            title={user.displayName || ""}
+                        >
+                            {user.displayName}
+                        </span>
+                        <span
+                            className="user-email"
+                            title={user.email || ""}
+                        >
+                            {user.email}
+                        </span>
+                    </div>
+                    <button
+                        onClick={handleLogout}
+                        title="Cerrar Sesión"
+                        className="btn-logout"
                     >
-                      {user.displayName}
-                    </span>
-                    <span
-                      className="user-email"
-                      title={user.email || ""}
-                    >
-                      {user.email}
-                    </span>
-                  </div>
-                  <button
-                    onClick={handleLogout}
-                    title="Cerrar Sesión"
-                    className="btn-logout"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                      <polyline points="16 17 21 12 16 7" />
-                      <line x1="21" y1="12" x2="9" y2="12" />
-                    </svg>
-                  </button>
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        >
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                            <polyline points="16 17 21 12 16 7" />
+                            <line x1="21" y1="12" x2="9" y2="12" />
+                        </svg>
+                    </button>
                 </div>
             </div>
 
@@ -362,25 +400,35 @@ export default function Sidebar({
             <Modal
                 isOpen={!!modalAction}
                 onClose={() => setModalAction(null)}
-                title={modalAction === 'newProject' ? 'Nuevo Proyecto' : 'Nueva Capa'}
+                title={modalAction === 'newProject' ? 'Nuevo Proyecto' : modalAction === 'newLayer' ? 'Nueva Capa' : 'Eliminar Capa'}
                 footer={
                     <>
                         <button onClick={() => setModalAction(null)} className="btn-outline">Cancelar</button>
-                        <button onClick={handleModalSubmit} className="btn-primary">Crear</button>
+                        {modalAction === 'deleteLayer' ? (
+                            <button onClick={confirmDeleteLayer} className="btn-primary bg-red-600 hover:bg-red-700">Eliminar</button>
+                        ) : (
+                            <button onClick={handleModalSubmit} className="btn-primary">Crear</button>
+                        )}
                     </>
                 }
             >
-                <div className="flex flex-col gap-2">
-                    <label className="text-sm font-medium text-slate-700">Nombre</label>
-                    <input
-                        type="text"
-                        value={inputValue}
-                        onChange={(e) => setInputValue(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        autoFocus
-                        onKeyDown={(e) => { if (e.key === 'Enter') handleModalSubmit(); }}
-                    />
-                </div>
+                {modalAction === 'deleteLayer' ? (
+                    <p className="text-slate-600">
+                        ¿Estás seguro de que deseas eliminar esta capa? Esta acción no se puede deshacer.
+                    </p>
+                ) : (
+                    <div className="flex flex-col gap-2">
+                        <label className="text-sm font-medium text-slate-700">Nombre</label>
+                        <input
+                            type="text"
+                            value={inputValue}
+                            onChange={(e) => setInputValue(e.target.value)}
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            autoFocus
+                            onKeyDown={(e) => { if (e.key === 'Enter') handleModalSubmit(); }}
+                        />
+                    </div>
+                )}
             </Modal>
         </>
     );

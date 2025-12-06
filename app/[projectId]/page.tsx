@@ -6,8 +6,10 @@ import { useParams } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import AuthWrapper, { useAuth } from '@/components/AuthWrapper';
 import { Project, Layer, getUserProjects, getProject, saveProjectLayers } from '@/lib/firebase';
-import { parseWKT, calculateStats } from '@/lib/map-utils';
+import { parseWKT, calculateStats, generateColor } from '@/lib/map-utils';
+import { parseCSVLine } from '@/lib/csv-utils';
 import Modal from '@/components/Modal';
+import Toast from '@/components/Toast';
 import { stringify } from 'wellknown'; // Assuming we can use this to reverse if needed, or just use property
 
 // Dynamically import Map to avoid SSR window issues
@@ -28,6 +30,8 @@ function ProjectApp() {
 
     // States for feedback
     const [drawRequest, setDrawRequest] = useState<{ type: 'polygon' | 'point', id: number } | null>(null);
+    const [flyToRequest, setFlyToRequest] = useState<any | null>(null);
+    const [toastMessage, setToastMessage] = useState<string | null>(null);
 
     // States for feedback
     const [isSaving, setIsSaving] = useState(false);
@@ -87,35 +91,57 @@ function ProjectApp() {
     // --- Handlers for Sidebar ---
 
     const handleImportCsv = async (file: File) => {
-        if (!activeLayerId) {
-            alert("Selecciona una capa primero");
-            return;
-        }
-
         const text = await file.text();
         const lines = text.split(/\r?\n/);
-        // Simple CSV parser: Look for WKT in each line.
-        // Or if it has headers, try to find a "wkt" column.
-        // Fallback: try to parse the whole line as WKT? Or find a substring starting with POLYGON/POINT?
+
+        let headerIndex = -1;
+        let nameColIndex = -1;
+        let wktColIndex = -1; // Optional, if we want strict column finding, but line searching is robust for simple files.
+
+        // Try to find header
+        if (lines.length > 0) {
+            const potentialHeader = lines[0].toLowerCase();
+            if (potentialHeader.includes('name') || potentialHeader.includes('nombre') || potentialHeader.includes('label') || potentialHeader.includes('wkt')) {
+                headerIndex = 0;
+                // Use robust parser for header too
+                const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().replace(/"/g, ''));
+                nameColIndex = headers.findIndex(h => ['name', 'nombre', 'label', 'id'].includes(h));
+            }
+        }
 
         let addedCount = 0;
         const newFeatures = [];
 
-        for (const line of lines) {
+        for (let i = 0; i < lines.length; i++) {
+            if (i === headerIndex) continue; // Skip header
+            const line = lines[i];
             if (!line.trim()) continue;
-            // Clean quotes if CSV
-            // A very naive matching: find first occurrence of "POLYGON", "POINT", "LINESTRING", etc.
-            // Or just regex for WKT pattern.
+
             const wktMatch = line.match(/(MULTIPOLYGON|POLYGON|POINT|LINESTRING|MULTILINESTRING|MULTIPOINT)\s*\([\s\d\.,\(\)\-\+]+\)/i);
 
             if (wktMatch) {
                 const wkt = wktMatch[0];
                 const geojson = parseWKT(wkt);
+
+                // Try to extract name
+                let name = `Objeto ${addedCount + 1}`;
+                if (nameColIndex !== -1) {
+                    const cols = parseCSVLine(line);
+                    if (cols[nameColIndex]) {
+                        name = cols[nameColIndex].trim().replace(/^"|"$/g, '');
+                    }
+                } else {
+                    // Fallback: if no header, try to find a non-WKT string part or just default
+                }
+
                 if (geojson) {
                     newFeatures.push({
                         type: 'Feature',
                         geometry: geojson,
-                        properties: { name: `Imported ${addedCount + 1}` }
+                        properties: {
+                            name: name,
+                            color: generateColor() // Ensure we have a color
+                        }
                     });
                     addedCount++;
                 }
@@ -123,16 +149,20 @@ function ProjectApp() {
         }
 
         if (addedCount > 0) {
-            const active = layers.find(l => l.id === activeLayerId);
-            if (active) {
-                const currentFeats = active.features?.features || [];
-                const updatedFeats = {
+            const newLayerId = 'layer_' + Date.now();
+            const newLayer: Layer = {
+                id: newLayerId,
+                name: file.name.replace('.csv', '').replace('.txt', '') || 'Capa Importada',
+                visible: true,
+                features: {
                     type: 'FeatureCollection',
-                    features: [...currentFeats, ...newFeatures]
-                };
-                handleUpdateLayer(activeLayerId, updatedFeats);
-                alert(`Importados ${addedCount} objetos exitosamente.`);
-            }
+                    features: newFeatures
+                }
+            };
+
+            setLayers(prev => [...prev, newLayer]);
+            setActiveLayerId(newLayerId);
+            alert(`Importados ${addedCount} objetos en nueva capa "${newLayer.name}".`);
         } else {
             alert("No se encontraron geometrías WKT válidas en el archivo.");
         }
@@ -164,8 +194,7 @@ function ProjectApp() {
         try {
             const wkt = stringify(feature.geometry);
             navigator.clipboard.writeText(wkt).then(() => {
-                // Toast or something? 
-                alert("WKT copiado al portapapeles"); // Simple for now
+                setToastMessage("WKT copiado al portapapeles");
             });
         } catch (e) {
             console.error("Error copying WKT", e);
@@ -183,6 +212,10 @@ function ProjectApp() {
         downloadAnchorNode.remove();
     };
 
+    const handleFocusFeature = (feature: any) => {
+        setFlyToRequest(feature);
+    };
+
     if (loading) return <div>Cargando...</div>;
 
     return (
@@ -195,12 +228,14 @@ function ProjectApp() {
                 activeLayerId={activeLayerId}
                 setActiveLayerId={setActiveLayerId}
                 onLoadProject={loadProject}
+                isSaving={isSaving}
                 // New Props
                 onImportCsv={handleImportCsv}
                 onExportLayer={handleExportLayer}
                 onAddFeature={handleAddFeature}
                 onCopyWkt={handleCopyWkt}
                 onExportProject={handleExportProject}
+                onFocusFeature={handleFocusFeature}
             />
             <div className="flex-1 relative">
                 <Map
@@ -208,26 +243,20 @@ function ProjectApp() {
                     activeLayerId={activeLayerId}
                     onUpdateLayer={handleUpdateLayer}
                     requestDraw={drawRequest}
+                    requestFlyTo={flyToRequest}
+                    onShowToast={(msg) => setToastMessage(msg)}
                 />
 
-                <div className="ui-overlay pointer-events-none">
-                    <header className="app-header pointer-events-auto flex justify-between items-center">
-                        {/* Show Project Name if available */}
-                        <h1>{currentProject ? currentProject.name : 'WKT Map Creator'}</h1>
-                        <div className="text-sm text-slate-500 font-medium bg-white/80 px-3 py-1 rounded-full shadow-sm backdrop-blur-sm">
-                            {isSaving ? (
-                                <span className="flex items-center gap-2 text-blue-600">
-                                    <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                    </svg>
-                                    Guardando...
-                                </span>
-                            ) : 'Guardado'}
-                        </div>
-                    </header>
-                </div>
+
             </div>
+
+            {toastMessage && (
+                <Toast
+                    message={toastMessage}
+                    onClose={() => setToastMessage(null)}
+                    duration={3000}
+                />
+            )}
         </div>
     );
 }

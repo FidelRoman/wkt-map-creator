@@ -23,6 +23,8 @@ interface MapProps {
     activeLayerId: string | null;
     onUpdateLayer: (layerId: string, features: any) => void;
     requestDraw?: { type: 'polygon' | 'point', id: number } | null;
+    requestFlyTo?: any | null;
+    onShowToast?: (message: string) => void;
 }
 
 function FeatureHandler({ layers, activeLayerId, onUpdateLayer }: MapProps) {
@@ -65,7 +67,7 @@ function FeatureHandler({ layers, activeLayerId, onUpdateLayer }: MapProps) {
 }
 
 // Wrapper for the Active Layer to enable Drawing
-function ActiveLayerEditor({ layers, activeLayerId, onUpdateLayer, requestDraw }: MapProps) {
+function ActiveLayerEditor({ layers, activeLayerId, onUpdateLayer, requestDraw, requestFlyTo, onShowToast }: MapProps) {
     const featureGroupRef = useRef<L.FeatureGroup>(null);
     const [mounted, setMounted] = useState(false);
     const map = useMap();
@@ -79,6 +81,23 @@ function ActiveLayerEditor({ layers, activeLayerId, onUpdateLayer, requestDraw }
         window.addEventListener('click', handleClick);
         return () => window.removeEventListener('click', handleClick);
     }, []);
+
+
+    // Fly to bounds trigger
+    useEffect(() => {
+        if (requestFlyTo && map) {
+            try {
+                // Check if bounds valid?
+                const bounds = L.geoJSON(requestFlyTo).getBounds();
+                if (bounds.isValid()) {
+                    map.flyToBounds(bounds, { padding: [50, 50], duration: 1.5 });
+                }
+            } catch (e) {
+                console.error("FlyTo error", e);
+            }
+        }
+    }, [requestFlyTo, map]);
+
 
     // Handle Programmatic Draw Trigger
     useEffect(() => {
@@ -104,6 +123,7 @@ function ActiveLayerEditor({ layers, activeLayerId, onUpdateLayer, requestDraw }
     const activeLayer = layers.find(l => l.id === activeLayerId);
 
     const [menu, setMenu] = useState<{ x: number, y: number, layer: L.Layer | null } | null>(null);
+    const [editingLayer, setEditingLayer] = useState<L.Layer | null>(null);
 
     const _onCreated = (e: any) => {
         const layer = e.layer;
@@ -207,7 +227,11 @@ function ActiveLayerEditor({ layers, activeLayerId, onUpdateLayer, requestDraw }
             const geojson = menu.layer.toGeoJSON();
             const wkt = stringifyWKT(geojson);
             navigator.clipboard.writeText(wkt);
-            alert("WKT copiado al portapapeles");
+            if (onShowToast) {
+                onShowToast("WKT copiado al portapapeles");
+            } else {
+                alert("WKT copiado al portapapeles");
+            }
         }
         setMenu(null);
     };
@@ -222,30 +246,46 @@ function ActiveLayerEditor({ layers, activeLayerId, onUpdateLayer, requestDraw }
         setMenu(null);
     };
 
-    const handleEdit = () => {
-        // Rudimentary edit: just enables global edit?
-        // Actually react-leaflet-draw handles edit state via toolbar.
-
-
-        // Programmatically enabling edit for one feature is hard without accessing Leaflet.Draw internals.
-        // For now, let's just close menu and let user use toolbar, OR selecting it might be enough?
-        // We can mimic a click? `menu.layer.fire('click')`?
-        // Most Leaflet Draw implementations use the toolbar.
-        // Let's just mock it or say "Use Edit Toolbar".
-        // BETTER: If we are in edit mode, we can delete.
-
-        // Actually the user asked "poderse editar".
-        // If I click edit, maybe I can enable the edit handler?
-        // Let's just focus on Delete and Copy for now, and Edit maybe "Start Editing"?
-        // `L.EditToolbar.Edit(map, { featureGroup: group }).enable()` enables for ALL.
-
-        // Let's just close for now or maybe trigger a click which might select it if Edit tool is active.
-        if (menu?.layer instanceof L.Polygon || menu?.layer instanceof L.Polyline) {
+    const handleStopEdit = () => {
+        if (editingLayer) {
             // @ts-ignore
-            menu.layer.editing.enable();
+            if (editingLayer.editing) {
+                // @ts-ignore
+                editingLayer.editing.disable();
+                // Trigger update manually to ensure changes are saved
+                if (activeLayerId && featureGroupRef.current) {
+                    const geojson = featureGroupRef.current.toGeoJSON();
+                    onUpdateLayer(activeLayerId, geojson);
+                }
+            }
+            setEditingLayer(null);
+            setMenu(null);
         }
-        setMenu(null);
     };
+
+    const handleEdit = () => {
+        const layerToEdit = menu?.layer;
+        if (layerToEdit) {
+            // @ts-ignore
+            if (layerToEdit.editing) {
+                // @ts-ignore
+                layerToEdit.editing.enable();
+                setEditingLayer(layerToEdit);
+                setMenu(null);
+            }
+        }
+    };
+
+    // Listen for Escape key to stop editing
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                handleStopEdit();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [editingLayer, activeLayerId]); // tracking editingLayer to have closure access if needed, though state is fresh.
 
 
     if (!activeLayer || !activeLayer.visible) return null;
@@ -338,27 +378,42 @@ function ActiveLayerEditor({ layers, activeLayerId, onUpdateLayer, requestDraw }
                         </svg>
                         <span>Restar selección</span>
                     </div>
-                    {/* Editar */}
-                    <div
-                        onClick={handleEdit}
-                        className="menu-item"
-                    >
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
+                    {/* Editar / Terminar Edición */}
+                    {editingLayer === menu.layer ? (
+                        <div
+                            onClick={handleStopEdit}
+                            className="menu-item"
+                            style={{ color: '#f59e0b' }}
                         >
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4L18.5 2.5z" />
-                        </svg>
-                        <span>Editar</span>
-                    </div>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="15" y1="9" x2="9" y2="15"></line>
+                                <line x1="9" y1="9" x2="15" y2="15"></line>
+                            </svg>
+                            <span>Terminar edición</span>
+                        </div>
+                    ) : (
+                        <div
+                            onClick={handleEdit}
+                            className="menu-item"
+                        >
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                            >
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4L18.5 2.5z" />
+                            </svg>
+                            <span>Editar</span>
+                        </div>
+                    )}
                     {/* Eliminar */}
                     <div
                         onClick={handleDelete}
