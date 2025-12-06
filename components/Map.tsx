@@ -1,0 +1,441 @@
+"use client";
+
+import { useEffect, useRef, useState } from 'react';
+import { MapContainer, TileLayer, FeatureGroup, useMap, GeoJSON } from 'react-leaflet';
+import { EditControl } from 'react-leaflet-draw';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import 'leaflet-draw/dist/leaflet.draw.css';
+import { generateColor, stringifyWKT } from '@/lib/map-utils';
+import { Layer } from '@/lib/firebase';
+
+// Fix Leaflet icons
+// @ts-ignore
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+    iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+    iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
+
+interface MapProps {
+    layers: Layer[];
+    activeLayerId: string | null;
+    onUpdateLayer: (layerId: string, features: any) => void;
+    requestDraw?: { type: 'polygon' | 'point', id: number } | null;
+}
+
+function FeatureHandler({ layers, activeLayerId, onUpdateLayer }: MapProps) {
+    const featureGroupRef = useRef<L.FeatureGroup>(null);
+    const map = useMap();
+
+    // Effect to render non-active layers as static GeoJSON/features
+    // For simplicity in this migration, passing all layers to FeatureGroup might be tricky if we want to separate them.
+    // The original code had one 'drawnItems' for editing and others were just layers.
+    // Here we might want to put ONLY the active layer in the EditControl FeatureGroup,
+    // and other layers as read-only GeoJSON layers.
+
+    // However, react-leaflet-draw works on a FeatureGroup.
+    // Strategy:
+    // 1. We render "Other Layers" as standard <GeoJSON> or <Polygon> list (read-only or context menu driven).
+    // 2. We render "Active Layer" inside the <FeatureGroup> that has <EditControl>.
+    // This allows drawing/editing ONLY on the active layer.
+
+    // BUT `script.js` loaded everything into `drawnItems` but filtered editing?
+    // "activeLayer" in script.js meant the single polygon selected? No, "setActiveLayer" set the *current layer container*.
+    // "activeLayer" variable in script.js was the clicked polygon.
+    // "activeLayerId" in Sidebar is the *Layer Collection* we are editing (e.g. "Capa 1").
+
+    return (
+        <>
+            {layers.map(layer => {
+                if (layer.id === activeLayerId) return null; // Render active layer inside FeatureGroup
+                if (!layer.visible) return null;
+                // Render other layers read-only
+                return (
+                    <GeoJSON
+                        key={layer.id}
+                        data={layer.features}
+                        pathOptions={{ color: '#3388ff', fillOpacity: 0.2 }} // Default style, maybe add color to layer model
+                    />
+                );
+            })}
+        </>
+    );
+}
+
+// Wrapper for the Active Layer to enable Drawing
+function ActiveLayerEditor({ layers, activeLayerId, onUpdateLayer, requestDraw }: MapProps) {
+    const featureGroupRef = useRef<L.FeatureGroup>(null);
+    const [mounted, setMounted] = useState(false);
+    const map = useMap();
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    useEffect(() => {
+        const handleClick = () => setMenu(null);
+        window.addEventListener('click', handleClick);
+        return () => window.removeEventListener('click', handleClick);
+    }, []);
+
+    // Handle Programmatic Draw Trigger
+    useEffect(() => {
+        if (!requestDraw || !map) return;
+
+        // @ts-ignore
+        if (requestDraw.type === 'polygon' && L.Draw && L.Draw.Polygon) {
+            // @ts-ignore
+            new L.Draw.Polygon(map).enable();
+        }
+        // @ts-ignore
+        else if (requestDraw.type === 'point' && L.Draw && L.Draw.Marker) {
+            // @ts-ignore
+            new L.Draw.Marker(map).enable();
+        }
+    }, [requestDraw, map]);
+
+
+    // When active layer changes, we need to clear the feature group and load the new features.
+    // React-Leaflet's FeatureGroup doesn't auto-update children easily if unmanaged.
+    // We will use a ref to set the content manually or rely on `key` to force remount.
+
+    const activeLayer = layers.find(l => l.id === activeLayerId);
+
+    const [menu, setMenu] = useState<{ x: number, y: number, layer: L.Layer | null } | null>(null);
+
+    const _onCreated = (e: any) => {
+        const layer = e.layer;
+
+        // Attach context menu to new layer
+        layer.on('contextmenu', (e: any) => {
+            setMenu({ x: e.originalEvent.clientX, y: e.originalEvent.clientY, layer: layer });
+        });
+
+        // Add to feature group if not added by EditControl (EditControl usually adds it)
+        // Check if it's already there? EditControl adds it to the FeatureGroup it wraps.
+        // BUT if we trigger draw manually via L.Draw.Polygon(map), does it add to this FeatureGroup?
+        // NO. L.Draw via map adds it to map (or nothing?). It fires draw:created.
+        // We need to catch draw:created globally or from map if we trigger it manually?
+        // Actually EditControl listens to map 'draw:created'.
+        // Let's verify if EditControl picks it up. 
+        // If not, we might need a map event listener here too.
+
+        if (activeLayerId && featureGroupRef.current) {
+            // Wait for next tick to ensure layer is added?
+            // Actually _onCreated is called by EditControl.
+            // If we use manual draw, we should ensure the result goes into our Update loop.
+
+            // If manual draw fires map event, EditControl might NOT pick it up if it didn't initiate it?
+            // "The created layer is added to the map by default" -> No, L.Draw doesn't add.
+            // We need to listen to map.on('draw:created') for manual triggers.
+        }
+
+        if (activeLayerId && featureGroupRef.current) {
+            // The layer is already added by EditControl if it originated there.
+            // If manual, we need to add it manually to featureGroupRef.
+            featureGroupRef.current.addLayer(layer);
+
+            const geojson = featureGroupRef.current.toGeoJSON();
+            onUpdateLayer(activeLayerId, geojson);
+        }
+    };
+
+    // Listen for manual draw creation which bypasses EditControl's onCreate sometimes
+    useEffect(() => {
+        if (!map) return;
+
+        const handleManualCreated = (e: any) => {
+            // Need to distinguish if EditControl handled it?
+            // EditControl binds to draw:created too.
+            // If we add it twice, it might be bad.
+            // Let's see. If I use `new L.Draw.Polygon`, the type is 'polygon'.
+            // EditControl props `onCreated` might only fire for its own toolbar.
+
+            if (e.layerType === 'polygon' || e.layerType === 'marker') {
+                // Add to our group
+                if (featureGroupRef.current) {
+                    // Check if already has layer? Leaflet IDs.
+                    if (!featureGroupRef.current.hasLayer(e.layer)) {
+                        featureGroupRef.current.addLayer(e.layer);
+
+                        // Attach simple events
+                        e.layer.on('contextmenu', (evt: any) => {
+                            setMenu({ x: evt.originalEvent.clientX, y: evt.originalEvent.clientY, layer: e.layer });
+                        });
+
+                        // Update
+                        if (activeLayerId) {
+                            const geojson = featureGroupRef.current.toGeoJSON();
+                            onUpdateLayer(activeLayerId, geojson);
+                        }
+                    }
+                }
+            }
+        };
+
+        map.on('draw:created', handleManualCreated);
+        return () => {
+            map.off('draw:created', handleManualCreated);
+        };
+    }, [map, activeLayerId]);
+
+
+    const _onEdited = (e: any) => {
+        if (activeLayerId && featureGroupRef.current) {
+            const geojson = featureGroupRef.current.toGeoJSON();
+            onUpdateLayer(activeLayerId, geojson);
+        }
+    };
+
+    const _onDeleted = (e: any) => {
+        if (activeLayerId && featureGroupRef.current) {
+            const geojson = featureGroupRef.current.toGeoJSON();
+            onUpdateLayer(activeLayerId, geojson);
+        }
+    };
+
+    // Handler passed to InitialDataLoader
+    const handleContextMenu = (e: any, layer: L.Layer) => {
+        setMenu({ x: e.originalEvent.clientX, y: e.originalEvent.clientY, layer: layer });
+    };
+
+    const handleCopyWKT = () => {
+        if (menu?.layer) {
+            // @ts-ignore
+            const geojson = menu.layer.toGeoJSON();
+            const wkt = stringifyWKT(geojson);
+            navigator.clipboard.writeText(wkt);
+            alert("WKT copiado al portapapeles");
+        }
+        setMenu(null);
+    };
+
+    const handleDelete = () => {
+        if (menu?.layer && featureGroupRef.current) {
+            featureGroupRef.current.removeLayer(menu.layer);
+            // Trigger update
+            const geojson = featureGroupRef.current.toGeoJSON();
+            if (activeLayerId) onUpdateLayer(activeLayerId, geojson);
+        }
+        setMenu(null);
+    };
+
+    const handleEdit = () => {
+        // Rudimentary edit: just enables global edit?
+        // Actually react-leaflet-draw handles edit state via toolbar.
+
+
+        // Programmatically enabling edit for one feature is hard without accessing Leaflet.Draw internals.
+        // For now, let's just close menu and let user use toolbar, OR selecting it might be enough?
+        // We can mimic a click? `menu.layer.fire('click')`?
+        // Most Leaflet Draw implementations use the toolbar.
+        // Let's just mock it or say "Use Edit Toolbar".
+        // BETTER: If we are in edit mode, we can delete.
+
+        // Actually the user asked "poderse editar".
+        // If I click edit, maybe I can enable the edit handler?
+        // Let's just focus on Delete and Copy for now, and Edit maybe "Start Editing"?
+        // `L.EditToolbar.Edit(map, { featureGroup: group }).enable()` enables for ALL.
+
+        // Let's just close for now or maybe trigger a click which might select it if Edit tool is active.
+        if (menu?.layer instanceof L.Polygon || menu?.layer instanceof L.Polyline) {
+            // @ts-ignore
+            menu.layer.editing.enable();
+        }
+        setMenu(null);
+    };
+
+
+    if (!activeLayer || !activeLayer.visible) return null;
+
+
+
+    return (
+        <>
+            <FeatureGroup ref={featureGroupRef} key={activeLayerId}>
+                <EditControl
+                    position="topleft"
+                    onCreated={_onCreated}
+                    onEdited={_onEdited}
+                    onDeleted={_onDeleted}
+                    draw={{
+                        rectangle: true,
+                        polygon: true,
+                        circle: false,
+                        circlemarker: false,
+                        marker: true,
+                        polyline: true,
+                    }}
+                />
+                <InitialDataLoader data={activeLayer.features} groupRef={featureGroupRef} onContextMenu={handleContextMenu} />
+            </FeatureGroup>
+
+            {menu && (
+                <div
+                    className="context-menu"
+                    style={{
+                        position: 'fixed', // usamos fixed para respetar clientX/clientY
+                        top: menu.y,
+                        left: menu.x,
+                        display: 'block', // sobrescribe el display:none del CSS
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    {/* Copiar WKT */}
+                    <div
+                        onClick={handleCopyWKT}
+                        className="menu-item"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        >
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                        </svg>
+                        <span>Copiar WKT</span>
+                        <svg
+                            className="check-icon"
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        >
+                            <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                    </div>
+                    {/* Restar selección (visible sólo si luego lo usas) */}
+                    <div
+                        className="menu-item"
+                        style={{ display: 'none' }}
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        >
+                            <path d="M5 12h14" />
+                        </svg>
+                        <span>Restar selección</span>
+                    </div>
+                    {/* Editar */}
+                    <div
+                        onClick={handleEdit}
+                        className="menu-item"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        >
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4L18.5 2.5z" />
+                        </svg>
+                        <span>Editar</span>
+                    </div>
+                    {/* Eliminar */}
+                    <div
+                        onClick={handleDelete}
+                        className="menu-item"
+                        style={{ color: '#ef4444' }}
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        >
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                        </svg>
+                        <span>Eliminar</span>
+                    </div>
+                </div>
+            )}
+        </>
+    );
+}
+
+// Helper to hydrate the FeatureGroup with existing GeoJSON
+function InitialDataLoader({ data, groupRef, onContextMenu }: { data: any, groupRef: any, onContextMenu?: any }) {
+    useEffect(() => {
+        if (!groupRef.current || !data) return;
+
+        // Clear existing layers in this group (should be empty on remount but safe to check)
+        groupRef.current.clearLayers();
+
+        if (data.type === 'FeatureCollection') {
+            L.geoJSON(data, {
+                style: (feature: any) => ({
+                    color: feature?.properties?.color || '#3388ff',
+                    fillColor: feature?.properties?.color || '#3388ff',
+                    weight: 2
+                }),
+                onEachFeature: (feature: any, layer: L.Layer) => {
+                    // @ts-ignore
+                    layer.on('contextmenu', (e) => {
+                        // @ts-ignore
+                        if (onContextMenu) {
+                            // @ts-ignore
+                            onContextMenu(e, layer);
+                        }
+                    });
+                    groupRef.current?.addLayer(layer);
+                }
+            });
+        }
+
+    }, [data, groupRef]);
+    return null;
+}
+
+
+export default function MapComponent(props: MapProps) {
+    return (
+        <MapContainer center={[-12.0464, -77.0428]} zoom={12} style={{ height: "100%", width: "100%" }}>
+            <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+            {/* Non-active layers (Visual only) */}
+            {props.layers.map(layer => {
+                if (layer.id === props.activeLayerId || !layer.visible) return null;
+                return <GeoJSON key={layer.id} data={layer.features} pathOptions={{ color: '#64748b' }} />;
+            })}
+
+            {/* Active editing layer */}
+            <ActiveLayerEditor {...props} />
+        </MapContainer>
+    );
+}
