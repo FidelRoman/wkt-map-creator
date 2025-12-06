@@ -142,75 +142,108 @@ function ActiveLayerEditor({ layers, activeLayerId, onUpdateLayer, requestDraw, 
     };
 
     const handleSubtract = () => {
-        if (!menu?.layer || selectedIndices.size !== 2 || menu.index === -1) return;
+        // Debug Phase: Trace execution
+        // alert("Debug: Start handleSubtract"); 
+
+        if (!menu?.layer) {
+            alert("Debug: No menu layer");
+            return;
+        }
+        if (selectedIndices.size !== 2) {
+            alert(`Debug: Selected count is ${selectedIndices.size}, need 2`);
+            return;
+        }
+        if (menu.index === -1) {
+            alert("Debug: Menu index is -1");
+            return;
+        }
 
         const subjectIndex = menu.index;
-        // Find the other index
         const otherIndex = Array.from(selectedIndices).find(i => i !== subjectIndex);
 
-        if (otherIndex === undefined || !featureGroupRef.current) return;
+        if (otherIndex === undefined) {
+            alert("Debug: Other index not found");
+            return;
+        }
+
+        if (!featureGroupRef.current) {
+            alert("Debug: No FeatureGroup ref");
+            return;
+        }
 
         const allLayers = featureGroupRef.current.getLayers();
         const subjectLayer = allLayers[subjectIndex];
         const clipLayer = allLayers[otherIndex];
 
-        if (subjectLayer && clipLayer) {
-            try {
-                // @ts-ignore
-                const sG = subjectLayer.toGeoJSON();
-                // @ts-ignore
-                const cG = clipLayer.toGeoJSON();
+        if (!subjectLayer || !clipLayer) {
+            alert("Debug: Layers not found in FeatureGroup");
+            return;
+        }
 
-                // Validate Geometries (must be Polygon or MultiPolygon)
-                const validTypes = ['Polygon', 'MultiPolygon'];
-                if (!validTypes.includes(sG.geometry.type) || !validTypes.includes(cG.geometry.type)) {
-                    alert("La operación de resta solo es válida para Polígonos.");
-                    return;
-                }
+        try {
+            // @ts-ignore
+            const sG = subjectLayer.toGeoJSON();
+            // @ts-ignore
+            const cG = clipLayer.toGeoJSON();
 
-                // Turf v7 difference expects a FeatureCollection usually, or (poly1, poly2). 
-                // Documentation says difference(features).
-                let difference;
-                try {
-                    difference = turf.difference(turf.featureCollection([sG, cG]));
-                } catch (err) {
-                    console.error("Turf difference error:", err);
-                    alert("Error calculando la diferencia. Verifica las geometrías.");
-                    return;
-                }
+            // Simplify geometry prep: just rewind to fix winding order
+            // @ts-ignore
+            const sGTyped = turf.rewind(sG, { reverse: true });
+            // @ts-ignore
+            const cGTyped = turf.rewind(cG, { reverse: true });
 
-                if (!difference) {
-                    alert("No hay intersección o el resultado es vacío (geometría eliminada por completo).");
-                    // If result is null, it means subject was fully inside clip? 
-                    // In that case, we should probably just remove the subject.
-                    // But usually returning null implies "nothing left".
-                    // For now, alert and do nothing is safer.
-                    return;
-                }
+            const validTypes = ['Polygon', 'MultiPolygon'];
+            // @ts-ignore
+            if (!validTypes.includes(sGTyped.geometry.type) || !validTypes.includes(cGTyped.geometry.type)) {
+                if (onShowToast) onShowToast("Error: Solo se pueden restar Polígonos");
+                else alert("Error: Tipos inválidos");
+                return;
+            }
 
-                // Update Data
+            // Perform Difference directly
+            // Turf v7: difference(featureCollection)
+            // @ts-ignore
+            const collection = turf.featureCollection([sGTyped, cGTyped]);
+            const difference = turf.difference(collection as any);
+
+            if (!difference) {
+                // This creates ambiguity: did it fail, or was it fully removed?
+                // We'll treat it as "result is empty geometry" -> remove subject.
+                if (onShowToast) onShowToast("Aviso: El polígono fue eliminado completamente");
+
+                // Remove subject layer
                 const currentGeoJSON = featureGroupRef.current.toGeoJSON() as any;
-                const features = currentGeoJSON.features;
+                const features = currentGeoJSON.features.filter((_: any, i: number) => i !== subjectIndex);
+                const newCollection = { ...currentGeoJSON, features };
 
-                // Remove subject layer from features list
-                const newFeatures = features.filter((_: any, i: number) => i !== subjectIndex);
-
-                // Add the result of the difference
-                newFeatures.push(difference);
-
-                const newCollection = { ...currentGeoJSON, features: newFeatures };
-
-                if (activeLayerId) {
-                    onUpdateLayer(activeLayerId, newCollection);
-                }
+                if (activeLayerId) onUpdateLayer(activeLayerId, newCollection);
+                else alert("Debug: No activeLayerId to update");
 
                 setMenu(null);
                 if (onClearSelection) onClearSelection();
-
-            } catch (e) {
-                console.error("Error in subtract operation", e);
-                alert("Ocurrió un error inesperado al restar.");
+                return;
             }
+
+            // Normal Success Case
+            const currentGeoJSON = featureGroupRef.current.toGeoJSON() as any;
+            const features = currentGeoJSON.features;
+            const newFeatures = features.filter((_: any, i: number) => i !== subjectIndex);
+            newFeatures.push(difference);
+
+            if (activeLayerId) {
+                onUpdateLayer(activeLayerId, { ...currentGeoJSON, features: newFeatures });
+                if (onShowToast) onShowToast("Resta completada exitosamente");
+            } else {
+                alert("Debug: No activeLayerId (Main branch)");
+            }
+
+            setMenu(null);
+            if (onClearSelection) onClearSelection();
+
+        } catch (err: any) {
+            console.error("Subtract error:", err);
+            if (onShowToast) onShowToast(`Error: ${err.message || "Fallo en resta"}`);
+            else alert(`Error: ${err.message}`);
         }
     };
 
