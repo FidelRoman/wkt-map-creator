@@ -54,7 +54,7 @@ export default function ActiveLayerEditor({
         allLayers.forEach((l: any, index: number) => {
             if (selectedIndices.has(index)) {
                 if (typeof l.setStyle === 'function') {
-                    l.setStyle({ dashArray: '10, 10', weight: 4, color: '#f59e0b' });
+                    l.setStyle({ dashArray: '10, 10', weight: 4, color: l.feature?.properties?.color || '#3388ff' });
                 }
             } else {
                 if (typeof l.setStyle === 'function') {

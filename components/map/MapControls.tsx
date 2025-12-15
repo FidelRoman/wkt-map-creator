@@ -59,14 +59,15 @@ export default function MapControls({ activeTileLayer, setActiveTileLayer }: Map
             try {
                 const PERU_VIEWBOX = "-81.5,0.5,-68,-19"; // left,top,right,bottom
                 const url = new URL("https://nominatim.openstreetmap.org/search");
-                url.searchParams.set("format", "json");
+                url.searchParams.set("format", "jsonv2");
+                url.searchParams.set("accept-language", "es-PE,es");
                 url.searchParams.set("q", searchQuery);
                 url.searchParams.set("limit", "10");
                 url.searchParams.set("addressdetails", "1");
                 url.searchParams.set("countrycodes", "pe");
                 url.searchParams.set("dedupe", "1");
                 url.searchParams.set("viewbox", PERU_VIEWBOX);
-                url.searchParams.set("bounded", "1");
+                // url.searchParams.set("bounded", "1");
 
                 const response = await fetch(url.toString());
                 const data = await response.json();
