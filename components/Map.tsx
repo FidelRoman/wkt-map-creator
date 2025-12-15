@@ -1,4 +1,6 @@
 "use client";
+import { useState } from 'react';
+import MapControls, { MAP_LAYERS } from './map/MapControls';
 
 import { MapContainer, TileLayer, GeoJSON } from 'react-leaflet';
 import L from 'leaflet';
@@ -29,11 +31,17 @@ interface MapProps {
 }
 
 export default function MapComponent(props: MapProps) {
+    const [activeTileLayer, setActiveTileLayer] = useState("light");
+
+    // @ts-ignore
+    const currentLayer = MAP_LAYERS[activeTileLayer] || MAP_LAYERS['osm'];
+
     return (
         <MapContainer center={[-12.0464, -77.0428]} zoom={12} style={{ height: "100%", width: "100%" }}>
+            <MapControls activeTileLayer={activeTileLayer} setActiveTileLayer={setActiveTileLayer} />
             <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                attribution={currentLayer.attribution}
+                url={currentLayer.url}
             />
             {/* Non-active layers (Visual only) */}
             {props.layers.map(layer => {
