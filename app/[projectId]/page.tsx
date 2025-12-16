@@ -80,9 +80,45 @@ function ProjectApp() {
         }
     }, [projectId]);
 
+    // Access Control
+    const [accessDenied, setAccessDenied] = useState(false);
+
+    useEffect(() => {
+        if (loading) return; // Waiting for auth to initialize
+        if (!currentProject) return; // Waiting for project data
+
+        const isPublic = currentProject.isPublic;
+        const isOwner = user && user.uid === currentProject.ownerId;
+        const isCollaborator = user && user.email && currentProject.collaborators?.includes(user.email);
+
+        if (!isPublic && !isOwner && !isCollaborator) {
+            setAccessDenied(true);
+        } else {
+            setAccessDenied(false);
+        }
+    }, [user, loading, currentProject]);
+
+
+    // Determine Access Level (ReadOnly)
+    const isReadOnly = useMemo(() => {
+        if (!currentProject) return true;
+        if (accessDenied) return true; // Safety
+        if (!user) return true;
+        if (currentProject.ownerId === user.uid) return false;
+
+        const userEmail = user.email;
+        if (userEmail && currentProject.collaborators?.includes(userEmail)) {
+            const role = currentProject.roles?.[userEmail];
+            return role === 'viewer';
+        }
+        return true;
+    }, [currentProject, user, accessDenied]);
+
+
     // Auto-save effect (debounced)
     useEffect(() => {
         if (!projectId || layers.length === 0) return;
+        if (isReadOnly) return; // SKIP SAVE
 
         setIsSaving(true);
         const timeout = setTimeout(() => {
@@ -93,7 +129,7 @@ function ProjectApp() {
             }
         }, 2000);
         return () => clearTimeout(timeout);
-    }, [layers, projectId]);
+    }, [layers, projectId, isReadOnly]);
 
 
     const loadUserProjects = async (uid: string) => {
@@ -244,6 +280,20 @@ function ProjectApp() {
         setFlyToRequest(feature);
     };
 
+    if (accessDenied) {
+        return (
+            <div className="flex h-screen w-screen items-center justify-center bg-gray-50 flex-col gap-4">
+                <div className="p-4 bg-white rounded-xl shadow-sm border border-slate-200 text-center max-w-md">
+                    <h1 className="text-xl font-bold text-slate-800 mb-2">Acceso Restringido</h1>
+                    <p className="text-slate-600 mb-4 text-sm">Este proyecto es privado y no tienes permisos para verlo.</p>
+                    <a href="/" className="inline-block px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors">
+                        Volver al Inicio
+                    </a>
+                </div>
+            </div>
+        );
+    }
+
     if (loading) return <div>Cargando...</div>;
 
     return (
@@ -257,6 +307,7 @@ function ProjectApp() {
                 setActiveLayerId={handleSetActiveLayerId}
                 onLoadProject={loadProject}
                 isSaving={isSaving}
+                isReadOnly={isReadOnly}
                 // New Props
                 onImportCsv={handleImportCsv}
                 onExportLayer={handleExportLayer}

@@ -42,6 +42,7 @@ export interface Project {
     layers: Layer[];
     isPublic: boolean;
     collaborators: string[];
+    roles?: Record<string, 'editor' | 'viewer'>;
 }
 
 // Create a new project
@@ -153,12 +154,13 @@ export async function saveProjectLayers(projectId: string, layers: Layer[]) {
 }
 
 // Update sharing settings
-export async function updateProjectSharing(projectId: string, isPublic: boolean, collaborators: string[] = []) {
+export async function updateProjectSharing(projectId: string, isPublic: boolean, collaborators: string[] = [], roles: Record<string, 'editor' | 'viewer'> = {}) {
     try {
         const projectRef = doc(db, PROJECTS_COLLECTION, projectId);
         await updateDoc(projectRef, {
             isPublic: isPublic,
-            collaborators: collaborators
+            collaborators: collaborators,
+            roles: roles
         });
     } catch (error) {
         console.error("Error updating sharing:", error);

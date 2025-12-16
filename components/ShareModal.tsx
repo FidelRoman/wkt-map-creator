@@ -13,19 +13,22 @@ interface ShareModalProps {
 export default function ShareModal({ isOpen, onClose, project, onUpdate }: ShareModalProps) {
     const [isPublic, setIsPublic] = useState(project.isPublic);
     const [collaborators, setCollaborators] = useState<string[]>(project.collaborators || []);
+    const [roles, setRoles] = useState<Record<string, 'editor' | 'viewer'>>(project.roles || {});
     const [newEmail, setNewEmail] = useState("");
+    const [newRole, setNewRole] = useState<'editor' | 'viewer'>('editor');
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
         setIsPublic(project.isPublic);
         setCollaborators(project.collaborators || []);
+        setRoles(project.roles || {});
     }, [project]);
 
     const handleSave = async () => {
         setLoading(true);
         try {
-            await updateProjectSharing(project.id!, isPublic, collaborators);
-            onUpdate({ ...project, isPublic, collaborators });
+            await updateProjectSharing(project.id!, isPublic, collaborators, roles);
+            onUpdate({ ...project, isPublic, collaborators, roles });
             onClose();
         } catch (error) {
             console.error(error);
@@ -45,12 +48,22 @@ export default function ShareModal({ isOpen, onClose, project, onUpdate }: Share
         if (collaborators.includes(newEmail)) return;
 
         setCollaborators([...collaborators, newEmail]);
+        setRoles({ ...roles, [newEmail]: newRole });
         setNewEmail("");
     };
 
     const removeCollaborator = (email: string) => {
         setCollaborators(collaborators.filter(c => c !== email));
+        const newRoles = { ...roles };
+        delete newRoles[email];
+        setRoles(newRoles);
     };
+
+    const handleRoleChange = (email: string, role: 'editor' | 'viewer') => {
+        setRoles({ ...roles, [email]: role });
+    }
+
+    const publicLink = typeof window !== 'undefined' ? `${window.location.origin}/${project.id}` : '';
 
     return (
         <Modal
@@ -68,20 +81,41 @@ export default function ShareModal({ isOpen, onClose, project, onUpdate }: Share
         >
             <div className="space-y-6">
                 {/* Public Link Section */}
-                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200">
-                    <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-lg ${isPublic ? 'bg-green-100 text-green-600' : 'bg-slate-200 text-slate-500'}`}>
-                            <LinkIcon className="w-5 h-5" />
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                    <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-lg ${isPublic ? 'bg-green-100 text-green-600' : 'bg-slate-200 text-slate-500'}`}>
+                                <LinkIcon className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <p className="font-medium text-slate-800">Acceso Público</p>
+                                <p className="text-sm text-slate-500">Cualquiera con el link puede ver</p>
+                            </div>
                         </div>
-                        <div>
-                            <p className="font-medium text-slate-800">Acceso Público</p>
-                            <p className="text-sm text-slate-500">Cualquiera con el link puede ver</p>
-                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" className="sr-only peer" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} />
+                            <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
                     </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" className="sr-only peer" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} />
-                        <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
+                    {isPublic && (
+                        <div className="mt-3 flex items-center gap-2">
+                            <input
+                                type="text"
+                                readOnly
+                                value={publicLink}
+                                className="flex-1 bg-white border border-slate-300 text-slate-600 text-xs rounded p-2 overflow-hidden text-ellipsis"
+                            />
+                            <button
+                                onClick={() => {
+                                    navigator.clipboard.writeText(publicLink);
+                                    alert("Link copiado!");
+                                }}
+                                className="text-blue-600 hover:text-blue-700 text-xs font-medium"
+                            >
+                                Copiar
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 <hr className="border-slate-100" />
@@ -101,6 +135,14 @@ export default function ShareModal({ isOpen, onClose, project, onUpdate }: Share
                             value={newEmail}
                             onChange={(e) => setNewEmail(e.target.value)}
                         />
+                        <select
+                            value={newRole}
+                            onChange={(e) => setNewRole(e.target.value as 'editor' | 'viewer')}
+                            className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            <option value="editor">Editor</option>
+                            <option value="viewer">Lector</option>
+                        </select>
                         <button type="submit" className="px-3 py-2 bg-blue-50 text-blue-600 font-medium rounded-lg text-sm hover:bg-blue-100">
                             Agregar
                         </button>
@@ -118,13 +160,23 @@ export default function ShareModal({ isOpen, onClose, project, onUpdate }: Share
                                     </div>
                                     <span className="text-sm text-slate-700">{email}</span>
                                 </div>
-                                <button
-                                    onClick={() => removeCollaborator(email)}
-                                    className="text-slate-400 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    title="Quitar acceso"
-                                >
-                                    <XMarkIcon className="w-4 h-4" />
-                                </button>
+                                <div className="flex items-center gap-2">
+                                    <select
+                                        value={roles[email] || 'editor'}
+                                        onChange={(e) => handleRoleChange(email, e.target.value as 'editor' | 'viewer')}
+                                        className="text-xs border border-slate-200 rounded px-1 py-0.5 bg-white text-slate-600 focus:outline-none"
+                                    >
+                                        <option value="editor">Editor</option>
+                                        <option value="viewer">Lector</option>
+                                    </select>
+                                    <button
+                                        onClick={() => removeCollaborator(email)}
+                                        className="text-slate-400 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        title="Quitar acceso"
+                                    >
+                                        <XMarkIcon className="w-4 h-4" />
+                                    </button>
+                                </div>
                             </div>
                         ))}
                     </div>

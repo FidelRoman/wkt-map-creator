@@ -42,6 +42,7 @@ interface SidebarProps {
     onToggleSelection: (index: number, multi: boolean) => void;
     onClearSelection: () => void;
     onUpdateProject?: (project: Project) => void;
+    isReadOnly?: boolean;
 }
 
 export default function Sidebar({
@@ -62,7 +63,8 @@ export default function Sidebar({
     selectedIndices,
     onToggleSelection,
     onClearSelection,
-    onUpdateProject
+    onUpdateProject,
+    isReadOnly = false
 }: SidebarProps) {
     const { user } = useAuth();
     const [projectListOpen, setProjectListOpen] = useState(false);
@@ -284,20 +286,31 @@ export default function Sidebar({
                         <a href="/" className="text-sm text-blue-600 hover:underline flex items-center gap-1">
                             &larr; Volver al Dashboard
                         </a>
-                        <button
-                            onClick={() => setShareModalOpen(true)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white p-1.5 rounded-lg transition-colors shadow-sm"
-                            title="Compartir Proyecto"
-                        >
-                            <ShareIcon className="w-4 h-4" />
-                        </button>
+                        {!isReadOnly && (
+                            <button
+                                onClick={() => setShareModalOpen(true)}
+                                className="bg-blue-600 hover:bg-blue-700 text-white p-1.5 rounded-lg transition-colors shadow-sm"
+                                title="Compartir Proyecto"
+                            >
+                                <ShareIcon className="w-4 h-4" />
+                            </button>
+                        )}
                     </div>
 
                     <div className="flex items-center justify-between mb-1">
-                        <div className="font-bold text-slate-800 text-lg truncate flex-1" title={currentProject?.name}>
-                            {currentProject ? currentProject.name : 'Cargando...'}
+                        <div className="flex-1 min-w-0">
+                            <div className="font-bold text-slate-800 text-lg truncate" title={currentProject?.name}>
+                                {currentProject ? currentProject.name : 'Cargando...'}
+                            </div>
+                            {isReadOnly && (
+                                <div className="mt-1">
+                                    <span className="text-[10px] bg-slate-100 text-slate-500 border border-slate-200 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium">
+                                        Lector
+                                    </span>
+                                </div>
+                            )}
                         </div>
-                        <div className="text-xs font-medium ml-2">
+                        <div className="text-xs font-medium ml-2 self-start mt-1">
                             {isSaving ? (
                                 <span className="flex items-center gap-1 text-slate-400">
                                     <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
