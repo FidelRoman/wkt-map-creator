@@ -221,7 +221,7 @@ export default function Sidebar({
                 ...activeLayer.features,
                 features: [...(activeLayer.features.features || []), newFeature]
             };
-            setLayers(prev => prev.map(l => l.id === activeLayerId ? { ...l, features: { ...l.features, features: newFeatures } } : l));
+            setLayers(prev => prev.map(l => l.id === activeLayerId ? { ...l, features: newFeatures } : l));
         }
 
         setWktInput("");

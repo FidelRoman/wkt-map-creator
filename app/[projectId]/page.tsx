@@ -236,10 +236,30 @@ function ProjectApp() {
         const layer = layers.find(l => l.id === layerId);
         if (!layer) return;
 
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(layer.features));
+        // CSV Header
+        let csvContent = "id,name,color,wkt\n";
+
+        // CSV Rows
+        layer.features.features.forEach((feature: any, index: number) => {
+            const props = feature.properties || {};
+            const name = (props.name || `Objeto ${index + 1}`).replace(/"/g, '""'); // Escape quotes
+            const color = (props.color || '#000000').replace(/"/g, '""');
+
+            let wkt = "";
+            try {
+                wkt = stringify(feature.geometry); // Uses wellknown stringify
+            } catch (e) {
+                console.error("Error stringifying geometry", e);
+            }
+
+            // Wrap fields in quotes to handle commas
+            csvContent += `"${index}","${name}","${color}","${wkt}"\n`;
+        });
+
+        const dataStr = "data:text/csv;charset=utf-8," + encodeURIComponent(csvContent);
         const downloadAnchorNode = document.createElement('a');
         downloadAnchorNode.setAttribute("href", dataStr);
-        downloadAnchorNode.setAttribute("download", `${layer.name}.geojson`);
+        downloadAnchorNode.setAttribute("download", `${layer.name}.csv`);
         document.body.appendChild(downloadAnchorNode);
         downloadAnchorNode.click();
         downloadAnchorNode.remove();
