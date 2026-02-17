@@ -303,7 +303,7 @@ export default function ActiveLayerEditor({
                     onEdited={_onEdited}
                     onDeleted={_onDeleted}
                     draw={{
-                        rectangle: true, polygon: true, circle: false, circlemarker: false, marker: true, polyline: true
+                        rectangle: true, polygon: true, circle: false, circlemarker: false, marker: true, polyline: false
                     }}
                 />
                 <InitialDataLoader
