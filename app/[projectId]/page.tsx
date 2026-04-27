@@ -237,7 +237,7 @@ function ProjectApp() {
         if (!layer) return;
 
         // CSV Header
-        let csvContent = "id,name,color,wkt\n";
+        let csvContent = "id,name,color,WKT\n";
 
         // CSV Rows
         layer.features.features.forEach((feature: any, index: number) => {
