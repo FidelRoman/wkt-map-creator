@@ -174,6 +174,79 @@ export default function ActiveLayerEditor({
         }
     };
 
+    const handleAdd = () => {
+        if (!menu?.layer || selectedIndices.size !== 2 || menu.index === -1) {
+            return;
+        }
+
+        const subjectIndex = menu.index;
+        const otherIndex = Array.from(selectedIndices).find(i => i !== subjectIndex);
+
+        if (otherIndex === undefined || !featureGroupRef.current) {
+            return;
+        }
+
+        const allLayers = featureGroupRef.current.getLayers();
+        const subjectLayer = allLayers[subjectIndex];
+        const clipLayer = allLayers[otherIndex];
+
+        if (!subjectLayer || !clipLayer) return;
+
+        try {
+            // @ts-ignore
+            const sG = subjectLayer.toGeoJSON();
+            // @ts-ignore
+            const cG = clipLayer.toGeoJSON();
+
+            // @ts-ignore
+            const sGTyped = turf.rewind(sG, { reverse: true });
+            // @ts-ignore
+            const cGTyped = turf.rewind(cG, { reverse: true });
+
+            const validTypes = ['Polygon', 'MultiPolygon'];
+            // @ts-ignore
+            if (!validTypes.includes(sGTyped.geometry.type) || !validTypes.includes(cGTyped.geometry.type)) {
+                if (onShowToast) onShowToast("Error: Solo se pueden sumar Polígonos");
+                else alert("Error: Tipos inválidos");
+                return;
+            }
+
+            // @ts-ignore
+            const collection = turf.featureCollection([sGTyped, cGTyped]);
+            const unionFeature = turf.union(collection as any);
+
+            if (!unionFeature) {
+                if (onShowToast) onShowToast("Error: No se pudo realizar la suma.");
+                return;
+            }
+
+            if (unionFeature.geometry.type === 'MultiPolygon') {
+                if (onShowToast) onShowToast("Aviso: Los polígonos no se intersectan (el resultado es MultiPolygon). Acerquelos para unirlos en 1 solo.");
+                else alert("Aviso: Los polígonos deben intersectarse para unirse en 1 solo polígono.");
+                return;
+            }
+
+            const currentGeoJSON = featureGroupRef.current.toGeoJSON() as any;
+            const features = currentGeoJSON.features;
+            
+            // Remove both original polygons and add the union
+            const newFeatures = features.filter((_: any, i: number) => i !== subjectIndex && i !== otherIndex);
+            newFeatures.push(unionFeature);
+
+            if (activeLayerId) {
+                onUpdateLayer(activeLayerId, { ...currentGeoJSON, features: newFeatures });
+                if (onShowToast) onShowToast("Suma completada exitosamente");
+            }
+
+            setMenu(null);
+            if (onClearSelection) onClearSelection();
+
+        } catch (err: any) {
+            console.error("Add error:", err);
+            if (onShowToast) onShowToast(`Error: ${err.message || "Fallo en suma"}`);
+        }
+    };
+
     // --- Event Binding Helper ---
     const setupLayerEvents = (layer: any) => {
         layer.off('click');
@@ -325,10 +398,16 @@ export default function ActiveLayerEditor({
                     </div>
 
                     {showSubtract ? (
-                        <div onClick={handleSubtract} className="menu-item" style={{ display: 'flex', gap: '10px', padding: '10px', cursor: 'pointer', alignItems: 'center' }}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M5 12h14" /></svg>
-                            <span>Restar selección</span>
-                        </div>
+                        <>
+                            <div onClick={handleSubtract} className="menu-item" style={{ display: 'flex', gap: '10px', padding: '10px', cursor: 'pointer', alignItems: 'center' }}>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M5 12h14" /></svg>
+                                <span>Restar selección</span>
+                            </div>
+                            <div onClick={handleAdd} className="menu-item" style={{ display: 'flex', gap: '10px', padding: '10px', cursor: 'pointer', alignItems: 'center' }}>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                                <span>Sumar selección</span>
+                            </div>
+                        </>
                     ) : null}
 
                     {editingLayer === menu.layer ? (
