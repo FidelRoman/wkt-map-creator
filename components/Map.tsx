@@ -7,7 +7,8 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import { Layer } from '@/lib/firebase';
-import ActiveLayerEditor from './map/ActiveLayerEditor'; // Import extracted component
+import ActiveLayerEditor from './map/ActiveLayerEditor';
+import type { PlanId } from '@/lib/plans';
 
 // Fix Leaflet icons
 // @ts-ignore
@@ -28,6 +29,8 @@ interface MapProps {
     selectedIndices?: Set<number>;
     onToggleSelection?: (index: number, multi: boolean) => void;
     onClearSelection?: () => void;
+    plan?: PlanId;
+    onUpgradeRequired?: (reason: any) => void;
 }
 
 export default function MapComponent(props: MapProps) {

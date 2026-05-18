@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
-import { getFirestore, collection, addDoc, serverTimestamp, query, where, orderBy, getDocs, doc, updateDoc, getDoc, deleteDoc } from "firebase/firestore";
+import { getFirestore, collection, addDoc, serverTimestamp, query, where, orderBy, getDocs, doc, updateDoc, getDoc, deleteDoc, setDoc } from "firebase/firestore";
+import type { PlanId } from './plans';
 
 const firebaseConfig = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -23,6 +24,128 @@ export { app, auth, db, googleProvider };
 // Firestore Helpers
 
 const PROJECTS_COLLECTION = 'projects';
+const USERS_COLLECTION = 'users';
+
+export interface UserProfile {
+    uid: string;
+    email: string;
+    displayName: string;
+    plan: PlanId;
+    lsCustomerId: string | null;
+    lsSubscriptionId: string | null;
+    lsCustomerPortalUrl: string | null;
+    subscriptionStatus: 'active' | 'trialing' | 'past_due' | 'canceled' | null;
+    currentPeriodEnd: any | null;
+    usageCounters: {
+        projectCount: number;
+        apiCallsThisMonth: number;
+        apiCallsResetAt: any;
+    };
+    hasCompletedOnboarding: boolean;
+    apiKeys: Array<{ key: string; name: string; createdAt: any; lastUsed: any | null }>;
+    createdAt: any;
+}
+
+export async function getUserProfile(uid: string): Promise<UserProfile | null> {
+    try {
+        const docRef = doc(db, USERS_COLLECTION, uid);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+            return { uid, ...docSnap.data() } as UserProfile;
+        }
+        return null;
+    } catch (error) {
+        console.error("Error fetching user profile:", error);
+        return null;
+    }
+}
+
+export async function createUserProfile(uid: string, email: string, displayName: string): Promise<UserProfile> {
+    const profile: Omit<UserProfile, 'uid'> = {
+        email,
+        displayName,
+        plan: 'free',
+        lsCustomerId: null,
+        lsSubscriptionId: null,
+        lsCustomerPortalUrl: null,
+        subscriptionStatus: null,
+        currentPeriodEnd: null,
+        usageCounters: {
+            projectCount: 0,
+            apiCallsThisMonth: 0,
+            apiCallsResetAt: serverTimestamp(),
+        },
+        hasCompletedOnboarding: false,
+        apiKeys: [],
+        createdAt: serverTimestamp(),
+    };
+    await setDoc(doc(db, USERS_COLLECTION, uid), profile);
+    return { uid, ...profile };
+}
+
+export async function updateUserProfile(uid: string, updates: Partial<UserProfile>): Promise<void> {
+    const docRef = doc(db, USERS_COLLECTION, uid);
+    await updateDoc(docRef, updates as Record<string, unknown>);
+}
+
+export async function incrementProjectCount(uid: string, delta: number): Promise<void> {
+    try {
+        const profile = await getUserProfile(uid);
+        if (!profile) return;
+        const newCount = Math.max(0, (profile.usageCounters?.projectCount ?? 0) + delta);
+        await updateDoc(doc(db, USERS_COLLECTION, uid), {
+            'usageCounters.projectCount': newCount
+        });
+    } catch (error) {
+        console.error("Error updating project count:", error);
+    }
+}
+
+export interface Snapshot {
+    id?: string;
+    projectId: string;
+    ownerId: string;
+    name: string;
+    layers: any[];
+    createdAt: any;
+}
+
+export async function createSnapshot(projectId: string, ownerId: string, name: string, layers: Layer[]): Promise<string> {
+    const serializedLayers = layers.map(l => ({
+        ...l,
+        features: typeof l.features === 'string' ? l.features : JSON.stringify(l.features)
+    }));
+    const docRef = await addDoc(collection(db, 'snapshots'), {
+        projectId,
+        ownerId,
+        name,
+        layers: serializedLayers,
+        createdAt: serverTimestamp(),
+    });
+    return docRef.id;
+}
+
+export async function getSnapshots(projectId: string, limitCount: number = 20): Promise<Snapshot[]> {
+    try {
+        const q = query(
+            collection(db, 'snapshots'),
+            where('projectId', '==', projectId),
+            orderBy('createdAt', 'desc')
+        );
+        const snapshot = await getDocs(q);
+        return snapshot.docs.slice(0, limitCount).map(d => ({
+            id: d.id,
+            ...d.data()
+        })) as Snapshot[];
+    } catch (error) {
+        console.error("Error fetching snapshots:", error);
+        return [];
+    }
+}
+
+export async function deleteSnapshot(snapshotId: string): Promise<void> {
+    await deleteDoc(doc(db, 'snapshots', snapshotId));
+}
 
 export interface Layer {
     id: string;
@@ -55,19 +178,18 @@ export async function createProject(name: string, ownerId: string, ownerName: st
             ownerEmail: ownerEmail,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
-            // New Layer Structure
             layers: [
                 {
                     id: 'layer_' + Date.now(),
                     name: 'Capa 1',
                     visible: true,
-                    // Serialize empty features
                     features: JSON.stringify({ type: "FeatureCollection", features: [] })
                 }
             ],
             isPublic: false,
             collaborators: []
         });
+        await incrementProjectCount(ownerId, 1);
         return { id: docRef.id, name };
     } catch (error) {
         console.error("Error creating project:", error);
@@ -183,9 +305,10 @@ export async function updateProjectName(projectId: string, newName: string) {
 }
 
 // Delete Project
-export async function deleteProject(projectId: string) {
+export async function deleteProject(projectId: string, ownerId?: string) {
     try {
         await deleteDoc(doc(db, PROJECTS_COLLECTION, projectId));
+        if (ownerId) await incrementProjectCount(ownerId, -1);
     } catch (error) {
         console.error("Error deleting project:", error);
         throw error;

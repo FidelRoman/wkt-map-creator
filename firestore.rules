@@ -1,0 +1,57 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(resource) {
+      return isSignedIn() && resource.data.ownerId == request.auth.uid;
+    }
+
+    function isCollaborator(resource) {
+      return isSignedIn() && request.auth.token.email in resource.data.collaborators;
+    }
+
+    function isViewer(resource) {
+       let email = request.auth.token.email;
+       return isCollaborator(resource) &&
+              resource.data.roles.get(email, 'editor') == 'viewer';
+    }
+
+    function isEditor(resource) {
+       return isOwner(resource) || (isCollaborator(resource) && !isViewer(resource));
+    }
+
+    // --- User Profiles ---
+    match /users/{uid} {
+      allow read, write: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    // --- Projects ---
+    match /projects/{projectId} {
+      allow get: if resource.data.isPublic == true || isOwner(resource) || isCollaborator(resource);
+
+      allow list: if isSignedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        request.auth.token.email in resource.data.collaborators
+      );
+
+      allow create: if isSignedIn() &&
+                    request.resource.data.ownerId == request.auth.uid;
+
+      allow update: if isEditor(resource);
+
+      allow delete: if isOwner(resource);
+    }
+
+    // --- Snapshots ---
+    match /snapshots/{snapshotId} {
+      allow read: if isSignedIn() && request.auth.uid == resource.data.ownerId;
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.ownerId;
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.ownerId;
+    }
+  }
+}

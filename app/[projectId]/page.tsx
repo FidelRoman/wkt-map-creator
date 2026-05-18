@@ -10,7 +10,11 @@ import { parseWKT, calculateStats, generateColor } from '@/lib/map-utils';
 import { parseCSVLine } from '@/lib/csv-utils';
 import Modal from '@/components/Modal';
 import Toast from '@/components/Toast';
-import { stringify } from 'wellknown'; // Assuming we can use this to reverse if needed, or just use property
+import UpgradeModal from '@/components/UpgradeModal';
+import { stringify } from 'wellknown';
+import { checkLimit, hasFeature } from '@/lib/plans';
+// @ts-ignore
+import tokml from 'tokml';
 
 // Dynamically import Map to avoid SSR window issues
 const Map = dynamic(() => import('@/components/Map'), {
@@ -19,7 +23,9 @@ const Map = dynamic(() => import('@/components/Map'), {
 });
 
 function ProjectApp() {
-    const { user, loading } = useAuth();
+    const { user, loading, userProfile } = useAuth();
+    const plan = userProfile?.plan ?? 'free';
+    const [upgradeModalReason, setUpgradeModalReason] = useState<React.ComponentProps<typeof UpgradeModal>['reason']>(undefined);
     const params = useParams();
     const projectId = params.projectId as string;
 
@@ -232,37 +238,55 @@ function ProjectApp() {
         }
     };
 
-    const handleExportLayer = (layerId: string) => {
+    const handleExportLayer = (layerId: string, format: 'csv' | 'geojson' | 'kml' = 'csv') => {
         const layer = layers.find(l => l.id === layerId);
         if (!layer) return;
 
-        // CSV Header
-        let csvContent = "id,name,color,WKT\n";
+        if (format === 'kml') {
+            if (!hasFeature(plan, 'hasKmlExport')) {
+                setUpgradeModalReason({ type: 'feature', featureKey: 'hasKmlExport', requiredPlan: 'pro' });
+                return;
+            }
+            const kmlStr = tokml(layer.features, { documentName: layer.name, documentDescription: '' });
+            const dataStr = "data:application/vnd.google-earth.kml+xml;charset=utf-8," + encodeURIComponent(kmlStr);
+            const a = document.createElement('a');
+            a.setAttribute("href", dataStr);
+            a.setAttribute("download", `${layer.name}.kml`);
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            return;
+        }
 
-        // CSV Rows
+        if (format === 'geojson') {
+            const dataStr = "data:application/json;charset=utf-8," + encodeURIComponent(JSON.stringify(layer.features, null, 2));
+            const a = document.createElement('a');
+            a.setAttribute("href", dataStr);
+            a.setAttribute("download", `${layer.name}.geojson`);
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            return;
+        }
+
+        // CSV (default, free)
+        let csvContent = "id,name,color,WKT\n";
         layer.features.features.forEach((feature: any, index: number) => {
             const props = feature.properties || {};
-            const name = (props.name || `Objeto ${index + 1}`).replace(/"/g, '""'); // Escape quotes
+            const name = (props.name || `Objeto ${index + 1}`).replace(/"/g, '""');
             const color = (props.color || '#000000').replace(/"/g, '""');
-
             let wkt = "";
-            try {
-                wkt = stringify(feature.geometry); // Uses wellknown stringify
-            } catch (e) {
-                console.error("Error stringifying geometry", e);
-            }
-
-            // Wrap fields in quotes to handle commas
+            try { wkt = stringify(feature.geometry); } catch (e) { console.error(e); }
             csvContent += `"${index}","${name}","${color}","${wkt}"\n`;
         });
 
         const dataStr = "data:text/csv;charset=utf-8," + encodeURIComponent(csvContent);
-        const downloadAnchorNode = document.createElement('a');
-        downloadAnchorNode.setAttribute("href", dataStr);
-        downloadAnchorNode.setAttribute("download", `${layer.name}.csv`);
-        document.body.appendChild(downloadAnchorNode);
-        downloadAnchorNode.click();
-        downloadAnchorNode.remove();
+        const a = document.createElement('a');
+        a.setAttribute("href", dataStr);
+        a.setAttribute("download", `${layer.name}.csv`);
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
     };
 
     const handleAddFeature = () => {
@@ -352,9 +376,9 @@ function ProjectApp() {
                     selectedIndices={selectedIndices}
                     onToggleSelection={handleSelectionChange}
                     onClearSelection={() => setSelectedIndices(new Set())}
+                    plan={plan}
+                    onUpgradeRequired={(reason) => setUpgradeModalReason(reason as any)}
                 />
-
-
             </div>
 
             {toastMessage && (
@@ -364,6 +388,12 @@ function ProjectApp() {
                     duration={3000}
                 />
             )}
+
+            <UpgradeModal
+                isOpen={!!upgradeModalReason}
+                onClose={() => setUpgradeModalReason(undefined)}
+                reason={upgradeModalReason}
+            />
         </div>
     );
 }

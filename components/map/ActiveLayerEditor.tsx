@@ -6,6 +6,7 @@ import * as turf from '@turf/turf';
 import { stringifyWKT } from '@/lib/map-utils';
 import InitialDataLoader from './InitialDataLoader';
 import { Layer } from '@/lib/firebase';
+import { checkLimit, hasFeature, type PlanId } from '@/lib/plans';
 
 interface ActiveLayerEditorProps {
     layers: Layer[];
@@ -17,6 +18,8 @@ interface ActiveLayerEditorProps {
     selectedIndices?: Set<number>;
     onToggleSelection?: (index: number, multi: boolean) => void;
     onClearSelection?: () => void;
+    plan?: PlanId;
+    onUpgradeRequired?: (reason: { type: 'limit'; limitKey: 'maxFeaturesPerLayer'; current: number; limit: number; requiredPlan: PlanId }) => void;
 }
 
 export default function ActiveLayerEditor({
@@ -28,11 +31,15 @@ export default function ActiveLayerEditor({
     onShowToast,
     selectedIndices = new Set(),
     onToggleSelection,
-    onClearSelection
+    onClearSelection,
+    plan = 'free',
+    onUpgradeRequired,
 }: ActiveLayerEditorProps) {
     const featureGroupRef = useRef<L.FeatureGroup>(null);
     const [menu, setMenu] = useState<{ x: number, y: number, layer: L.Layer | null, index: number } | null>(null);
     const [editingLayer, setEditingLayer] = useState<L.Layer | null>(null);
+    const [bufferInputOpen, setBufferInputOpen] = useState(false);
+    const [bufferDistance, setBufferDistance] = useState('500');
     const map = useMap();
 
     // --- Selection Logic ---
@@ -83,7 +90,7 @@ export default function ActiveLayerEditor({
 
     // Close menu
     useEffect(() => {
-        const handleClick = () => setMenu(null);
+        const handleClick = () => { setMenu(null); setBufferInputOpen(false); setBufferDistance('500'); };
         window.addEventListener('click', handleClick);
         return () => window.removeEventListener('click', handleClick);
     }, []);
@@ -265,6 +272,16 @@ export default function ActiveLayerEditor({
     const _onCreated = (e: any) => {
         const layer = e.layer;
         if (activeLayerId && featureGroupRef.current) {
+            const activeLayer = layers.find(l => l.id === activeLayerId);
+            const featureCount = activeLayer?.features?.features?.length ?? 0;
+            const check = checkLimit(plan, 'maxFeaturesPerLayer', featureCount);
+            if (!check.allowed) {
+                featureGroupRef.current.removeLayer(layer);
+                if (onUpgradeRequired) {
+                    onUpgradeRequired({ type: 'limit', limitKey: 'maxFeaturesPerLayer', current: featureCount, limit: check.limit!, requiredPlan: check.upgradeRequired! });
+                }
+                return;
+            }
             setupLayerEvents(layer);
             const geojson = featureGroupRef.current.toGeoJSON();
             onUpdateLayer(activeLayerId, geojson);
@@ -361,6 +378,43 @@ export default function ActiveLayerEditor({
         setMenu(null);
     };
 
+    const handleBuffer = () => {
+        if (!hasFeature(plan, 'hasSpatialAnalysis')) {
+            if (onUpgradeRequired) {
+                onUpgradeRequired({ type: 'limit', limitKey: 'maxFeaturesPerLayer', current: 0, limit: 0, requiredPlan: 'pro' });
+            }
+            setMenu(null);
+            return;
+        }
+        setBufferInputOpen(true);
+    };
+
+    const handleBufferConfirm = () => {
+        const distMeters = parseFloat(bufferDistance);
+        if (isNaN(distMeters) || distMeters <= 0) {
+            if (onShowToast) onShowToast("Distancia inválida");
+            return;
+        }
+        if (!menu?.layer || !activeLayerId || !featureGroupRef.current) { setMenu(null); setBufferInputOpen(false); return; }
+        try {
+            // @ts-ignore
+            const feature = menu.layer.toGeoJSON();
+            const buffered = turf.buffer(feature, distMeters / 1000, { units: 'kilometers' });
+            if (!buffered) { if (onShowToast) onShowToast("Error al crear buffer"); setMenu(null); setBufferInputOpen(false); return; }
+            buffered.properties = { name: `Buffer ${distMeters}m`, color: '#f59e0b' };
+
+            const currentGeoJSON = featureGroupRef.current.toGeoJSON() as any;
+            const newFeatures = [...currentGeoJSON.features, buffered];
+            onUpdateLayer(activeLayerId, { ...currentGeoJSON, features: newFeatures });
+            if (onShowToast) onShowToast(`Buffer de ${distMeters}m creado`);
+        } catch {
+            if (onShowToast) onShowToast("Error al crear buffer");
+        }
+        setMenu(null);
+        setBufferInputOpen(false);
+        setBufferDistance('500');
+    };
+
     if (!layers.find(l => l.id === activeLayerId)?.visible) return null;
     const activeLayerData = layers.find(l => l.id === activeLayerId)?.features;
 
@@ -422,6 +476,45 @@ export default function ActiveLayerEditor({
                         </div>
                     )}
 
+                    {bufferInputOpen ? (
+                        <div style={{ padding: '8px 10px' }} onClick={e => e.stopPropagation()}>
+                            <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '6px', fontWeight: 600 }}>Distancia del buffer</p>
+                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                <input
+                                    type="number"
+                                    value={bufferDistance}
+                                    onChange={e => setBufferDistance(e.target.value)}
+                                    onKeyDown={e => e.key === 'Enter' && handleBufferConfirm()}
+                                    autoFocus
+                                    min={1}
+                                    style={{ width: '90px', padding: '5px 8px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '13px', outline: 'none' }}
+                                />
+                                <span style={{ fontSize: '12px', color: '#94a3b8' }}>metros</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+                                <button
+                                    onClick={handleBufferConfirm}
+                                    style={{ flex: 1, padding: '5px 8px', background: 'var(--primary-color, #3b82f6)', color: 'white', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+                                >
+                                    Crear
+                                </button>
+                                <button
+                                    onClick={() => { setBufferInputOpen(false); setBufferDistance('500'); }}
+                                    style={{ flex: 1, padding: '5px 8px', background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+                                >
+                                    Cancelar
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div onClick={handleBuffer} className="menu-item" style={{ display: 'flex', gap: '10px', padding: '10px', cursor: 'pointer', alignItems: 'center' }}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="9" strokeDasharray="2 2"/></svg>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                Buffer
+                                {!hasFeature(plan, 'hasSpatialAnalysis') && <span style={{ fontSize: '10px', background: '#6366f1', color: 'white', padding: '1px 5px', borderRadius: '99px', fontWeight: 700 }}>Pro</span>}
+                            </span>
+                        </div>
+                    )}
                     <div onClick={handleDelete} className="menu-item" style={{ color: '#ef4444', display: 'flex', gap: '10px', padding: '10px', cursor: 'pointer', alignItems: 'center' }}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
                         <span>Eliminar</span>

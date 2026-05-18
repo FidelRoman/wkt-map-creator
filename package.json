@@ -10,8 +10,11 @@
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
+    "@opentelemetry/api": "^1.9.1",
     "@turf/turf": "^7.3.1",
+    "@types/react-window": "^1.8.8",
     "firebase": "^12.6.0",
+    "firebase-admin": "^13.10.0",
     "leaflet": "^1.9.4",
     "leaflet-draw": "^1.0.4",
     "leaflet-omnivore": "^0.3.4",
@@ -20,6 +23,8 @@
     "react-dom": "19.2.0",
     "react-leaflet": "^5.0.0",
     "react-leaflet-draw": "^0.21.0",
+    "react-window": "^2.2.7",
+    "stripe": "^22.1.1",
     "tokml": "^0.4.0",
     "wellknown": "^0.5.0"
   },

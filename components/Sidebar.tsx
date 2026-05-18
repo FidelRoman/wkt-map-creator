@@ -1,10 +1,14 @@
 "use client";
 import { useState, Dispatch, SetStateAction, useRef } from "react";
+import Link from "next/link";
 import Modal from "@/components/Modal";
 import { Project, Layer, createProject } from "@/lib/firebase";
 import { useAuth } from "@/components/AuthWrapper";
 import { signInWithPopup, signOut } from "firebase/auth";
 import { auth, googleProvider } from "@/lib/firebase";
+import { checkLimit, hasFeature } from "@/lib/plans";
+import UpgradeModal from "@/components/UpgradeModal";
+import PlanBadge from "@/components/PlanBadge";
 import {
     EyeIcon,
     EyeSlashIcon,
@@ -15,7 +19,8 @@ import {
     DocumentDuplicateIcon,
     FolderOpenIcon,
     ClipboardDocumentCheckIcon,
-    PencilSquareIcon
+    PencilSquareIcon,
+    Cog6ToothIcon
 } from "@heroicons/react/24/outline";
 import ShareModal from "@/components/ShareModal";
 import { generateColor, parseWKT } from "@/lib/map-utils";
@@ -43,6 +48,11 @@ interface SidebarProps {
     onClearSelection: () => void;
     onUpdateProject?: (project: Project) => void;
     isReadOnly?: boolean;
+
+    // Sandbox mode — no auth required, save prompts Google login
+    sandboxMode?: boolean;
+    onSandboxSave?: () => void;
+    isSandboxSaving?: boolean;
 }
 
 export default function Sidebar({
@@ -64,11 +74,16 @@ export default function Sidebar({
     onToggleSelection,
     onClearSelection,
     onUpdateProject,
-    isReadOnly = false
+    isReadOnly = false,
+    sandboxMode = false,
+    onSandboxSave,
+    isSandboxSaving = false,
 }: SidebarProps) {
-    const { user } = useAuth();
+    const { user, userProfile } = useAuth();
     const [projectListOpen, setProjectListOpen] = useState(false);
     const [shareModalOpen, setShareModalOpen] = useState(false);
+    const [upgradeModal, setUpgradeModal] = useState<React.ComponentProps<typeof UpgradeModal>['reason']>(undefined);
+    const plan = userProfile?.plan ?? 'free';
 
     // File Input Ref
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -137,6 +152,11 @@ export default function Sidebar({
     };
 
     const openNewLayerModal = () => {
+        const check = checkLimit(plan, 'maxLayersPerProject', layers.length);
+        if (!check.allowed) {
+            setUpgradeModal({ type: 'limit', limitKey: 'maxLayersPerProject', current: layers.length, limit: check.limit!, requiredPlan: check.upgradeRequired! });
+            return;
+        }
         setInputValue("Nueva Capa");
         setModalAction('newLayer');
     };
@@ -199,6 +219,14 @@ export default function Sidebar({
             alert("Selecciona una capa primero");
             return;
         }
+        const activeLayer = layers.find(l => l.id === activeLayerId);
+        const featureCount = activeLayer?.features?.features?.length ?? 0;
+        const check = checkLimit(plan, 'maxFeaturesPerLayer', featureCount);
+        if (!check.allowed) {
+            setUpgradeModal({ type: 'limit', limitKey: 'maxFeaturesPerLayer', current: featureCount, limit: check.limit!, requiredPlan: check.upgradeRequired! });
+            setPasteModalOpen(false);
+            return;
+        }
 
         const geojson = parseWKT(wktInput);
         if (!geojson) {
@@ -214,8 +242,6 @@ export default function Sidebar({
             },
             geometry: geojson
         };
-
-        const activeLayer = layers.find(l => l.id === activeLayerId);
         if (activeLayer) {
             const newFeatures = {
                 ...activeLayer.features,
@@ -263,7 +289,7 @@ export default function Sidebar({
         if (fileInputRef.current) fileInputRef.current.value = "";
     };
 
-    if (!user) {
+    if (!user && !sandboxMode) {
         return (
             <div id="login-overlay">
                 <div className="login-card">
@@ -281,52 +307,65 @@ export default function Sidebar({
         <>
             <div className="sidebar">
                 {/* Header: Proyectos */}
-                <div className="project-header" style={{ padding: '20px', borderBottom: '1px solid #f1f5f9' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                        <a href="/" className="text-sm text-blue-600 hover:underline flex items-center gap-1">
-                            &larr; Volver al Dashboard
-                        </a>
-                        {!isReadOnly && (
-                            <button
-                                onClick={() => setShareModalOpen(true)}
-                                className="bg-blue-600 hover:bg-blue-700 text-white p-1.5 rounded-lg transition-colors shadow-sm"
-                                title="Compartir Proyecto"
-                            >
-                                <ShareIcon className="w-4 h-4" />
-                            </button>
-                        )}
-                    </div>
-
-                    <div className="flex items-center justify-between mb-1">
-                        <div className="flex-1 min-w-0">
-                            <div className="font-bold text-slate-800 text-lg truncate" title={currentProject?.name}>
-                                {currentProject ? currentProject.name : 'Cargando...'}
+                <div className="project-header" style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9' }}>
+                    {sandboxMode ? (
+                        <div className="flex items-center gap-2">
+                            <svg className="w-5 h-5 text-indigo-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                            </svg>
+                            <span className="font-bold text-slate-800 text-base">WKT Map Creator</span>
+                            <span className="text-[10px] bg-slate-100 text-slate-500 border border-slate-200 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium ml-auto">
+                                Demo
+                            </span>
+                        </div>
+                    ) : (
+                        <>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                <a href="/" className="text-sm text-blue-600 hover:underline flex items-center gap-1">
+                                    &larr; Volver al Dashboard
+                                </a>
+                                {!isReadOnly && (
+                                    <button
+                                        onClick={() => setShareModalOpen(true)}
+                                        className="bg-blue-600 hover:bg-blue-700 text-white p-1.5 rounded-lg transition-colors shadow-sm"
+                                        title="Compartir Proyecto"
+                                    >
+                                        <ShareIcon className="w-4 h-4" />
+                                    </button>
+                                )}
                             </div>
-                            {isReadOnly && (
-                                <div className="mt-1">
-                                    <span className="text-[10px] bg-slate-100 text-slate-500 border border-slate-200 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium">
-                                        Lector
-                                    </span>
+                            <div className="flex items-center justify-between mb-1">
+                                <div className="flex-1 min-w-0">
+                                    <div className="font-bold text-slate-800 text-lg truncate" title={currentProject?.name}>
+                                        {currentProject ? currentProject.name : 'Cargando...'}
+                                    </div>
+                                    {isReadOnly && (
+                                        <div className="mt-1">
+                                            <span className="text-[10px] bg-slate-100 text-slate-500 border border-slate-200 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium">
+                                                Lector
+                                            </span>
+                                        </div>
+                                    )}
                                 </div>
-                            )}
-                        </div>
-                        <div className="text-xs font-medium ml-2 self-start mt-1">
-                            {isSaving ? (
-                                <span className="flex items-center gap-1 text-slate-400">
-                                    <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                    </svg>
-                                </span>
-                            ) : (
-                                <span className="text-slate-300">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                        <polyline points="20 6 9 17 4 12" />
-                                    </svg>
-                                </span>
-                            )}
-                        </div>
-                    </div>
+                                <div className="text-xs font-medium ml-2 self-start mt-1">
+                                    {isSaving ? (
+                                        <span className="flex items-center gap-1 text-slate-400">
+                                            <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                            </svg>
+                                        </span>
+                                    ) : (
+                                        <span className="text-slate-300">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <polyline points="20 6 9 17 4 12" />
+                                            </svg>
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 {/* Capas Section */}
@@ -379,22 +418,41 @@ export default function Sidebar({
                 <div className="layers-header" style={{ borderTop: 'none' }}>
                     <h2 style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>Objetos</h2>
                     <div className="layers-actions">
-                        <button onClick={() => setPasteModalOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', marginRight: '5px' }} title="Pegar WKT">
-                            <ClipboardDocumentCheckIcon style={{ width: 18, height: 18, color: '#64748b' }} />
+                        <button
+                            onClick={() => setPasteModalOpen(true)}
+                            className="flex items-center gap-1 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2 py-1 rounded-lg transition-colors"
+                            title="Pegar WKT"
+                        >
+                            <ClipboardDocumentCheckIcon style={{ width: 13, height: 13 }} />
+                            Pegar WKT
                         </button>
-                        <button onClick={onAddFeature} style={{ background: 'none', border: 'none', cursor: 'pointer' }} title="Agregar Objeto">
+                        <button onClick={onAddFeature} style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: 4 }} title="Dibujar en mapa">
                             <PlusIcon style={{ width: 18, height: 18, color: '#64748b' }} />
                         </button>
                     </div>
                 </div>
 
-                <div style={{ flex: 1, overflowY: 'auto', padding: '16px', color: '#94a3b8', fontSize: '0.9rem' }}>
+                <div style={{ flex: 1, overflowY: 'auto', color: '#94a3b8', fontSize: '0.9rem' }}>
                     {layers.find(l => l.id === activeLayerId)?.features.features.length === 0 && (
-                        <div className="text-center italic text-slate-400 p-5">
-                            Sin objetos en esta capa
+                        <div className="flex flex-col items-center justify-center px-5 py-8 text-center">
+                            <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center mb-3">
+                                <ClipboardDocumentCheckIcon className="w-6 h-6 text-indigo-400" />
+                            </div>
+                            <p className="text-sm font-semibold text-slate-600 mb-1">Pega tu geometría WKT</p>
+                            <p className="text-[11px] text-slate-400 font-mono mb-4 leading-relaxed">
+                                POLYGON ((-77.03 -12.04,<br />-77.02 -12.05, ...))
+                            </p>
+                            <button
+                                onClick={() => setPasteModalOpen(true)}
+                                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors shadow-sm"
+                            >
+                                <ClipboardDocumentCheckIcon className="w-4 h-4" />
+                                Pegar WKT
+                            </button>
+                            <p className="text-[11px] text-slate-400 mt-3">o dibuja directamente en el mapa →</p>
                         </div>
                     )}
-                    <ul className="list-none p-0 m-0">
+                    <ul className="list-none p-0 m-0 px-4 pb-4">
                         {layers.find(l => l.id === activeLayerId)?.features.features.map((feature: any, index: number) => {
                             const color = feature.properties?.color || '#3388ff';
                             const isSelected = selectedIndices.has(index);
@@ -469,49 +527,65 @@ export default function Sidebar({
                     </ul>
                 </div>
 
-                {/* Footer Profile */}
-                <div className="user-profile">
-                    <img
-                        src={user.photoURL || "https://via.placeholder.com/36"}
-                        alt="Profile"
-                        className="user-avatar"
-                    />
-                    <div className="user-info">
-                        <span
-                            className="user-name"
-                            title={user.displayName || ""}
+                {/* Footer */}
+                {sandboxMode ? (
+                    <div className="p-3 border-t border-slate-100">
+                        <button
+                            onClick={onSandboxSave}
+                            disabled={isSandboxSaving}
+                            className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors disabled:opacity-60"
                         >
-                            {user.displayName}
-                        </span>
-                        <span
-                            className="user-email"
-                            title={user.email || ""}
-                        >
-                            {user.email}
-                        </span>
+                            {isSandboxSaving ? (
+                                <>
+                                    <svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                    </svg>
+                                    Guardando...
+                                </>
+                            ) : (
+                                <>
+                                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="G" width="14" height="14" />
+                                    Guardar con Google
+                                </>
+                            )}
+                        </button>
+                        <p className="text-[10px] text-slate-400 text-center mt-1.5">Gratis · Sin tarjeta de crédito</p>
                     </div>
-                    <button
-                        onClick={handleLogout}
-                        title="Cerrar Sesión"
-                        className="btn-logout"
-                    >
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                        >
-                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                            <polyline points="16 17 21 12 16 7" />
-                            <line x1="21" y1="12" x2="9" y2="12" />
-                        </svg>
-                    </button>
-                </div>
+                ) : (
+                    <>
+                        <div className="user-profile">
+                            <img
+                                src={user?.photoURL || "https://via.placeholder.com/36"}
+                                alt="Profile"
+                                className="user-avatar"
+                            />
+                            <div className="user-info">
+                                <span className="user-name" title={user?.displayName || ""}>
+                                    {user?.displayName}
+                                </span>
+                                <span className="user-email" title={user?.email || ""}>
+                                    {user?.email}
+                                </span>
+                            </div>
+                            <Link href="/settings" title="Configuración" className="btn-logout" style={{ color: '#64748b', textDecoration: 'none' }}>
+                                <Cog6ToothIcon width={16} height={16} />
+                            </Link>
+                            <button onClick={handleLogout} title="Cerrar Sesión" className="btn-logout">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                                    <polyline points="16 17 21 12 16 7" />
+                                    <line x1="21" y1="12" x2="9" y2="12" />
+                                </svg>
+                            </button>
+                        </div>
+                        {userProfile && (
+                            <div className="px-3 pb-2">
+                                <PlanBadge plan={plan} projectCount={userProfile.usageCounters?.projectCount} />
+                            </div>
+                        )}
+                    </>
+                )}
             </div>
 
             {/* General Modal */}
@@ -552,27 +626,28 @@ export default function Sidebar({
             {/* Paste WKT Modal */}
             <Modal
                 isOpen={pasteModalOpen}
-                onClose={() => setPasteModalOpen(false)}
-                title="Pegar WKT"
+                onClose={() => { setPasteModalOpen(false); setWktInput(""); }}
+                title="Pegar geometría WKT"
                 footer={
                     <>
-                        <button onClick={() => setPasteModalOpen(false)} className="btn-outline">Cancelar</button>
-                        <button onClick={handlePasteWkt} className="btn-primary">Pegar</button>
+                        <button onClick={() => { setPasteModalOpen(false); setWktInput(""); }} className="btn-outline">Cancelar</button>
+                        <button onClick={handlePasteWkt} className="btn-primary" disabled={!wktInput.trim()}>Visualizar</button>
                     </>
                 }
             >
-                <div className="flex flex-col gap-2">
-                    <label className="text-sm font-medium text-slate-700">Texto WKT</label>
+                <div className="flex flex-col gap-3">
                     <textarea
                         value={wktInput}
                         onChange={(e) => setWktInput(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[120px]"
-                        placeholder="POLYGON ((...))"
+                        className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-sm min-h-[160px] resize-none"
+                        placeholder={"POLYGON ((-77.03 -12.04, -77.02 -12.05, -77.01 -12.04, -77.03 -12.04))\n\nSoporta: POLYGON, MULTIPOLYGON, POINT, LINESTRING, MULTILINESTRING, MULTIPOINT"}
                         autoFocus
+                        onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handlePasteWkt(); }}
                     />
-                    <p className="text-xs text-slate-500">
-                        Pega aquí tu geometría en formato WKT (Well-Known Text).
-                    </p>
+                    <div className="flex items-center justify-between text-xs text-slate-400">
+                        <span>Ctrl+Enter para confirmar</span>
+                        <span className="font-mono bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">WKT · PostGIS · Shapely</span>
+                    </div>
                 </div>
             </Modal>
             {/* Share Modal */}
@@ -586,6 +661,13 @@ export default function Sidebar({
                     }}
                 />
             )}
+
+            {/* Upgrade Modal */}
+            <UpgradeModal
+                isOpen={!!upgradeModal}
+                onClose={() => setUpgradeModal(undefined)}
+                reason={upgradeModal}
+            />
         </>
     );
 }
