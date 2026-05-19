@@ -10,12 +10,12 @@ import { Project, getUserProjects, getSharedProjects, createProject, deleteProje
 import Modal from '@/components/Modal';
 import ShareModal from '@/components/ShareModal';
 import UpgradeModal from '@/components/UpgradeModal';
-import PlanBadge from '@/components/PlanBadge';
 import { PLANS, PLAN_LIMITS, checkLimit, type LimitKey, type FeatureKey, type PlanId } from '@/lib/plans';
 import {
   PlusIcon, UserCircleIcon, EllipsisVerticalIcon, TrashIcon,
   PencilIcon, ShareIcon, CheckIcon, SparklesIcon, XMarkIcon, Cog6ToothIcon,
 } from '@heroicons/react/24/outline';
+import Toast, { type ToastType } from '@/components/Toast';
 
 type UpgradeReason =
   | { type: 'limit'; limitKey: LimitKey; current: number; limit: number; requiredPlan: PlanId }
@@ -419,6 +419,8 @@ function Dashboard() {
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [upgradeReason, setUpgradeReason] = useState<UpgradeReason>(undefined);
   const [upgradeSuccess, setUpgradeSuccess] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
+  const showToast = (message: string, type: ToastType = 'info') => setToast({ message, type });
 
   useEffect(() => {
     const handleClick = () => setMenuOpenId(null);
@@ -477,7 +479,7 @@ function Dashboard() {
       router.push(`/${id}`);
     } catch (e) {
       console.error(e);
-      alert("Error al crear proyecto");
+      showToast('Error al crear proyecto. Intenta de nuevo.', 'error');
       setCreating(false);
     }
   };
@@ -491,7 +493,7 @@ function Dashboard() {
       loadProjects();
     } catch (e) {
       console.error(e);
-      alert("Error al renombrar");
+      showToast('Error al renombrar. Intenta de nuevo.', 'error');
     } finally {
       setActionLoading(false);
       setActionProject(null);
@@ -507,7 +509,7 @@ function Dashboard() {
       loadProjects();
     } catch (e) {
       console.error(e);
-      alert("Error al eliminar");
+      showToast('Error al eliminar. Intenta de nuevo.', 'error');
     } finally {
       setActionLoading(false);
       setActionProject(null);
@@ -548,15 +550,23 @@ function Dashboard() {
           </svg>
           WKT Map Creator
         </h1>
-        <div className="flex items-center gap-3">
-          <PlanBadge plan={plan} projectCount={projects.length} />
-          <div className="flex items-center gap-2 text-sm text-slate-600 bg-slate-100 py-1.5 px-3 rounded-full">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 bg-slate-100 rounded-full pl-1.5 pr-3 py-1.5">
             {user?.photoURL ? (
-              <img src={user.photoURL} className="w-6 h-6 rounded-full" alt="" />
+              <img src={user.photoURL} className="w-7 h-7 rounded-full object-cover flex-shrink-0" alt={user.displayName ?? 'Foto de perfil'} />
             ) : (
-              <UserCircleIcon className="w-6 h-6" />
+              <UserCircleIcon className="w-7 h-7 text-slate-400 flex-shrink-0" />
             )}
-            <span className="font-medium truncate max-w-[150px]">{user?.displayName}</span>
+            <span className="text-sm font-semibold text-slate-800 truncate max-w-[160px]">{user?.displayName}</span>
+            <button
+              onClick={() => { if (plan === 'free') setShowUpgrade(true); }}
+              title={plan === 'free' ? 'Upgrade a Pro' : `Plan ${plan}`}
+              className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-white text-xs font-bold flex-shrink-0 ${plan === 'free' ? 'cursor-pointer hover:opacity-80 transition-opacity' : 'cursor-default'}`}
+              style={{ background: plan === 'pro' ? '#6366f1' : plan === 'business' ? '#f59e0b' : '#6b7280' }}
+            >
+              {plan !== 'free' && <SparklesIcon className="w-3 h-3" />}
+              {plan === 'pro' ? 'Pro' : plan === 'business' ? 'Business' : 'Free'}
+            </button>
           </div>
           <Link href="/settings" className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors" title="Configuración">
             <Cog6ToothIcon className="w-5 h-5" />
@@ -819,10 +829,12 @@ function Dashboard() {
           onClose={() => setShareModalOpen(false)}
           project={actionProject}
           onUpdate={() => loadProjects()}
+          onShowToast={showToast}
         />
       )}
 
-      <UpgradeModal isOpen={showUpgrade} onClose={() => setShowUpgrade(false)} reason={upgradeReason} />
+      <UpgradeModal isOpen={showUpgrade} onClose={() => setShowUpgrade(false)} reason={upgradeReason} onShowToast={showToast} />
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }

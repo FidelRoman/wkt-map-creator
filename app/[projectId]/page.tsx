@@ -9,7 +9,7 @@ import { Project, Layer, getUserProjects, getProject, saveProjectLayers } from '
 import { parseWKT, calculateStats, generateColor } from '@/lib/map-utils';
 import { parseCSVLine } from '@/lib/csv-utils';
 import Modal from '@/components/Modal';
-import Toast from '@/components/Toast';
+import Toast, { type ToastType } from '@/components/Toast';
 import UpgradeModal from '@/components/UpgradeModal';
 import { stringify } from 'wellknown';
 import { checkLimit, hasFeature } from '@/lib/plans';
@@ -37,7 +37,8 @@ function ProjectApp() {
     // States for feedback
     const [drawRequest, setDrawRequest] = useState<{ type: 'polygon' | 'point', id: number } | null>(null);
     const [flyToRequest, setFlyToRequest] = useState<any | null>(null);
-    const [toastMessage, setToastMessage] = useState<string | null>(null);
+    const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
+    const showToast = (message: string, type: ToastType = 'info') => setToast({ message, type });
 
     // Selection State
     const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
@@ -232,9 +233,9 @@ function ProjectApp() {
 
             setLayers(prev => [...prev, newLayer]);
             setActiveLayerId(newLayerId);
-            alert(`Importados ${addedCount} objetos en nueva capa "${newLayer.name}".`);
+            showToast(`Importados ${addedCount} objetos en nueva capa "${newLayer.name}".`, 'success');
         } else {
-            alert("No se encontraron geometrías WKT válidas en el archivo.");
+            showToast('No se encontraron geometrías WKT válidas en el archivo.', 'warning');
         }
     };
 
@@ -302,11 +303,11 @@ function ProjectApp() {
         try {
             const wkt = stringify(feature.geometry);
             navigator.clipboard.writeText(wkt).then(() => {
-                setToastMessage("WKT copiado al portapapeles");
+                showToast('WKT copiado al portapapeles', 'success');
             });
         } catch (e) {
             console.error("Error copying WKT", e);
-            alert("Error generando WKT");
+            showToast('Error generando WKT', 'error');
         }
     };
 
@@ -330,7 +331,7 @@ function ProjectApp() {
                 <div className="p-4 bg-white rounded-xl shadow-sm border border-slate-200 text-center max-w-md">
                     <h1 className="text-xl font-bold text-slate-800 mb-2">Acceso Restringido</h1>
                     <p className="text-slate-600 mb-4 text-sm">Este proyecto es privado y no tienes permisos para verlo.</p>
-                    <a href="/" className="inline-block px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors">
+                    <a href="/" className="inline-block px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors">
                         Volver al Inicio
                     </a>
                 </div>
@@ -364,6 +365,7 @@ function ProjectApp() {
                 selectedIndices={selectedIndices}
                 onToggleSelection={handleSelectionChange}
                 onClearSelection={() => setSelectedIndices(new Set())}
+                onShowToast={showToast}
             />
             <div className="flex-1 relative">
                 <Map
@@ -372,7 +374,7 @@ function ProjectApp() {
                     onUpdateLayer={handleUpdateLayer}
                     requestDraw={drawRequest}
                     requestFlyTo={flyToRequest}
-                    onShowToast={(msg) => setToastMessage(msg)}
+                    onShowToast={showToast}
                     selectedIndices={selectedIndices}
                     onToggleSelection={handleSelectionChange}
                     onClearSelection={() => setSelectedIndices(new Set())}
@@ -381,10 +383,11 @@ function ProjectApp() {
                 />
             </div>
 
-            {toastMessage && (
+            {toast && (
                 <Toast
-                    message={toastMessage}
-                    onClose={() => setToastMessage(null)}
+                    message={toast.message}
+                    type={toast.type}
+                    onClose={() => setToast(null)}
                     duration={3000}
                 />
             )}
@@ -393,6 +396,7 @@ function ProjectApp() {
                 isOpen={!!upgradeModalReason}
                 onClose={() => setUpgradeModalReason(undefined)}
                 reason={upgradeModalReason}
+                onShowToast={showToast}
             />
         </div>
     );

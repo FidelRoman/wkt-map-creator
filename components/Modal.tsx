@@ -1,6 +1,7 @@
 "use client";
 
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 
 interface ModalProps {
@@ -12,47 +13,51 @@ interface ModalProps {
 }
 
 export default function Modal({ isOpen, onClose, title, children, footer }: ModalProps) {
-    const [show, setShow] = useState(isOpen);
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => { setMounted(true); }, []);
 
     useEffect(() => {
-        setShow(isOpen);
-    }, [isOpen]);
+        if (!isOpen) return;
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [isOpen, onClose]);
 
-    if (!show) return null;
+    if (!isOpen || !mounted) return null;
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-            {/* Backdrop */}
+    return createPortal(
+        <div className="fixed inset-0 z-[9998] flex items-center justify-center">
             <div
-                className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
+                className="fixed inset-0 bg-black/50 backdrop-blur-sm"
                 onClick={onClose}
+                aria-hidden="true"
             />
-
-            {/* Modal Content */}
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 relative z-10 overflow-hidden transform transition-all">
-                {/* Header */}
+            <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="modal-title"
+                className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 relative z-10 overflow-hidden"
+            >
                 <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-                    <h3 className="text-lg font-bold text-slate-800">{title}</h3>
+                    <h3 id="modal-title" className="text-lg font-bold text-slate-800">{title}</h3>
                     <button
                         onClick={onClose}
+                        aria-label="Cerrar"
                         className="p-1 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
                     >
                         <XMarkIcon className="w-5 h-5" />
                     </button>
                 </div>
-
-                {/* Body */}
                 <div className="px-6 py-6">
                     {children}
                 </div>
-
-                {/* Footer */}
                 {footer && (
                     <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
                         {footer}
                     </div>
                 )}
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

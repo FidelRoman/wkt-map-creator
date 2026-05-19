@@ -9,6 +9,7 @@ import 'leaflet-draw/dist/leaflet.draw.css';
 import { Layer } from '@/lib/firebase';
 import ActiveLayerEditor from './map/ActiveLayerEditor';
 import type { PlanId } from '@/lib/plans';
+import type { ToastType } from './Toast';
 
 // Fix Leaflet icons
 // @ts-ignore
@@ -25,7 +26,7 @@ interface MapProps {
     onUpdateLayer: (layerId: string, features: any) => void;
     requestDraw?: { type: 'polygon' | 'point', id: number } | null;
     requestFlyTo?: any | null;
-    onShowToast?: (message: string) => void;
+    onShowToast?: (message: string, type?: ToastType) => void;
     selectedIndices?: Set<number>;
     onToggleSelection?: (index: number, multi: boolean) => void;
     onClearSelection?: () => void;

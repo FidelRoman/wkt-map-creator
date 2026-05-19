@@ -38,6 +38,8 @@ export default function AttributeTable({
     const [search, setSearch] = useState('');
     const [editingCell, setEditingCell] = useState<{ row: number; col: string } | null>(null);
     const [editValue, setEditValue] = useState('');
+    const [addingColumn, setAddingColumn] = useState(false);
+    const [newColName, setNewColName] = useState('');
 
     const isPro = hasFeature(plan, 'hasVersionHistory'); // proxy for pro/business
 
@@ -90,7 +92,7 @@ export default function AttributeTable({
 
     const SortIcon = ({ col }: { col: string }) => {
         if (sortCol !== col) return <ChevronUpIcon className="w-3 h-3 opacity-20" />;
-        return sortDir === 'asc' ? <ChevronUpIcon className="w-3 h-3 text-blue-600" /> : <ChevronDownIcon className="w-3 h-3 text-blue-600" />;
+        return sortDir === 'asc' ? <ChevronUpIcon className="w-3 h-3 text-indigo-600" /> : <ChevronDownIcon className="w-3 h-3 text-indigo-600" />;
     };
 
     const startEdit = (row: number, col: string, value: string) => {
@@ -111,14 +113,16 @@ export default function AttributeTable({
         setEditingCell(null);
     };
 
-    const addColumn = () => {
-        const name = prompt('Nombre de la nueva columna:');
-        if (!name?.trim() || !layer) return;
+    const confirmAddColumn = () => {
+        if (!newColName.trim() || !layer) { setAddingColumn(false); setNewColName(''); return; }
+        const name = newColName.trim();
         const newFeatures = features.map(f => ({
             ...f,
-            properties: { ...f.properties, [name.trim()]: '' }
+            properties: { ...f.properties, [name]: '' }
         }));
         onUpdateLayer(layer.id, { ...layer.features, features: newFeatures });
+        setAddingColumn(false);
+        setNewColName('');
     };
 
     const exportCsv = () => {
@@ -162,12 +166,24 @@ export default function AttributeTable({
                     value={search}
                     onChange={e => setSearch(e.target.value)}
                     placeholder="Buscar..."
-                    className="ml-2 text-xs px-2 py-1 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    className="ml-2 text-xs px-2 py-1 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-400"
                 />
                 <div className="flex-1" />
-                <button onClick={addColumn} className="text-xs flex items-center gap-1 text-slate-500 hover:text-slate-800 px-2 py-1 rounded border border-slate-200 hover:bg-slate-50" title="Agregar columna">
-                    <PlusIcon className="w-3.5 h-3.5" /> Columna
-                </button>
+                {addingColumn ? (
+                    <input
+                        autoFocus
+                        value={newColName}
+                        onChange={e => setNewColName(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') confirmAddColumn(); if (e.key === 'Escape') { setAddingColumn(false); setNewColName(''); } }}
+                        onBlur={confirmAddColumn}
+                        placeholder="Nombre de columna"
+                        className="text-xs px-2 py-1 border border-indigo-400 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-400 w-36"
+                    />
+                ) : (
+                    <button onClick={() => setAddingColumn(true)} className="text-xs flex items-center gap-1 text-slate-500 hover:text-slate-800 px-2 py-1 rounded border border-slate-200 hover:bg-slate-50" title="Agregar columna">
+                        <PlusIcon className="w-3.5 h-3.5" /> Columna
+                    </button>
+                )}
                 <button onClick={exportCsv} className="text-xs flex items-center gap-1 text-slate-500 hover:text-slate-800 px-2 py-1 rounded border border-slate-200 hover:bg-slate-50" title="Exportar CSV">
                     <ArrowDownTrayIcon className="w-3.5 h-3.5" /> CSV
                 </button>
@@ -197,7 +213,7 @@ export default function AttributeTable({
                         {filtered.map((row, i) => (
                             <tr
                                 key={row.index}
-                                className={`border-b border-slate-100 cursor-pointer hover:bg-blue-50 transition-colors ${selectedIndices.has(row.index) ? 'bg-blue-50' : ''}`}
+                                className={`border-b border-slate-100 cursor-pointer hover:bg-indigo-50 transition-colors ${selectedIndices.has(row.index) ? 'bg-indigo-50' : ''}`}
                                 onClick={() => { onToggleSelection(row.index, false); onFocusFeature(row.feature); }}
                             >
                                 <td className="px-2 py-1 text-slate-400">{row.index + 1}</td>
@@ -205,7 +221,7 @@ export default function AttributeTable({
                                 {/* Name — editable */}
                                 <td className="px-3 py-1" onClick={e => { e.stopPropagation(); startEdit(i, 'name', row.name); }}>
                                     {editingCell?.row === i && editingCell.col === 'name' ? (
-                                        <input autoFocus value={editValue} onChange={e => setEditValue(e.target.value)} onBlur={saveEdit} onKeyDown={e => e.key === 'Enter' && saveEdit()} className="w-full text-xs border border-blue-400 rounded px-1 py-0.5 focus:outline-none" onClick={e => e.stopPropagation()} />
+                                        <input autoFocus value={editValue} onChange={e => setEditValue(e.target.value)} onBlur={saveEdit} onKeyDown={e => e.key === 'Enter' && saveEdit()} className="w-full text-xs border border-indigo-400 rounded px-1 py-0.5 focus:outline-none" onClick={e => e.stopPropagation()} />
                                     ) : (
                                         <div className="flex items-center gap-1.5">
                                             <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: row.color }} />
@@ -222,7 +238,7 @@ export default function AttributeTable({
                                 {customCols.map(col => (
                                     <td key={col} className="px-3 py-1" onClick={e => { e.stopPropagation(); startEdit(i, col, row.feature.properties?.[col] ?? ''); }}>
                                         {editingCell?.row === i && editingCell.col === col ? (
-                                            <input autoFocus value={editValue} onChange={e => setEditValue(e.target.value)} onBlur={saveEdit} onKeyDown={e => e.key === 'Enter' && saveEdit()} className="w-full text-xs border border-blue-400 rounded px-1 py-0.5 focus:outline-none" onClick={e => e.stopPropagation()} />
+                                            <input autoFocus value={editValue} onChange={e => setEditValue(e.target.value)} onBlur={saveEdit} onKeyDown={e => e.key === 'Enter' && saveEdit()} className="w-full text-xs border border-indigo-400 rounded px-1 py-0.5 focus:outline-none" onClick={e => e.stopPropagation()} />
                                         ) : (
                                             <span className="text-slate-600">{row.feature.properties?.[col] ?? ''}</span>
                                         )}

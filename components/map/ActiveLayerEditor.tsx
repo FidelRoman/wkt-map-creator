@@ -7,6 +7,7 @@ import { stringifyWKT } from '@/lib/map-utils';
 import InitialDataLoader from './InitialDataLoader';
 import { Layer } from '@/lib/firebase';
 import { checkLimit, hasFeature, type PlanId } from '@/lib/plans';
+import type { ToastType } from '@/components/Toast';
 
 interface ActiveLayerEditorProps {
     layers: Layer[];
@@ -14,7 +15,7 @@ interface ActiveLayerEditorProps {
     onUpdateLayer: (layerId: string, features: any) => void;
     requestDraw?: { type: 'polygon' | 'point', id: number } | null;
     requestFlyTo?: any | null;
-    onShowToast?: (message: string) => void;
+    onShowToast?: (message: string, type?: ToastType) => void;
     selectedIndices?: Set<number>;
     onToggleSelection?: (index: number, multi: boolean) => void;
     onClearSelection?: () => void;
@@ -140,8 +141,7 @@ export default function ActiveLayerEditor({
             const validTypes = ['Polygon', 'MultiPolygon'];
             // @ts-ignore
             if (!validTypes.includes(sGTyped.geometry.type) || !validTypes.includes(cGTyped.geometry.type)) {
-                if (onShowToast) onShowToast("Error: Solo se pueden restar Polígonos");
-                else alert("Error: Tipos inválidos");
+                onShowToast?.("Error: Solo se pueden restar Polígonos", 'error');
                 return;
             }
 
@@ -150,7 +150,7 @@ export default function ActiveLayerEditor({
             const difference = turf.difference(collection as any);
 
             if (!difference) {
-                if (onShowToast) onShowToast("Aviso: El polígono fue eliminado completamente");
+                onShowToast?.("Aviso: El polígono fue eliminado completamente", 'warning');
 
                 const currentGeoJSON = featureGroupRef.current.toGeoJSON() as any;
                 const features = currentGeoJSON.features.filter((_: any, i: number) => i !== subjectIndex);
@@ -169,7 +169,7 @@ export default function ActiveLayerEditor({
 
             if (activeLayerId) {
                 onUpdateLayer(activeLayerId, { ...currentGeoJSON, features: newFeatures });
-                if (onShowToast) onShowToast("Resta completada exitosamente");
+                onShowToast?.("Resta completada exitosamente", 'success');
             }
 
             setMenu(null);
@@ -177,7 +177,7 @@ export default function ActiveLayerEditor({
 
         } catch (err: any) {
             console.error("Subtract error:", err);
-            if (onShowToast) onShowToast(`Error: ${err.message || "Fallo en resta"}`);
+            onShowToast?.(`Error: ${err.message || "Fallo en resta"}`, 'error');
         }
     };
 
@@ -213,8 +213,7 @@ export default function ActiveLayerEditor({
             const validTypes = ['Polygon', 'MultiPolygon'];
             // @ts-ignore
             if (!validTypes.includes(sGTyped.geometry.type) || !validTypes.includes(cGTyped.geometry.type)) {
-                if (onShowToast) onShowToast("Error: Solo se pueden sumar Polígonos");
-                else alert("Error: Tipos inválidos");
+                onShowToast?.("Error: Solo se pueden sumar Polígonos", 'error');
                 return;
             }
 
@@ -223,13 +222,12 @@ export default function ActiveLayerEditor({
             const unionFeature = turf.union(collection as any);
 
             if (!unionFeature) {
-                if (onShowToast) onShowToast("Error: No se pudo realizar la suma.");
+                onShowToast?.("Error: No se pudo realizar la suma.", 'error');
                 return;
             }
 
             if (unionFeature.geometry.type === 'MultiPolygon') {
-                if (onShowToast) onShowToast("Aviso: Los polígonos no se intersectan (el resultado es MultiPolygon). Acerquelos para unirlos en 1 solo.");
-                else alert("Aviso: Los polígonos deben intersectarse para unirse en 1 solo polígono.");
+                onShowToast?.("Aviso: Los polígonos no se intersectan (el resultado es MultiPolygon). Acerquelos para unirlos en 1 solo.", 'warning');
                 return;
             }
 
@@ -242,7 +240,7 @@ export default function ActiveLayerEditor({
 
             if (activeLayerId) {
                 onUpdateLayer(activeLayerId, { ...currentGeoJSON, features: newFeatures });
-                if (onShowToast) onShowToast("Suma completada exitosamente");
+                onShowToast?.("Suma completada exitosamente", 'success');
             }
 
             setMenu(null);
@@ -250,7 +248,7 @@ export default function ActiveLayerEditor({
 
         } catch (err: any) {
             console.error("Add error:", err);
-            if (onShowToast) onShowToast(`Error: ${err.message || "Fallo en suma"}`);
+            onShowToast?.(`Error: ${err.message || "Fallo en suma"}`, 'error');
         }
     };
 
@@ -373,7 +371,7 @@ export default function ActiveLayerEditor({
             // @ts-ignore
             const wkt = stringifyWKT(menu.layer.toGeoJSON());
             navigator.clipboard.writeText(wkt);
-            if (onShowToast) onShowToast("WKT Copiado"); else alert("WKT Copiado");
+            onShowToast?.("WKT Copiado", 'success');
         }
         setMenu(null);
     };
@@ -392,7 +390,7 @@ export default function ActiveLayerEditor({
     const handleBufferConfirm = () => {
         const distMeters = parseFloat(bufferDistance);
         if (isNaN(distMeters) || distMeters <= 0) {
-            if (onShowToast) onShowToast("Distancia inválida");
+            onShowToast?.("Distancia inválida", 'warning');
             return;
         }
         if (!menu?.layer || !activeLayerId || !featureGroupRef.current) { setMenu(null); setBufferInputOpen(false); return; }
@@ -400,15 +398,15 @@ export default function ActiveLayerEditor({
             // @ts-ignore
             const feature = menu.layer.toGeoJSON();
             const buffered = turf.buffer(feature, distMeters / 1000, { units: 'kilometers' });
-            if (!buffered) { if (onShowToast) onShowToast("Error al crear buffer"); setMenu(null); setBufferInputOpen(false); return; }
+            if (!buffered) { onShowToast?.("Error al crear buffer", 'error'); setMenu(null); setBufferInputOpen(false); return; }
             buffered.properties = { name: `Buffer ${distMeters}m`, color: '#f59e0b' };
 
             const currentGeoJSON = featureGroupRef.current.toGeoJSON() as any;
             const newFeatures = [...currentGeoJSON.features, buffered];
             onUpdateLayer(activeLayerId, { ...currentGeoJSON, features: newFeatures });
-            if (onShowToast) onShowToast(`Buffer de ${distMeters}m creado`);
+            onShowToast?.(`Buffer de ${distMeters}m creado`, 'success');
         } catch {
-            if (onShowToast) onShowToast("Error al crear buffer");
+            onShowToast?.("Error al crear buffer", 'error');
         }
         setMenu(null);
         setBufferInputOpen(false);

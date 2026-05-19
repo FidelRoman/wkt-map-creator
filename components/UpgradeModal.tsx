@@ -1,15 +1,17 @@
 "use client";
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { XMarkIcon, CheckIcon, SparklesIcon } from '@heroicons/react/24/outline';
 import { PLANS, type PlanId, type LimitKey, type FeatureKey, LIMIT_LABELS, FEATURE_LABELS } from '@/lib/plans';
 import { useAuth } from './AuthWrapper';
 import { getIdToken } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
+import type { ToastType } from './Toast';
 
 interface UpgradeModalProps {
     isOpen: boolean;
     onClose: () => void;
+    onShowToast?: (message: string, type?: ToastType) => void;
     reason?: {
         type: 'limit';
         limitKey: LimitKey;
@@ -23,12 +25,20 @@ interface UpgradeModalProps {
     };
 }
 
-export default function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalProps) {
-    const { user, refreshProfile } = useAuth();
+export default function UpgradeModal({ isOpen, onClose, onShowToast, reason }: UpgradeModalProps) {
+    const { user } = useAuth();
     const [interval, setInterval] = useState<'month' | 'year'>('year');
     const [loading, setLoading] = useState<string | null>(null);
     const [mounted, setMounted] = useState(false);
+
     useEffect(() => { setMounted(true); }, []);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [isOpen, onClose]);
 
     if (!isOpen || !mounted) return null;
 
@@ -47,9 +57,9 @@ export default function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalPr
             });
             const data = await res.json();
             if (data.url) window.location.href = data.url;
-            else alert(data.error ?? 'Error al iniciar el checkout. Intenta de nuevo.');
+            else onShowToast?.(data.error ?? 'Error al iniciar el checkout. Intenta de nuevo.', 'error');
         } catch {
-            alert('Error al iniciar el checkout. Intenta de nuevo.');
+            onShowToast?.('Error al iniciar el checkout. Intenta de nuevo.', 'error');
         } finally {
             setLoading(null);
         }
@@ -65,14 +75,18 @@ export default function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalPr
         Math.round(100 - (plan.yearlyPrice / (plan.monthlyPrice * 12)) * 100);
 
     return createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)' }}>
+        <div
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="upgrade-modal-title"
+        >
             <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-                {/* Header */}
                 <div className="flex items-start justify-between p-6 pb-4">
                     <div>
                         <div className="flex items-center gap-2 mb-1">
                             <SparklesIcon className="w-5 h-5 text-indigo-500" />
-                            <span className="text-sm font-semibold text-indigo-600 uppercase tracking-wide">Mejora tu plan</span>
+                            <span id="upgrade-modal-title" className="text-sm font-semibold text-indigo-600 uppercase tracking-wide">Mejora tu plan</span>
                         </div>
                         {limitText && (
                             <p className="text-sm text-gray-500 mt-1 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
@@ -80,23 +94,26 @@ export default function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalPr
                             </p>
                         )}
                     </div>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 ml-4 flex-shrink-0">
-                        <XMarkIcon className="w-6 h-6" />
+                    <button
+                        onClick={onClose}
+                        aria-label="Cerrar"
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors ml-4 flex-shrink-0"
+                    >
+                        <XMarkIcon className="w-5 h-5" />
                     </button>
                 </div>
 
-                {/* Billing toggle */}
                 <div className="flex justify-center mb-6 px-6">
-                    <div className="flex items-center gap-2 bg-gray-100 rounded-full p-1">
+                    <div className="flex items-center gap-1 bg-gray-100 rounded-full p-1">
                         <button
                             onClick={() => setInterval('month')}
-                            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${interval === 'month' ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}
+                            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${interval === 'month' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
                         >
                             Mensual
                         </button>
                         <button
                             onClick={() => setInterval('year')}
-                            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all flex items-center gap-1.5 ${interval === 'year' ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}
+                            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all flex items-center gap-1.5 ${interval === 'year' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
                         >
                             Anual
                             <span className="bg-green-100 text-green-700 text-xs px-1.5 py-0.5 rounded-full font-semibold">-30%</span>
@@ -104,7 +121,6 @@ export default function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalPr
                     </div>
                 </div>
 
-                {/* Plan cards */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-6 pb-6">
                     {proPlans.map(plan => {
                         const isTarget = plan.id === targetPlan;
@@ -132,7 +148,6 @@ export default function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalPr
                                         Ahorra {savings}% vs mensual
                                     </p>
                                 )}
-
                                 <ul className="space-y-2 flex-1">
                                     {plan.features.map((f, i) => (
                                         <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
@@ -141,17 +156,24 @@ export default function UpgradeModal({ isOpen, onClose, reason }: UpgradeModalPr
                                         </li>
                                     ))}
                                 </ul>
-
                                 <button
                                     onClick={() => handleUpgrade(plan.id)}
                                     disabled={!!loading}
-                                    className={`w-full py-2.5 rounded-lg font-semibold text-sm transition-all ${
+                                    className={`w-full py-2.5 rounded-lg font-semibold text-sm transition-all disabled:opacity-60 flex items-center justify-center gap-2 ${
                                         isTarget
                                             ? 'bg-indigo-600 text-white hover:bg-indigo-700'
                                             : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-                                    } disabled:opacity-60`}
+                                    }`}
                                 >
-                                    {loading === plan.id ? 'Redirigiendo...' : `Upgrade a ${plan.name}`}
+                                    {loading === plan.id ? (
+                                        <>
+                                            <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                            </svg>
+                                            Redirigiendo...
+                                        </>
+                                    ) : `Upgrade a ${plan.name}`}
                                 </button>
                             </div>
                         );

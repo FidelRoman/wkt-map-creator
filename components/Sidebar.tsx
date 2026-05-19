@@ -20,10 +20,15 @@ import {
     FolderOpenIcon,
     ClipboardDocumentCheckIcon,
     PencilSquareIcon,
-    Cog6ToothIcon
+    Cog6ToothIcon,
+    SparklesIcon
 } from "@heroicons/react/24/outline";
 import ShareModal from "@/components/ShareModal";
 import { generateColor, parseWKT } from "@/lib/map-utils";
+import type { ToastType } from "@/components/Toast";
+
+const PLAN_COLORS: Record<string, string> = { free: '#6b7280', pro: '#6366f1', business: '#f59e0b' };
+const PLAN_LABELS: Record<string, string> = { free: 'Free', pro: 'Pro', business: 'Business' };
 
 interface SidebarProps {
     projects: Project[];
@@ -53,6 +58,7 @@ interface SidebarProps {
     sandboxMode?: boolean;
     onSandboxSave?: () => void;
     isSandboxSaving?: boolean;
+    onShowToast?: (message: string, type?: ToastType) => void;
 }
 
 export default function Sidebar({
@@ -78,11 +84,13 @@ export default function Sidebar({
     sandboxMode = false,
     onSandboxSave,
     isSandboxSaving = false,
+    onShowToast,
 }: SidebarProps) {
     const { user, userProfile } = useAuth();
     const [projectListOpen, setProjectListOpen] = useState(false);
     const [shareModalOpen, setShareModalOpen] = useState(false);
     const [upgradeModal, setUpgradeModal] = useState<React.ComponentProps<typeof UpgradeModal>['reason']>(undefined);
+    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
     const plan = userProfile?.plan ?? 'free';
 
     // File Input Ref
@@ -136,7 +144,7 @@ export default function Sidebar({
             await signInWithPopup(auth, googleProvider);
         } catch (err) {
             console.error(err);
-            alert("Login failed");
+            onShowToast?.('Error al iniciar sesión. Intenta de nuevo.', 'error');
         }
     };
 
@@ -170,7 +178,7 @@ export default function Sidebar({
                 window.location.href = `/${id}`;
             } catch (e) {
                 console.error(e);
-                alert("Error creando proyecto");
+                onShowToast?.('Error al crear proyecto. Intenta de nuevo.', 'error');
             }
         } else if (modalAction === 'newLayer') {
             const newLayer: Layer = {
@@ -216,7 +224,7 @@ export default function Sidebar({
     const handlePasteWkt = () => {
         if (!wktInput.trim()) return;
         if (!activeLayerId) {
-            alert("Selecciona una capa primero");
+            onShowToast?.('Selecciona una capa primero', 'warning');
             return;
         }
         const activeLayer = layers.find(l => l.id === activeLayerId);
@@ -230,7 +238,7 @@ export default function Sidebar({
 
         const geojson = parseWKT(wktInput);
         if (!geojson) {
-            alert("WKT inválido o no soportado");
+            onShowToast?.('WKT inválido o no soportado', 'error');
             return;
         }
 
@@ -553,38 +561,44 @@ export default function Sidebar({
                         <p className="text-[10px] text-slate-400 text-center mt-1.5">Gratis · Sin tarjeta de crédito</p>
                     </div>
                 ) : (
-                    <>
-                        <div className="user-profile">
-                            <img
-                                src={user?.photoURL || "https://via.placeholder.com/36"}
-                                alt="Profile"
-                                className="user-avatar"
-                            />
-                            <div className="user-info">
+                    <div className="user-profile">
+                        <img
+                            src={user?.photoURL || "https://via.placeholder.com/36"}
+                            alt={user?.displayName ?? 'Foto de perfil'}
+                            className="user-avatar"
+                        />
+                        <div className="user-info">
+                            <div className="flex items-center gap-1.5">
                                 <span className="user-name" title={user?.displayName || ""}>
                                     {user?.displayName}
                                 </span>
-                                <span className="user-email" title={user?.email || ""}>
-                                    {user?.email}
-                                </span>
+                                {userProfile && (
+                                    <button
+                                        onClick={() => plan === 'free' ? setShowUpgradeModal(true) : undefined}
+                                        title={plan !== 'free' ? 'Plan activo' : 'Upgrade a Pro'}
+                                        className={`flex-shrink-0 flex items-center gap-0.5 text-[10px] font-bold text-white px-1.5 py-0.5 rounded-full leading-none ${plan === 'free' ? 'cursor-pointer hover:opacity-80 transition-opacity' : 'cursor-default'}`}
+                                        style={{ background: PLAN_COLORS[plan] }}
+                                    >
+                                        {plan !== 'free' && <SparklesIcon className="w-2.5 h-2.5" />}
+                                        {PLAN_LABELS[plan]}
+                                    </button>
+                                )}
                             </div>
-                            <Link href="/settings" title="Configuración" className="btn-logout" style={{ color: '#64748b', textDecoration: 'none' }}>
-                                <Cog6ToothIcon width={16} height={16} />
-                            </Link>
-                            <button onClick={handleLogout} title="Cerrar Sesión" className="btn-logout">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                                    <polyline points="16 17 21 12 16 7" />
-                                    <line x1="21" y1="12" x2="9" y2="12" />
-                                </svg>
-                            </button>
+                            <span className="user-email" title={user?.email || ""}>
+                                {user?.email}
+                            </span>
                         </div>
-                        {userProfile && (
-                            <div className="px-3 pb-2">
-                                <PlanBadge plan={plan} projectCount={userProfile.usageCounters?.projectCount} />
-                            </div>
-                        )}
-                    </>
+                        <Link href="/settings" title="Configuración" className="btn-logout" style={{ color: '#64748b', textDecoration: 'none' }}>
+                            <Cog6ToothIcon width={16} height={16} />
+                        </Link>
+                        <button onClick={handleLogout} title="Cerrar Sesión" className="btn-logout">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                                <polyline points="16 17 21 12 16 7" />
+                                <line x1="21" y1="12" x2="9" y2="12" />
+                            </svg>
+                        </button>
+                    </div>
                 )}
             </div>
 
@@ -659,14 +673,16 @@ export default function Sidebar({
                     onUpdate={(updated) => {
                         if (onUpdateProject) onUpdateProject(updated);
                     }}
+                    onShowToast={onShowToast}
                 />
             )}
 
             {/* Upgrade Modal */}
             <UpgradeModal
-                isOpen={!!upgradeModal}
-                onClose={() => setUpgradeModal(undefined)}
+                isOpen={!!upgradeModal || showUpgradeModal}
+                onClose={() => { setUpgradeModal(undefined); setShowUpgradeModal(false); }}
                 reason={upgradeModal}
+                onShowToast={onShowToast}
             />
         </>
     );

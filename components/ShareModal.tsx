@@ -3,6 +3,7 @@ import Modal from "./Modal";
 import { Project, updateProjectSharing } from "@/lib/firebase";
 import { UserPlusIcon, LinkIcon, XMarkIcon, CodeBracketIcon, SparklesIcon } from "@heroicons/react/24/outline";
 import { checkLimit, hasFeature, type PlanId } from "@/lib/plans";
+import type { ToastType } from "./Toast";
 
 interface ShareModalProps {
     isOpen: boolean;
@@ -11,17 +12,19 @@ interface ShareModalProps {
     onUpdate: (updatedProject: Project) => void;
     plan?: PlanId;
     onUpgradeRequired?: (reason: any) => void;
+    onShowToast?: (message: string, type?: ToastType) => void;
 }
 
 type Tab = 'link' | 'collaborators' | 'embed';
 
-export default function ShareModal({ isOpen, onClose, project, onUpdate, plan = 'free', onUpgradeRequired }: ShareModalProps) {
+export default function ShareModal({ isOpen, onClose, project, onUpdate, plan = 'free', onUpgradeRequired, onShowToast }: ShareModalProps) {
     const [tab, setTab] = useState<Tab>('link');
     const [isPublic, setIsPublic] = useState(project.isPublic);
     const [collaborators, setCollaborators] = useState<string[]>(project.collaborators || []);
     const [roles, setRoles] = useState<Record<string, 'editor' | 'viewer'>>(project.roles || {});
     const [newEmail, setNewEmail] = useState("");
     const [newRole, setNewRole] = useState<'editor' | 'viewer'>('editor');
+    const [emailError, setEmailError] = useState("");
     const [loading, setLoading] = useState(false);
     const [embedCopied, setEmbedCopied] = useState(false);
 
@@ -39,7 +42,7 @@ export default function ShareModal({ isOpen, onClose, project, onUpdate, plan = 
             onClose();
         } catch (error) {
             console.error(error);
-            alert("Error al guardar cambios");
+            onShowToast?.('Error al guardar cambios. Intenta de nuevo.', 'error');
         } finally {
             setLoading(false);
         }
@@ -48,7 +51,8 @@ export default function ShareModal({ isOpen, onClose, project, onUpdate, plan = 
     const addCollaborator = (e: React.FormEvent) => {
         e.preventDefault();
         if (!newEmail.trim()) return;
-        if (!newEmail.includes('@')) { alert("Ingresa un correo válido"); return; }
+        if (!newEmail.includes('@')) { setEmailError("Ingresa un correo válido"); return; }
+        setEmailError("");
         if (collaborators.includes(newEmail)) return;
 
         const maxCollaborators = 5; // pro limit
@@ -110,7 +114,7 @@ export default function ShareModal({ isOpen, onClose, project, onUpdate, plan = 
                     <button
                         key={t.id}
                         onClick={() => setTab(t.id)}
-                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === t.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === t.id ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                     >
                         {t.label}
                     </button>
@@ -132,13 +136,13 @@ export default function ShareModal({ isOpen, onClose, project, onUpdate, plan = 
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" className="sr-only peer" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} />
-                                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
                             </label>
                         </div>
                         {isPublic && (
                             <div className="mt-3 flex items-center gap-2">
                                 <input type="text" readOnly value={publicLink} className="flex-1 bg-white border border-slate-300 text-slate-600 text-xs rounded p-2 overflow-hidden text-ellipsis" />
-                                <button onClick={() => { navigator.clipboard.writeText(publicLink); alert("Link copiado!"); }} className="text-blue-600 hover:text-blue-700 text-xs font-medium">Copiar</button>
+                                <button onClick={() => { navigator.clipboard.writeText(publicLink); onShowToast?.('Link copiado', 'success'); }} className="text-indigo-600 hover:text-indigo-700 text-xs font-medium">Copiar</button>
                             </div>
                         )}
                     </div>
@@ -157,20 +161,21 @@ export default function ShareModal({ isOpen, onClose, project, onUpdate, plan = 
                             </div>
                         )}
                         <form onSubmit={addCollaborator} className="flex gap-2 mb-4">
-                            <input type="email" placeholder="Agregar personas por correo" className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} disabled={plan === 'free'} />
+                            <input type="email" placeholder="Agregar personas por correo" className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" value={newEmail} onChange={(e) => { setNewEmail(e.target.value); if (emailError) setEmailError(""); }} disabled={plan === 'free'} />
                             <select value={newRole} onChange={(e) => setNewRole(e.target.value as 'editor' | 'viewer')} className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none disabled:opacity-50" disabled={plan === 'free'}>
                                 <option value="editor">Editor</option>
                                 <option value="viewer">Lector</option>
                             </select>
-                            <button type="submit" disabled={plan === 'free'} className="px-3 py-2 bg-blue-50 text-blue-600 font-medium rounded-lg text-sm hover:bg-blue-100 disabled:opacity-40 disabled:cursor-not-allowed">Agregar</button>
+                            <button type="submit" disabled={plan === 'free'} className="px-3 py-2 bg-indigo-50 text-indigo-600 font-medium rounded-lg text-sm hover:bg-indigo-100 disabled:opacity-40 disabled:cursor-not-allowed">Agregar</button>
                         </form>
+                        {emailError && <p className="text-red-500 text-xs -mt-3 mb-2">{emailError}</p>}
 
                         <div className="space-y-2 max-h-[150px] overflow-y-auto">
                             {collaborators.length === 0 && <p className="text-sm text-slate-400 italic text-center py-2">Sin colaboradores</p>}
                             {collaborators.map((email) => (
                                 <div key={email} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg group">
                                     <div className="flex items-center gap-2">
-                                        <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold">{email.charAt(0).toUpperCase()}</div>
+                                        <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-bold">{email.charAt(0).toUpperCase()}</div>
                                         <span className="text-sm text-slate-700">{email}</span>
                                     </div>
                                     <div className="flex items-center gap-2">
@@ -215,7 +220,7 @@ export default function ShareModal({ isOpen, onClose, project, onUpdate, plan = 
                                 </div>
                                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-500">
                                     <strong>Preview URL:</strong>{' '}
-                                    <a href={`/embed/${project.id}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">/embed/{project.id}</a>
+                                    <a href={`/embed/${project.id}`} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">/embed/{project.id}</a>
                                 </div>
                             </>
                         )}
