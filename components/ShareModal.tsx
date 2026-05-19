@@ -15,7 +15,7 @@ interface ShareModalProps {
     onShowToast?: (message: string, type?: ToastType) => void;
 }
 
-type Tab = 'link' | 'collaborators' | 'embed';
+type Tab = 'link' | 'collaborators' | 'embed' | 'api';
 
 export default function ShareModal({ isOpen, onClose, project, onUpdate, plan = 'free', onUpgradeRequired, onShowToast }: ShareModalProps) {
     const [tab, setTab] = useState<Tab>('link');
@@ -92,6 +92,7 @@ export default function ShareModal({ isOpen, onClose, project, onUpdate, plan = 
         { id: 'link', label: 'Link público' },
         { id: 'collaborators', label: 'Colaboradores' },
         { id: 'embed', label: 'Embed' },
+        { id: 'api', label: 'API REST' },
     ];
 
     return (
@@ -152,7 +153,7 @@ export default function ShareModal({ isOpen, onClose, project, onUpdate, plan = 
                     <div>
                         {plan === 'free' && (
                             <div className="mb-4 p-3 bg-indigo-50 border border-indigo-100 rounded-xl flex items-start gap-3">
-                                <SparklesIcon className="w-5 h-5 text-indigo-500 flex-shrink-0 mt-0.5" />
+                                <SparklesIcon className="w-5 h-5 text-indigo-500 shrink-0 mt-0.5" />
                                 <div>
                                     <p className="text-sm font-medium text-indigo-800">Colaboradores requieren plan Pro</p>
                                     <p className="text-xs text-indigo-600 mt-0.5">Invita hasta 5 colaboradores con plan Pro, o ilimitados con Business.</p>
@@ -221,6 +222,35 @@ export default function ShareModal({ isOpen, onClose, project, onUpdate, plan = 
                                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-500">
                                     <strong>Preview URL:</strong>{' '}
                                     <a href={`/embed/${project.id}`} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">/embed/{project.id}</a>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                )}
+
+                {tab === 'api' && (
+                    <div className="space-y-4">
+                        {(plan === 'free') ? (
+                            <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl text-center">
+                                <SparklesIcon className="w-8 h-8 text-indigo-400 mx-auto mb-2" />
+                                <p className="text-sm font-semibold text-indigo-800 mb-1">API REST requiere plan Pro</p>
+                                <p className="text-xs text-indigo-600 mb-3">Integra los datos de tus proyectos en tiempo real con nuestra API.</p>
+                                <button onClick={() => onUpgradeRequired?.({ type: 'feature', featureKey: 'hasApiAccess', requiredPlan: 'pro' })} className="text-sm px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700">Ver planes Pro</button>
+                            </div>
+                        ) : (
+                            <>
+                                <div>
+                                    <label className="text-sm font-medium text-slate-700 block mb-2">Endpoint de la API (GET)</label>
+                                    <div className="flex items-center gap-2">
+                                        <input type="text" readOnly value={`${origin}/api/v1/projects/${project.id}/features`} className="flex-1 bg-white border border-slate-300 text-slate-600 text-xs rounded p-2 overflow-hidden text-ellipsis font-mono" />
+                                        <button onClick={() => { navigator.clipboard.writeText(`${origin}/api/v1/projects/${project.id}/features`); onShowToast?.('Endpoint copiado', 'success'); }} className="text-indigo-600 hover:text-indigo-700 text-xs font-medium border border-indigo-200 rounded px-3 py-2">Copiar</button>
+                                    </div>
+                                    <p className="text-xs text-slate-500 mt-3">
+                                        Para autenticar tus peticiones, debes enviar un header <code className="bg-slate-100 text-slate-700 px-1 rounded">Authorization: Bearer &lt;tu-api-key&gt;</code>.
+                                    </p>
+                                    <p className="text-xs text-slate-500 mt-2">
+                                        Puedes gestionar tus API Keys desde la <a href="/settings" target="_blank" className="text-indigo-600 hover:underline">página de Configuración</a>.
+                                    </p>
                                 </div>
                             </>
                         )}

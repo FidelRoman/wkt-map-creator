@@ -19,7 +19,12 @@ import tokml from 'tokml';
 // Dynamically import Map to avoid SSR window issues
 const Map = dynamic(() => import('@/components/Map'), {
     ssr: false,
-    loading: () => <div className="h-full w-full flex items-center justify-center bg-gray-100">Cargando Mapa...</div>
+    loading: () => (
+        <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50">
+            <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-4"></div>
+            <p className="text-slate-500 font-medium text-sm">Cargando mapa interactivo...</p>
+        </div>
+    )
 });
 
 function ProjectApp() {
@@ -82,7 +87,15 @@ function ProjectApp() {
     useEffect(() => {
         if (projectId) {
             getProject(projectId).then(p => {
-                if (p) loadProject(p);
+                if (p) {
+                    loadProject(p);
+                } else {
+                    // Project not found
+                    window.location.href = '/404';
+                }
+            }).catch(e => {
+                console.error("Error loading project:", e);
+                window.location.href = '/404';
             });
         }
     }, [projectId]);

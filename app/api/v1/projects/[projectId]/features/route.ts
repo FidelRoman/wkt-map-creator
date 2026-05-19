@@ -35,6 +35,17 @@ async function verifyApiKey(apiKey: string): Promise<{ uid: string; plan: string
     return null;
 }
 
+export async function OPTIONS(request: NextRequest) {
+    return new NextResponse(null, {
+        status: 204,
+        headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        },
+    });
+}
+
 export async function GET(
     request: NextRequest,
     { params }: { params: Promise<{ projectId: string }> }
@@ -157,6 +168,7 @@ export async function GET(
             'Content-Type': 'application/geo+json',
             'X-Total-Count': String(allFeatures.length),
             'X-Rate-Limit-Remaining': String(dailyLimit - apiCallsToday - 1),
+            'Access-Control-Allow-Origin': '*',
         }
     });
 }

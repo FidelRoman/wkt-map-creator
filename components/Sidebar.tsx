@@ -576,7 +576,7 @@ export default function Sidebar({
                                     <button
                                         onClick={() => plan === 'free' ? setShowUpgradeModal(true) : undefined}
                                         title={plan !== 'free' ? 'Plan activo' : 'Upgrade a Pro'}
-                                        className={`flex-shrink-0 flex items-center gap-0.5 text-[10px] font-bold text-white px-1.5 py-0.5 rounded-full leading-none ${plan === 'free' ? 'cursor-pointer hover:opacity-80 transition-opacity' : 'cursor-default'}`}
+                                        className={`shrink-0 flex items-center gap-0.5 text-[10px] font-bold text-white px-1.5 py-0.5 rounded-full leading-none ${plan === 'free' ? 'cursor-pointer hover:opacity-80 transition-opacity' : 'cursor-default'}`}
                                         style={{ background: PLAN_COLORS[plan] }}
                                     >
                                         {plan !== 'free' && <SparklesIcon className="w-2.5 h-2.5" />}
@@ -670,6 +670,8 @@ export default function Sidebar({
                     isOpen={shareModalOpen}
                     onClose={() => setShareModalOpen(false)}
                     project={currentProject}
+                    plan={plan}
+                    onUpgradeRequired={(reason) => setUpgradeModal(reason)}
                     onUpdate={(updated) => {
                         if (onUpdateProject) onUpdateProject(updated);
                     }}

@@ -15,6 +15,7 @@ import {
     ArrowLeftIcon, CheckIcon, SparklesIcon,
     ArrowRightStartOnRectangleIcon, TrashIcon, ShieldCheckIcon,
     ChartBarIcon, UserCircleIcon, CreditCardIcon, ExclamationTriangleIcon,
+    KeyIcon, PlusIcon
 } from '@heroicons/react/24/outline';
 import Toast, { type ToastType } from '@/components/Toast';
 
@@ -77,6 +78,8 @@ function SettingsContent() {
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [deleteConfirmText, setDeleteConfirmText] = useState('');
     const [deletingAccount, setDeletingAccount] = useState(false);
+    const [generatingKey, setGeneratingKey] = useState(false);
+    const [newKeyName, setNewKeyName] = useState('');
     const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
 
     useEffect(() => {
@@ -146,6 +149,39 @@ function SettingsContent() {
             }
             setDeletingAccount(false);
             setShowDeleteModal(false);
+        }
+    };
+
+    const handleGenerateApiKey = async () => {
+        if (!user || !userProfile || !newKeyName.trim()) return;
+        setGeneratingKey(true);
+        try {
+            const array = new Uint8Array(24);
+            window.crypto.getRandomValues(array);
+            const rawKey = Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+            const newKey = `wk_${rawKey}`;
+            
+            const apiKeys = [...(userProfile.apiKeys || []), { key: newKey, name: newKeyName.trim(), createdAt: new Date(), lastUsed: null }];
+            await updateUserProfile(user.uid, { apiKeys });
+            await refreshProfile();
+            setNewKeyName('');
+            showToast('API Key generada con éxito.', 'success');
+        } catch (error) {
+            showToast('Error al generar la API Key.', 'error');
+        } finally {
+            setGeneratingKey(false);
+        }
+    };
+
+    const handleDeleteApiKey = async (keyToDelete: string) => {
+        if (!user || !userProfile) return;
+        try {
+            const apiKeys = (userProfile.apiKeys || []).filter(k => k.key !== keyToDelete);
+            await updateUserProfile(user.uid, { apiKeys });
+            await refreshProfile();
+            showToast('API Key eliminada.', 'success');
+        } catch (error) {
+            showToast('Error al eliminar la API Key.', 'error');
         }
     };
 
@@ -347,6 +383,66 @@ function SettingsContent() {
                     </div>
                 </section>
 
+                {/* ── API Keys ── */}
+                {isPaid && (
+                    <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                        <SectionHeader icon={KeyIcon} title="API Keys" />
+                        <div className="px-6 py-5 space-y-5">
+                            <p className="text-sm text-slate-600">
+                                Las API Keys te permiten acceder de forma programática a los datos de tus proyectos.
+                            </p>
+                            
+                            {userProfile.apiKeys && userProfile.apiKeys.length > 0 && (
+                                <div className="space-y-3">
+                                    {userProfile.apiKeys.map((k) => (
+                                        <div key={k.key} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border border-slate-200 rounded-xl bg-slate-50 gap-3">
+                                            <div className="overflow-hidden">
+                                                <p className="font-semibold text-sm text-slate-800">{k.name}</p>
+                                                <p className="font-mono text-xs text-slate-500 truncate">{k.key}</p>
+                                                <p className="text-xs text-slate-400 mt-1">
+                                                    Creada: {new Date(k.createdAt?.seconds ? k.createdAt.seconds * 1000 : k.createdAt).toLocaleDateString()}
+                                                    {' · '}
+                                                    Último uso: {k.lastUsed ? new Date(k.lastUsed?.seconds ? k.lastUsed.seconds * 1000 : k.lastUsed).toLocaleDateString() : 'Nunca'}
+                                                </p>
+                                            </div>
+                                            <button
+                                                onClick={() => handleDeleteApiKey(k.key)}
+                                                className="shrink-0 text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-lg transition-colors"
+                                                title="Eliminar API Key"
+                                            >
+                                                <TrashIcon className="w-5 h-5" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {(!userProfile.apiKeys || userProfile.apiKeys.length < 5) ? (
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        value={newKeyName}
+                                        onChange={(e) => setNewKeyName(e.target.value)}
+                                        placeholder="Nombre de la nueva API Key"
+                                        className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        onKeyDown={(e) => e.key === 'Enter' && handleGenerateApiKey()}
+                                    />
+                                    <button
+                                        onClick={handleGenerateApiKey}
+                                        disabled={generatingKey || !newKeyName.trim()}
+                                        className="btn-primary text-sm px-4 py-2 disabled:opacity-50 flex items-center gap-1"
+                                    >
+                                        <PlusIcon className="w-4 h-4" />
+                                        <span>Generar</span>
+                                    </button>
+                                </div>
+                            ) : (
+                                <p className="text-xs text-amber-600">Has alcanzado el límite de 5 API Keys.</p>
+                            )}
+                        </div>
+                    </section>
+                )}
+
                 {/* ── Seguridad ── */}
                 <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
                     <SectionHeader icon={ShieldCheckIcon} title="Seguridad" />
@@ -398,7 +494,7 @@ function SettingsContent() {
                             </div>
                             <button
                                 onClick={() => setShowDeleteModal(true)}
-                                className="flex-shrink-0 flex items-center gap-2 text-sm font-medium text-red-600 border border-red-200 hover:bg-red-50 px-3 py-2 rounded-lg transition-colors"
+                                className="shrink-0 flex items-center gap-2 text-sm font-medium text-red-600 border border-red-200 hover:bg-red-50 px-3 py-2 rounded-lg transition-colors"
                             >
                                 <TrashIcon className="w-4 h-4" />
                                 Eliminar
@@ -442,7 +538,7 @@ function SettingsContent() {
             >
                 <div className="space-y-4">
                     <div className="flex items-start gap-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-                        <ExclamationTriangleIcon className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                        <ExclamationTriangleIcon className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
                         <div className="text-sm text-red-700">
                             <p className="font-semibold mb-1">Esta acción es irreversible</p>
                             <p className="text-xs text-red-600">Se eliminarán tu perfil, todos tus proyectos y capas. No podrás recuperar esta información.</p>
