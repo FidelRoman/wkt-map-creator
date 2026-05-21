@@ -32,9 +32,12 @@ interface MapProps {
     onClearSelection?: () => void;
     plan?: PlanId;
     onUpgradeRequired?: (reason: any) => void;
+    projectId?: string;
+    isReadOnly?: boolean;
 }
 
 export default function MapComponent(props: MapProps) {
+    const { projectId, isReadOnly, ...rest } = props;
     const [activeTileLayer, setActiveTileLayer] = useState("light");
 
     // @ts-ignore
@@ -50,11 +53,27 @@ export default function MapComponent(props: MapProps) {
             {/* Non-active layers (Visual only) */}
             {props.layers.map(layer => {
                 if (layer.id === props.activeLayerId || !layer.visible) return null;
-                return <GeoJSON key={layer.id} data={layer.features} pathOptions={{ color: '#64748b' }} />;
+                const s = layer.style;
+                const pathOptions = s ? {
+                    color: s.strokeColor ?? '#64748b',
+                    weight: s.strokeWidth ?? 2,
+                    opacity: s.strokeOpacity ?? 1,
+                    fillColor: s.fillColor ?? '#64748b',
+                    fillOpacity: s.fillOpacity ?? 0.4,
+                } : { color: '#64748b' };
+                return (
+                    <GeoJSON
+                        key={`${layer.id}-${JSON.stringify(s)}`}
+                        data={layer.features}
+                        pathOptions={pathOptions}
+                        pointToLayer={s?.pointRadius ? (_feature, latlng) =>
+                            L.circleMarker(latlng, { radius: s.pointRadius }) : undefined}
+                    />
+                );
             })}
 
             {/* Active editing layer */}
-            <ActiveLayerEditor {...props} />
+            <ActiveLayerEditor {...rest} projectId={projectId} isReadOnly={isReadOnly} />
         </MapContainer>
     );
 }

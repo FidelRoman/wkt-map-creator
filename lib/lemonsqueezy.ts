@@ -31,7 +31,7 @@ export async function lsCreateCheckout(params: {
                     product_options: {
                         redirect_url: params.successUrl,
                         receipt_button_text: 'Ir al Dashboard',
-                        receipt_thank_you_note: '¡Gracias por suscribirte a WKT Map Creator!',
+                        receipt_thank_you_note: 'Thank you for subscribing to WKT Studio!',
                     },
                     expires_at: null,
                 },

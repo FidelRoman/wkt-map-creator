@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
-import { getFirestore, collection, addDoc, serverTimestamp, query, where, orderBy, getDocs, doc, updateDoc, getDoc, deleteDoc, setDoc } from "firebase/firestore";
+import { getFirestore, collection, addDoc, serverTimestamp, query, where, orderBy, getDocs, doc, updateDoc, getDoc, deleteDoc, setDoc, onSnapshot, type Unsubscribe } from "firebase/firestore";
 import type { PlanId } from './plans';
 
 const firebaseConfig = {
@@ -147,11 +147,21 @@ export async function deleteSnapshot(snapshotId: string): Promise<void> {
     await deleteDoc(doc(db, 'snapshots', snapshotId));
 }
 
+export interface LayerStyle {
+    fillColor?: string;
+    fillOpacity?: number;
+    strokeColor?: string;
+    strokeWidth?: number;
+    strokeOpacity?: number;
+    pointRadius?: number;
+}
+
 export interface Layer {
     id: string;
     name: string;
     visible: boolean;
     features: any; // GeoJSON FeatureCollection or similar
+    style?: LayerStyle;
 }
 
 export interface Project {
@@ -334,4 +344,96 @@ export async function getProject(projectId: string): Promise<Project | null> {
         console.error("Error getting project:", error);
         throw error;
     }
+}
+
+export async function getPublicProjects(limitCount = 24): Promise<Project[]> {
+    try {
+        // No orderBy to avoid requiring a composite index; sort client-side instead
+        const q = query(
+            collection(db, PROJECTS_COLLECTION),
+            where('isPublic', '==', true)
+        );
+        const snapshot = await getDocs(q);
+        const projects = snapshot.docs.map(d => {
+            const data = d.data();
+            return { id: d.id, ...data, layers: data.layers ? parseLayers(data.layers) : [] } as Project;
+        });
+        return projects
+            .sort((a, b) => {
+                const aTime = a.updatedAt?.seconds ?? 0;
+                const bTime = b.updatedAt?.seconds ?? 0;
+                return bTime - aTime;
+            })
+            .slice(0, limitCount);
+    } catch (error) {
+        console.error("Error fetching public projects:", error);
+        return [];
+    }
+}
+
+export async function forkProject(sourceProjectId: string, targetUserId: string, targetUserName: string, targetUserEmail: string): Promise<string> {
+    const source = await getProject(sourceProjectId);
+    if (!source) throw new Error('Source project not found');
+    const serializedLayers = (source.layers ?? []).map(l => ({
+        ...l,
+        features: typeof l.features === 'string' ? l.features : JSON.stringify(l.features)
+    }));
+    const docRef = await addDoc(collection(db, PROJECTS_COLLECTION), {
+        name: `${source.name} (copia)`,
+        ownerId: targetUserId,
+        ownerName: targetUserName,
+        ownerEmail: targetUserEmail,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        layers: serializedLayers,
+        isPublic: false,
+        collaborators: [],
+    });
+    await incrementProjectCount(targetUserId, 1);
+    return docRef.id;
+}
+
+export interface FeatureComment {
+    id?: string;
+    projectId: string;
+    layerId: string;
+    featureIndex: number;
+    text: string;
+    authorId: string;
+    authorName: string;
+    authorPhoto: string | null;
+    createdAt: any;
+    resolved: boolean;
+}
+
+export async function addComment(comment: Omit<FeatureComment, 'id' | 'createdAt'>): Promise<string> {
+    const ref = await addDoc(collection(db, 'projects', comment.projectId, 'comments'), {
+        ...comment,
+        createdAt: serverTimestamp(),
+        resolved: false,
+    });
+    return ref.id;
+}
+
+export function subscribeToComments(
+    projectId: string,
+    layerId: string,
+    featureIndex: number,
+    callback: (comments: FeatureComment[]) => void
+): Unsubscribe {
+    // No orderBy to avoid composite index requirement; sort client-side
+    const q = query(
+        collection(db, 'projects', projectId, 'comments'),
+        where('layerId', '==', layerId),
+        where('featureIndex', '==', featureIndex)
+    );
+    return onSnapshot(q, snapshot => {
+        const comments = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as FeatureComment));
+        comments.sort((a, b) => (a.createdAt?.seconds ?? 0) - (b.createdAt?.seconds ?? 0));
+        callback(comments);
+    });
+}
+
+export async function resolveComment(projectId: string, commentId: string): Promise<void> {
+    await updateDoc(doc(db, 'projects', projectId, 'comments', commentId), { resolved: true });
 }

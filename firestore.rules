@@ -34,10 +34,11 @@ service cloud.firestore {
     match /projects/{projectId} {
       allow get: if resource.data.isPublic == true || isOwner(resource) || isCollaborator(resource);
 
-      allow list: if isSignedIn() && (
-        resource.data.ownerId == request.auth.uid ||
-        request.auth.token.email in resource.data.collaborators
-      );
+      allow list: if resource.data.isPublic == true ||
+                  (isSignedIn() && (
+                    resource.data.ownerId == request.auth.uid ||
+                    request.auth.token.email in resource.data.collaborators
+                  ));
 
       allow create: if isSignedIn() &&
                     request.resource.data.ownerId == request.auth.uid;
@@ -45,6 +46,27 @@ service cloud.firestore {
       allow update: if isEditor(resource);
 
       allow delete: if isOwner(resource);
+    }
+
+    // --- Comments (subcollection of projects) ---
+    match /projects/{projectId}/comments/{commentId} {
+      // Owner and collaborators can read
+      allow read: if get(/databases/$(database)/documents/projects/$(projectId)).data.isPublic == true ||
+                  (isSignedIn() && (
+                    get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid ||
+                    request.auth.token.email in get(/databases/$(database)/documents/projects/$(projectId)).data.collaborators
+                  ));
+
+      // Only owner and collaborators can write
+      allow create: if isSignedIn() &&
+                    request.resource.data.authorId == request.auth.uid && (
+                      get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid ||
+                      request.auth.token.email in get(/databases/$(database)/documents/projects/$(projectId)).data.collaborators
+                    );
+
+      // Only owner can resolve (update)
+      allow update: if isSignedIn() &&
+                    get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid;
     }
 
     // --- Snapshots ---

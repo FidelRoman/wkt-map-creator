@@ -8,6 +8,7 @@ import InitialDataLoader from './InitialDataLoader';
 import { Layer } from '@/lib/firebase';
 import { checkLimit, hasFeature, type PlanId } from '@/lib/plans';
 import type { ToastType } from '@/components/Toast';
+import FeatureComments from './FeatureComments';
 
 interface ActiveLayerEditorProps {
     layers: Layer[];
@@ -21,6 +22,8 @@ interface ActiveLayerEditorProps {
     onClearSelection?: () => void;
     plan?: PlanId;
     onUpgradeRequired?: (reason: { type: 'limit'; limitKey: 'maxFeaturesPerLayer'; current: number; limit: number; requiredPlan: PlanId }) => void;
+    projectId?: string;
+    isReadOnly?: boolean;
 }
 
 export default function ActiveLayerEditor({
@@ -35,12 +38,15 @@ export default function ActiveLayerEditor({
     onClearSelection,
     plan = 'free',
     onUpgradeRequired,
+    projectId,
+    isReadOnly = false,
 }: ActiveLayerEditorProps) {
     const featureGroupRef = useRef<L.FeatureGroup>(null);
     const [menu, setMenu] = useState<{ x: number, y: number, layer: L.Layer | null, index: number } | null>(null);
     const [editingLayer, setEditingLayer] = useState<L.Layer | null>(null);
     const [bufferInputOpen, setBufferInputOpen] = useState(false);
     const [bufferDistance, setBufferDistance] = useState('500');
+    const [commentsFeature, setCommentsFeature] = useState<{ index: number; name: string } | null>(null);
     const map = useMap();
 
     // --- Selection Logic ---
@@ -376,6 +382,25 @@ export default function ActiveLayerEditor({
         setMenu(null);
     };
 
+    const handleOpenComments = () => {
+        if (!menu || menu.index === -1) { setMenu(null); return; }
+        const activeLayer = layers.find(l => l.id === activeLayerId);
+        const feature = activeLayer?.features?.features?.[menu.index];
+        const name = feature?.properties?.name ?? `Objeto ${menu.index + 1}`;
+        // Select the feature so we can track when the user moves away from it
+        if (onToggleSelection) onToggleSelection(menu.index, false);
+        setCommentsFeature({ index: menu.index, name });
+        setMenu(null);
+    };
+
+    // Close comments when the associated feature is deselected
+    useEffect(() => {
+        if (!commentsFeature) return;
+        if (!selectedIndices.has(commentsFeature.index)) {
+            setCommentsFeature(null);
+        }
+    }, [selectedIndices]);
+
     const handleBuffer = () => {
         if (!hasFeature(plan, 'hasSpatialAnalysis')) {
             if (onUpgradeRequired) {
@@ -513,11 +538,28 @@ export default function ActiveLayerEditor({
                             </span>
                         </div>
                     )}
+                    {projectId && (
+                        <div onClick={handleOpenComments} className="menu-item" style={{ display: 'flex', gap: '10px', padding: '10px', cursor: 'pointer', alignItems: 'center', color: '#6366f1' }}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+                            <span>Comentarios</span>
+                        </div>
+                    )}
                     <div onClick={handleDelete} className="menu-item" style={{ color: '#ef4444', display: 'flex', gap: '10px', padding: '10px', cursor: 'pointer', alignItems: 'center' }}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
                         <span>Eliminar</span>
                     </div>
                 </div>
+            )}
+
+            {commentsFeature && projectId && activeLayerId && (
+                <FeatureComments
+                    projectId={projectId}
+                    layerId={activeLayerId}
+                    featureIndex={commentsFeature.index}
+                    featureName={commentsFeature.name}
+                    onClose={() => setCommentsFeature(null)}
+                    canWrite={!isReadOnly}
+                />
             )}
         </>
     );

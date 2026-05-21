@@ -21,10 +21,15 @@ import {
     ClipboardDocumentCheckIcon,
     PencilSquareIcon,
     Cog6ToothIcon,
-    SparklesIcon
+    SparklesIcon,
+    CircleStackIcon,
+    PaintBrushIcon,
 } from "@heroicons/react/24/outline";
 import ShareModal from "@/components/ShareModal";
 import { generateColor, parseWKT } from "@/lib/map-utils";
+import { generatePostgisSQL } from "@/lib/export-utils";
+import LayerStyleEditor from "@/components/map/LayerStyleEditor";
+import type { LayerStyle } from "@/lib/firebase";
 import type { ToastType } from "@/components/Toast";
 
 const PLAN_COLORS: Record<string, string> = { free: '#6b7280', pro: '#6366f1', business: '#f59e0b' };
@@ -59,6 +64,7 @@ interface SidebarProps {
     onSandboxSave?: () => void;
     isSandboxSaving?: boolean;
     onShowToast?: (message: string, type?: ToastType) => void;
+    onImportFile?: (file: File) => void;
 }
 
 export default function Sidebar({
@@ -85,6 +91,7 @@ export default function Sidebar({
     onSandboxSave,
     isSandboxSaving = false,
     onShowToast,
+    onImportFile,
 }: SidebarProps) {
     const { user, userProfile } = useAuth();
     const [projectListOpen, setProjectListOpen] = useState(false);
@@ -95,6 +102,8 @@ export default function Sidebar({
 
     // File Input Ref
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const importFileRef = useRef<HTMLInputElement>(null);
+    const [showImportMenu, setShowImportMenu] = useState(false);
 
     // Modal States
     const [modalAction, setModalAction] = useState<'newProject' | 'newLayer' | 'deleteLayer' | null>(null);
@@ -104,6 +113,49 @@ export default function Sidebar({
     // Paste WKT State
     const [pasteModalOpen, setPasteModalOpen] = useState(false);
     const [wktInput, setWktInput] = useState("");
+
+    // SQL Export State
+    const [sqlModalOpen, setSqlModalOpen] = useState(false);
+    const [sqlLayerId, setSqlLayerId] = useState<string | null>(null);
+    const [sqlTableName, setSqlTableName] = useState('');
+    const [sqlOutput, setSqlOutput] = useState('');
+    const [sqlCopied, setSqlCopied] = useState(false);
+
+    const openSqlExport = (layerId: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        const layer = layers.find(l => l.id === layerId);
+        if (!layer) return;
+        const defaultTable = layer.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'layer';
+        setSqlLayerId(layerId);
+        setSqlTableName(defaultTable);
+        setSqlOutput(generatePostgisSQL(layer, defaultTable));
+        setSqlModalOpen(true);
+    };
+
+    const handleSqlTableNameChange = (name: string) => {
+        setSqlTableName(name);
+        const layer = layers.find(l => l.id === sqlLayerId);
+        if (!layer) return;
+        const safe = name.replace(/[^a-zA-Z0-9_]/g, '_').replace(/^([0-9])/, '_$1').toLowerCase() || 'layer';
+        setSqlOutput(generatePostgisSQL(layer, safe));
+    };
+
+    const downloadSql = () => {
+        const blob = new Blob([sqlOutput], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${sqlTableName || 'layer'}.sql`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    // Style editor state
+    const [styleLayerId, setStyleLayerId] = useState<string | null>(null);
+
+    const handleStyleUpdate = (layerId: string, style: LayerStyle) => {
+        setLayers(prev => prev.map(l => l.id === layerId ? { ...l, style } : l));
+    };
 
     // Rename State
     const [renamingFeatureIndex, setRenamingFeatureIndex] = useState<number | null>(null);
@@ -293,8 +345,15 @@ export default function Sidebar({
         if (e.target.files && e.target.files[0]) {
             onImportCsv(e.target.files[0]);
         }
-        // Reset input
         if (fileInputRef.current) fileInputRef.current.value = "";
+    };
+
+    const handleImportFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            onImportFile?.(e.target.files[0]);
+        }
+        if (importFileRef.current) importFileRef.current.value = "";
+        setShowImportMenu(false);
     };
 
     if (!user && !sandboxMode) {
@@ -321,7 +380,7 @@ export default function Sidebar({
                             <svg className="w-5 h-5 text-indigo-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                             </svg>
-                            <span className="font-bold text-slate-800 text-base">WKT Map Creator</span>
+                            <span className="font-bold text-slate-800 text-base">WKT Studio</span>
                             <span className="text-[10px] bg-slate-100 text-slate-500 border border-slate-200 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium ml-auto">
                                 Demo
                             </span>
@@ -380,19 +439,49 @@ export default function Sidebar({
                 <div className="layers-header">
                     <h2 style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>Capas</h2>
                     <div className="layers-actions">
-                        <input
-                            type="file"
-                            ref={fileInputRef}
-                            style={{ display: 'none' }}
-                            accept=".csv,.txt"
-                            onChange={handleFileChange}
-                        />
-                        <button onClick={openNewLayerModal} style={{ background: 'none', border: 'none', cursor: 'pointer' }} title="Nueva Capa">
+                        {/* Legacy CSV input kept for backward compat */}
+                        <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept=".csv,.txt" onChange={handleFileChange} />
+                        {/* Multi-format import input */}
+                        <input type="file" ref={importFileRef} style={{ display: 'none' }} accept=".csv,.txt,.geojson,.json,.shp" onChange={handleImportFileChange} />
+
+                        <button onClick={openNewLayerModal} style={{ background: 'none', border: 'none', cursor: 'pointer' }} title="Nueva Capa" aria-label="Nueva Capa">
                             <PlusIcon style={{ width: 18, height: 18, color: '#64748b' }} />
                         </button>
-                        <button onClick={() => fileInputRef.current?.click()} style={{ background: 'none', border: 'none', cursor: 'pointer' }} title="Importar Capa (CSV)">
-                            <FolderOpenIcon style={{ width: 18, height: 18, color: '#64748b' }} />
-                        </button>
+
+                        {/* Import dropdown */}
+                        <div className="relative">
+                            <button
+                                onClick={() => setShowImportMenu(v => !v)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+                                title="Importar Capa"
+                                aria-label="Importar Capa"
+                            >
+                                <FolderOpenIcon style={{ width: 18, height: 18, color: '#64748b' }} />
+                            </button>
+                            {showImportMenu && (
+                                <>
+                                    <div className="fixed inset-0 z-30" onClick={() => setShowImportMenu(false)} />
+                                    <div className="absolute right-0 top-7 z-40 bg-white border border-slate-200 rounded-xl shadow-lg py-1 w-48">
+                                        <p className="px-3 pt-1 pb-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Formato</p>
+                                        {[
+                                            { label: 'CSV con WKT', ext: '.csv,.txt', desc: 'WKT', onClick: () => fileInputRef.current?.click() },
+                                            { label: 'GeoJSON', ext: '.geojson,.json', desc: 'GeoJSON', onClick: () => importFileRef.current?.click() },
+                                            { label: 'Shapefile', ext: '.shp', desc: '.shp', onClick: () => importFileRef.current?.click() },
+                                            { label: 'CSV lat/lng', ext: '.csv,.txt', desc: 'lat, lng cols', onClick: () => importFileRef.current?.click() },
+                                        ].map(({ label, desc, onClick }) => (
+                                            <button
+                                                key={label}
+                                                onClick={() => { onClick(); setShowImportMenu(false); }}
+                                                className="w-full flex items-center justify-between px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                                            >
+                                                <span>{label}</span>
+                                                <span className="text-[10px] text-slate-400 font-mono">{desc}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -407,6 +496,16 @@ export default function Sidebar({
                                 <span style={{ width: 12, height: 12, borderRadius: '50%', marginRight: 8, background: activeLayerId === layer.id ? 'var(--primary-color)' : '#cbd5e1' }}></span>
                                 <span className="layer-name">{layer.name}</span>
                                 <div className="ml-auto flex items-center gap-1">
+                                    <span
+                                        onClick={(e) => { e.stopPropagation(); setStyleLayerId(l => l === layer.id ? null : layer.id); }}
+                                        style={{ cursor: 'pointer', color: styleLayerId === layer.id ? '#6366f1' : '#94a3b8' }}
+                                        title="Estilo de capa"
+                                    >
+                                        <PaintBrushIcon style={{ width: 14, height: 14 }} />
+                                    </span>
+                                    <span onClick={(e) => openSqlExport(layer.id, e)} style={{ cursor: 'pointer', color: '#94a3b8' }} title="Exportar SQL (PostGIS)">
+                                        <CircleStackIcon style={{ width: 14, height: 14 }} />
+                                    </span>
                                     <span onClick={(e) => { e.stopPropagation(); onExportLayer(layer.id); }} style={{ cursor: 'pointer', color: '#94a3b8' }} title="Exportar Capa">
                                         <ArrowUpTrayIcon style={{ width: 14, height: 14 }} />
                                     </span>
@@ -421,6 +520,19 @@ export default function Sidebar({
                         ))}
                     </div>
                 </div>
+
+                {/* Layer Style Editor (floating panel) */}
+                {styleLayerId && (() => {
+                    const styleLayer = layers.find(l => l.id === styleLayerId);
+                    if (!styleLayer) return null;
+                    return (
+                        <LayerStyleEditor
+                            layer={styleLayer}
+                            onUpdate={(style) => handleStyleUpdate(styleLayerId, style)}
+                            onClose={() => setStyleLayerId(null)}
+                        />
+                    );
+                })()}
 
                 {/* Objetos Section */}
                 <div className="layers-header" style={{ borderTop: 'none' }}>
@@ -686,6 +798,50 @@ export default function Sidebar({
                 reason={upgradeModal}
                 onShowToast={onShowToast}
             />
+
+            {/* SQL Export Modal */}
+            <Modal
+                isOpen={sqlModalOpen}
+                onClose={() => setSqlModalOpen(false)}
+                title="Exportar SQL — PostGIS"
+                footer={
+                    <>
+                        <button onClick={() => setSqlModalOpen(false)} className="btn-outline">Cerrar</button>
+                        <button onClick={downloadSql} className="btn-primary flex items-center gap-1.5">
+                            <ArrowUpTrayIcon className="w-4 h-4" />
+                            Descargar .sql
+                        </button>
+                    </>
+                }
+            >
+                <div className="space-y-3">
+                    <div>
+                        <label className="text-sm font-medium text-slate-700 block mb-1">Nombre de tabla</label>
+                        <input
+                            type="text"
+                            value={sqlTableName}
+                            onChange={e => handleSqlTableNameChange(e.target.value)}
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+                            placeholder="my_table"
+                        />
+                    </div>
+                    <div className="relative">
+                        <label className="text-sm font-medium text-slate-700 block mb-1">SQL generado</label>
+                        <pre className="bg-slate-900 text-green-400 text-xs p-4 rounded-xl overflow-auto max-h-72 font-mono whitespace-pre-wrap break-all">{sqlOutput}</pre>
+                        <button
+                            onClick={() => {
+                                navigator.clipboard.writeText(sqlOutput);
+                                setSqlCopied(true);
+                                setTimeout(() => setSqlCopied(false), 2000);
+                            }}
+                            className="absolute top-8 right-2 text-xs bg-white text-slate-700 px-2 py-1 rounded border border-slate-200 hover:bg-slate-50"
+                        >
+                            {sqlCopied ? '✓ Copiado' : 'Copiar'}
+                        </button>
+                    </div>
+                    <p className="text-xs text-slate-400">Compatible con PostgreSQL + PostGIS. Usa <code className="bg-slate-100 px-1 rounded">ST_GeomFromText()</code> con SRID 4326.</p>
+                </div>
+            </Modal>
         </>
     );
 }

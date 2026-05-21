@@ -1,0 +1,35 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {"type": "Polygon", "coordinates": [[[-77.18,-12.09],[-77.08,-12.09],[-77.08,-12.02],[-77.18,-12.02],[-77.18,-12.09]]]},
+      "properties": {"name": "Zona Norte", "color": "#6366f1", "tipo": "entrega", "cobertura": "alta"}
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "Polygon", "coordinates": [[[-77.08,-12.09],[-76.98,-12.09],[-76.98,-12.02],[-77.08,-12.02],[-77.08,-12.09]]]},
+      "properties": {"name": "Zona Centro", "color": "#10b981", "tipo": "entrega", "cobertura": "alta"}
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "Polygon", "coordinates": [[[-76.98,-12.09],[-76.88,-12.09],[-76.88,-12.02],[-76.98,-12.02],[-76.98,-12.09]]]},
+      "properties": {"name": "Zona Este", "color": "#f59e0b", "tipo": "entrega", "cobertura": "media"}
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "Polygon", "coordinates": [[[-77.18,-12.18],[-77.08,-12.18],[-77.08,-12.09],[-77.18,-12.09],[-77.18,-12.18]]]},
+      "properties": {"name": "Zona Sur-Oeste", "color": "#ec4899", "tipo": "entrega", "cobertura": "media"}
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "Polygon", "coordinates": [[[-77.08,-12.18],[-76.98,-12.18],[-76.98,-12.09],[-77.08,-12.09],[-77.08,-12.18]]]},
+      "properties": {"name": "Zona Sur-Centro", "color": "#ef4444", "tipo": "entrega", "cobertura": "baja"}
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "Polygon", "coordinates": [[[-76.98,-12.18],[-76.88,-12.18],[-76.88,-12.09],[-76.98,-12.09],[-76.98,-12.18]]]},
+      "properties": {"name": "Zona Sur-Este", "color": "#8b5cf6", "tipo": "entrega", "cobertura": "baja"}
+    }
+  ]
+}

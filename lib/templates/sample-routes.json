@@ -1,0 +1,30 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {"type": "LineString", "coordinates": [[-77.08,-12.05],[-76.95,-12.1],[-76.85,-12.15],[-76.72,-12.18],[-76.5,-12.22]]},
+      "properties": {"name": "Ruta Lima Centro - Callao", "color": "#f59e0b", "distance_km": 18}
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "LineString", "coordinates": [[-77.03,-12.04],[-77.05,-12.12],[-77.08,-12.22],[-77.13,-12.35],[-77.18,-12.45]]},
+      "properties": {"name": "Ruta Norte-Sur Lima", "color": "#ef4444", "distance_km": 24}
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "LineString", "coordinates": [[-77.08,-12.05],[-77.1,-12.0],[-77.11,-11.95],[-77.12,-11.88],[-77.15,-11.8]]},
+      "properties": {"name": "Ruta Lima - Norte", "color": "#6366f1", "distance_km": 30}
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "LineString", "coordinates": [[-77.15,-12.0],[-77.2,-12.05],[-77.25,-12.1],[-77.3,-12.12],[-77.35,-12.08]]},
+      "properties": {"name": "Ruta Costera", "color": "#10b981", "distance_km": 12}
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "LineString", "coordinates": [[-76.95,-12.03],[-76.9,-12.1],[-76.83,-12.18],[-76.72,-12.25],[-76.6,-12.3],[-76.45,-12.38]]},
+      "properties": {"name": "Ruta Express Este", "color": "#8b5cf6", "distance_km": 22}
+    }
+  ]
+}

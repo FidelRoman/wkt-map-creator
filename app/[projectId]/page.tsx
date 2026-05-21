@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import { useParams } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import AuthWrapper, { useAuth } from '@/components/AuthWrapper';
-import { Project, Layer, getUserProjects, getProject, saveProjectLayers } from '@/lib/firebase';
+import { Project, Layer, getUserProjects, getProject, saveProjectLayers, forkProject } from '@/lib/firebase';
 import { parseWKT, calculateStats, generateColor } from '@/lib/map-utils';
 import { parseCSVLine } from '@/lib/csv-utils';
 import Modal from '@/components/Modal';
@@ -238,17 +238,148 @@ function ProjectApp() {
                 id: newLayerId,
                 name: file.name.replace('.csv', '').replace('.txt', '') || 'Capa Importada',
                 visible: true,
-                features: {
-                    type: 'FeatureCollection',
-                    features: newFeatures
-                }
+                features: { type: 'FeatureCollection', features: newFeatures }
             };
-
             setLayers(prev => [...prev, newLayer]);
             setActiveLayerId(newLayerId);
             showToast(`Importados ${addedCount} objetos en nueva capa "${newLayer.name}".`, 'success');
         } else {
             showToast('No se encontraron geometrías WKT válidas en el archivo.', 'warning');
+        }
+    };
+
+    const handleImportGeoJSON = async (file: File) => {
+        try {
+            const text = await file.text();
+            const parsed = JSON.parse(text);
+            let features: any[] = [];
+
+            if (parsed.type === 'FeatureCollection') {
+                features = parsed.features ?? [];
+            } else if (parsed.type === 'Feature') {
+                features = [parsed];
+            } else if (parsed.type && parsed.coordinates) {
+                features = [{ type: 'Feature', geometry: parsed, properties: {} }];
+            } else {
+                showToast('Formato GeoJSON no reconocido.', 'error');
+                return;
+            }
+
+            const normalized = features
+                .filter(f => f?.geometry)
+                .map((f, i) => ({
+                    ...f,
+                    properties: {
+                        ...f.properties,
+                        name: f.properties?.name ?? f.properties?.NAME ?? f.properties?.nombre ?? `Objeto ${i + 1}`,
+                        color: f.properties?.color ?? generateColor(),
+                    },
+                }));
+
+            if (normalized.length === 0) { showToast('No se encontraron geometrías en el archivo GeoJSON.', 'warning'); return; }
+
+            const newLayerId = 'layer_' + Date.now();
+            const layerName = file.name.replace(/\.(geojson|json)$/i, '') || 'Capa GeoJSON';
+            setLayers(prev => [...prev, { id: newLayerId, name: layerName, visible: true, features: { type: 'FeatureCollection', features: normalized } }]);
+            setActiveLayerId(newLayerId);
+            showToast(`Importados ${normalized.length} objetos desde "${layerName}".`, 'success');
+        } catch {
+            showToast('Error leyendo el archivo GeoJSON. Verifica que sea JSON válido.', 'error');
+        }
+    };
+
+    const handleImportShapefile = async (file: File) => {
+        try {
+            const shapefile = await import('shapefile');
+            const arrayBuffer = await file.arrayBuffer();
+            const source = await shapefile.open(arrayBuffer as any);
+            const features: any[] = [];
+            let result = await source.read();
+            while (!result.done) {
+                if (result.value) features.push(result.value);
+                result = await source.read();
+            }
+
+            if (features.length === 0) { showToast('No se encontraron geometrías en el Shapefile.', 'warning'); return; }
+
+            const normalized = features.map((f, i) => ({
+                ...f,
+                properties: {
+                    ...f.properties,
+                    name: f.properties?.name ?? f.properties?.NAME ?? f.properties?.nombre ?? `Objeto ${i + 1}`,
+                    color: generateColor(),
+                },
+            }));
+
+            const newLayerId = 'layer_' + Date.now();
+            const layerName = file.name.replace(/\.shp$/i, '') || 'Shapefile';
+            setLayers(prev => [...prev, { id: newLayerId, name: layerName, visible: true, features: { type: 'FeatureCollection', features: normalized } }]);
+            setActiveLayerId(newLayerId);
+            showToast(`Importados ${normalized.length} objetos desde "${layerName}".`, 'success');
+        } catch (err) {
+            console.error(err);
+            showToast('Error leyendo Shapefile. Asegúrate de seleccionar un archivo .shp válido.', 'error');
+        }
+    };
+
+    const handleImportLatLng = async (file: File) => {
+        const text = await file.text();
+        const lines = text.split(/\r?\n/).filter(l => l.trim());
+        if (lines.length < 2) { showToast('El archivo debe tener al menos una fila de datos y un encabezado.', 'warning'); return; }
+
+        const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim().replace(/"/g, ''));
+        const latIdx = headers.findIndex(h => ['lat', 'latitude', 'latitud', 'y'].includes(h));
+        const lngIdx = headers.findIndex(h => ['lon', 'lng', 'longitude', 'longitud', 'x'].includes(h));
+        const nameIdx = headers.findIndex(h => ['name', 'nombre', 'label', 'titulo', 'title'].includes(h));
+
+        if (latIdx === -1 || lngIdx === -1) {
+            showToast('Columnas lat/lng no encontradas. Usa encabezados: lat, lng (o latitude/longitude).', 'warning');
+            return;
+        }
+
+        const features: any[] = [];
+        for (let i = 1; i < lines.length; i++) {
+            const cols = parseCSVLine(lines[i]);
+            const lat = parseFloat(cols[latIdx]);
+            const lng = parseFloat(cols[lngIdx]);
+            if (isNaN(lat) || isNaN(lng)) continue;
+            const name = nameIdx !== -1 && cols[nameIdx] ? cols[nameIdx].trim().replace(/^"|"$/g, '') : `Punto ${features.length + 1}`;
+            const extra: Record<string, string> = {};
+            headers.forEach((h, idx) => {
+                if (idx !== latIdx && idx !== lngIdx && !['name', 'nombre', 'color'].includes(h) && cols[idx]) {
+                    extra[h] = cols[idx].trim().replace(/^"|"$/g, '');
+                }
+            });
+            features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [lng, lat] }, properties: { name, color: generateColor(), ...extra } });
+        }
+
+        if (features.length === 0) { showToast('No se encontraron coordenadas válidas en el archivo.', 'warning'); return; }
+
+        const newLayerId = 'layer_' + Date.now();
+        const layerName = file.name.replace(/\.(csv|txt)$/i, '') || 'Puntos';
+        setLayers(prev => [...prev, { id: newLayerId, name: layerName, visible: true, features: { type: 'FeatureCollection', features } }]);
+        setActiveLayerId(newLayerId);
+        showToast(`Importados ${features.length} puntos desde "${layerName}".`, 'success');
+    };
+
+    const handleImportFile = async (file: File) => {
+        const ext = file.name.split('.').pop()?.toLowerCase();
+        if (ext === 'geojson' || ext === 'json') {
+            await handleImportGeoJSON(file);
+        } else if (ext === 'shp') {
+            await handleImportShapefile(file);
+        } else if (ext === 'csv' || ext === 'txt') {
+            const text = await file.text();
+            const firstLine = text.split('\n')[0].toLowerCase();
+            const hasLatLng = (firstLine.match(/\blat(itude|itud)?\b/i) || firstLine.match(/\by\b/i)) &&
+                              (firstLine.match(/\blon(gitude|gitud)?\b/i) || firstLine.match(/\blng\b/i) || firstLine.match(/\bx\b/i));
+            if (hasLatLng) {
+                await handleImportLatLng(file);
+            } else {
+                await handleImportCsv(file);
+            }
+        } else {
+            showToast('Formato no soportado. Usa .csv, .geojson, o .shp', 'warning');
         }
     };
 
@@ -338,6 +469,22 @@ function ProjectApp() {
         setFlyToRequest(feature);
     };
 
+    const [isForkingProject, setIsForkingProject] = useState(false);
+    const handleForkProject = async () => {
+        if (!user || !currentProject?.id) return;
+        setIsForkingProject(true);
+        try {
+            const newId = await forkProject(currentProject.id, user.uid, user.displayName ?? 'Usuario', user.email ?? '');
+            showToast('Proyecto duplicado a tu cuenta. Abriendo...', 'success');
+            setTimeout(() => { window.location.href = `/${newId}`; }, 1200);
+        } catch (e) {
+            showToast('Error al duplicar el proyecto', 'error');
+            setIsForkingProject(false);
+        }
+    };
+
+    const canFork = !loading && user && currentProject && currentProject.ownerId !== user.uid && currentProject.isPublic;
+
     if (accessDenied) {
         return (
             <div className="flex h-screen w-screen items-center justify-center bg-gray-50 flex-col gap-4">
@@ -368,6 +515,7 @@ function ProjectApp() {
                 isReadOnly={isReadOnly}
                 // New Props
                 onImportCsv={handleImportCsv}
+                onImportFile={handleImportFile}
                 onExportLayer={handleExportLayer}
                 onAddFeature={handleAddFeature}
                 onCopyWkt={handleCopyWkt}
@@ -381,6 +529,22 @@ function ProjectApp() {
                 onShowToast={showToast}
             />
             <div className="flex-1 relative">
+                {canFork && (
+                    <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[400]">
+                        <button
+                            onClick={handleForkProject}
+                            disabled={isForkingProject}
+                            className="flex items-center gap-2 bg-white border border-slate-200 shadow-md rounded-full px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-60"
+                        >
+                            {isForkingProject ? (
+                                <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                            ) : (
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                            )}
+                            {isForkingProject ? 'Duplicando...' : 'Duplicar a mi cuenta'}
+                        </button>
+                    </div>
+                )}
                 <Map
                     layers={layers}
                     activeLayerId={activeLayerId}
@@ -393,6 +557,8 @@ function ProjectApp() {
                     onClearSelection={() => setSelectedIndices(new Set())}
                     plan={plan}
                     onUpgradeRequired={(reason) => setUpgradeModalReason(reason as any)}
+                    projectId={projectId}
+                    isReadOnly={isReadOnly}
                 />
             </div>
 

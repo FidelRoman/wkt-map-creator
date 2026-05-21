@@ -40,7 +40,7 @@ export async function OPTIONS(request: NextRequest) {
         status: 204,
         headers: {
             'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, OPTIONS',
+            'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type, Authorization',
         },
     });
@@ -170,5 +170,123 @@ export async function GET(
             'X-Rate-Limit-Remaining': String(dailyLimit - apiCallsToday - 1),
             'Access-Control-Allow-Origin': '*',
         }
+    });
+}
+
+export async function POST(
+    request: NextRequest,
+    { params }: { params: Promise<{ projectId: string }> }
+) {
+    const { projectId } = await params;
+
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+        return NextResponse.json({ error: 'API key required' }, { status: 401, headers: { 'Access-Control-Allow-Origin': '*' } });
+    }
+    const apiKey = authHeader.split('Bearer ')[1].trim();
+    const user = await verifyApiKey(apiKey);
+    if (!user) return NextResponse.json({ error: 'Invalid API key' }, { status: 403, headers: { 'Access-Control-Allow-Origin': '*' } });
+    if (!['pro', 'business'].includes(user.plan)) {
+        return NextResponse.json({ error: 'API access requires Pro or Business plan' }, { status: 403, headers: { 'Access-Control-Allow-Origin': '*' } });
+    }
+
+    const db = getAdminDb();
+    const projectDoc = await db.collection('projects').doc(projectId).get();
+    if (!projectDoc.exists) return NextResponse.json({ error: 'Project not found' }, { status: 404, headers: { 'Access-Control-Allow-Origin': '*' } });
+    const projectData = projectDoc.data()!;
+    if (projectData.ownerId !== user.uid && !projectData.collaborators?.includes(user.uid)) {
+        return NextResponse.json({ error: 'Access denied' }, { status: 403, headers: { 'Access-Control-Allow-Origin': '*' } });
+    }
+
+    let body: any;
+    try { body = await request.json(); } catch {
+        return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400, headers: { 'Access-Control-Allow-Origin': '*' } });
+    }
+
+    const { layerId, features } = body;
+    if (!layerId || !Array.isArray(features)) {
+        return NextResponse.json({ error: 'Body must include layerId (string) and features (array)' }, { status: 400, headers: { 'Access-Control-Allow-Origin': '*' } });
+    }
+
+    const layers: any[] = projectData.layers ?? [];
+    const layerIdx = layers.findIndex((l: any) => l.id === layerId);
+    if (layerIdx === -1) return NextResponse.json({ error: 'Layer not found' }, { status: 404, headers: { 'Access-Control-Allow-Origin': '*' } });
+
+    const layer = layers[layerIdx];
+    const existingFeatures = (() => {
+        try {
+            const fc = typeof layer.features === 'string' ? JSON.parse(layer.features) : layer.features;
+            return fc?.features ?? [];
+        } catch { return []; }
+    })();
+
+    const limits = PLAN_LIMITS[user.plan as 'pro' | 'business'];
+    const maxFeatures = limits.maxFeaturesPerLayer ?? 500;
+    if (existingFeatures.length + features.length > maxFeatures) {
+        return NextResponse.json({ error: `Exceeds maxFeaturesPerLayer limit (${maxFeatures})` }, { status: 422, headers: { 'Access-Control-Allow-Origin': '*' } });
+    }
+
+    const merged = [...existingFeatures, ...features];
+    layers[layerIdx] = { ...layer, features: JSON.stringify({ type: 'FeatureCollection', features: merged }) };
+    await db.collection('projects').doc(projectId).update({ layers });
+
+    return NextResponse.json({ added: features.length, total: merged.length }, {
+        status: 201,
+        headers: { 'Access-Control-Allow-Origin': '*' }
+    });
+}
+
+export async function DELETE(
+    request: NextRequest,
+    { params }: { params: Promise<{ projectId: string }> }
+) {
+    const { projectId } = await params;
+
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+        return NextResponse.json({ error: 'API key required' }, { status: 401, headers: { 'Access-Control-Allow-Origin': '*' } });
+    }
+    const apiKey = authHeader.split('Bearer ')[1].trim();
+    const user = await verifyApiKey(apiKey);
+    if (!user) return NextResponse.json({ error: 'Invalid API key' }, { status: 403, headers: { 'Access-Control-Allow-Origin': '*' } });
+    if (!['pro', 'business'].includes(user.plan)) {
+        return NextResponse.json({ error: 'API access requires Pro or Business plan' }, { status: 403, headers: { 'Access-Control-Allow-Origin': '*' } });
+    }
+
+    const db = getAdminDb();
+    const projectDoc = await db.collection('projects').doc(projectId).get();
+    if (!projectDoc.exists) return NextResponse.json({ error: 'Project not found' }, { status: 404, headers: { 'Access-Control-Allow-Origin': '*' } });
+    const projectData = projectDoc.data()!;
+    if (projectData.ownerId !== user.uid) {
+        return NextResponse.json({ error: 'Only the project owner can delete features' }, { status: 403, headers: { 'Access-Control-Allow-Origin': '*' } });
+    }
+
+    let body: any;
+    try { body = await request.json(); } catch {
+        return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400, headers: { 'Access-Control-Allow-Origin': '*' } });
+    }
+
+    const { layerId, featureIndex } = body;
+    if (!layerId || typeof featureIndex !== 'number') {
+        return NextResponse.json({ error: 'Body must include layerId (string) and featureIndex (number)' }, { status: 400, headers: { 'Access-Control-Allow-Origin': '*' } });
+    }
+
+    const layers: any[] = projectData.layers ?? [];
+    const layerIdx = layers.findIndex((l: any) => l.id === layerId);
+    if (layerIdx === -1) return NextResponse.json({ error: 'Layer not found' }, { status: 404, headers: { 'Access-Control-Allow-Origin': '*' } });
+
+    const layer = layers[layerIdx];
+    const fc = typeof layer.features === 'string' ? JSON.parse(layer.features) : layer.features;
+    const features: any[] = fc?.features ?? [];
+    if (featureIndex < 0 || featureIndex >= features.length) {
+        return NextResponse.json({ error: `featureIndex ${featureIndex} out of range (0–${features.length - 1})` }, { status: 422, headers: { 'Access-Control-Allow-Origin': '*' } });
+    }
+
+    features.splice(featureIndex, 1);
+    layers[layerIdx] = { ...layer, features: JSON.stringify({ type: 'FeatureCollection', features }) };
+    await db.collection('projects').doc(projectId).update({ layers });
+
+    return NextResponse.json({ deleted: true, remaining: features.length }, {
+        headers: { 'Access-Control-Allow-Origin': '*' }
     });
 }

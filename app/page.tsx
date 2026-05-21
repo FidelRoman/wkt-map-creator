@@ -54,12 +54,13 @@ function LandingPage() {
   const proPlan = PLANS.find(p => p.id === 'pro')!;
 
   const comparisons: [string, boolean | string, boolean | string, boolean | string][] = [
-    ['Input/Output WKT nativo', true, false, 'Solo scripts'],
-    ['API REST por proyecto', true, false, 'Caro'],
-    ['Attribute Table visual', true, false, true],
-    ['Análisis espacial (Buffer)', true, false, true],
-    ['Embed iframe', true, 'Limitado', true],
-    ['Precio accesible', true, 'Gratis*', false],
+    ['Native WKT input/output', true, false, 'Scripts only'],
+    ['REST API per project', true, false, 'Expensive'],
+    ['Visual Attribute Table', true, false, true],
+    ['Spatial analysis (Buffer, Union)', true, false, true],
+    ['Import GeoJSON / Shapefile', true, false, true],
+    ['Team comments & collaboration', true, false, 'Paid add-on'],
+    ['Affordable pricing', true, 'Free*', false],
   ];
 
   const checkCell = (val: boolean | string) => {
@@ -77,11 +78,17 @@ function LandingPage() {
             <svg className="w-6 h-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 01-.553-.894L15 4m0 13V4m0 0L9 7" />
             </svg>
-            WKT Map Creator
+            WKT Studio
           </div>
           <div className="flex items-center gap-3">
+            <Link href="/explore" className="text-sm text-slate-600 hover:text-slate-800 font-medium px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors hidden md:block">
+              Explore
+            </Link>
+            <Link href="/convert" className="text-sm text-slate-600 hover:text-slate-800 font-medium px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors hidden md:block">
+              Converter
+            </Link>
             <Link href="/editor" className="text-sm text-slate-600 hover:text-slate-800 font-medium px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors">
-              Probar gratis
+              Try free
             </Link>
             <button
               onClick={handleGoogleSignIn}
@@ -89,7 +96,7 @@ function LandingPage() {
               className="flex items-center gap-2 text-sm font-semibold bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-60"
             >
               <GoogleIcon />
-              {signingIn ? 'Abriendo...' : 'Iniciar sesión'}
+              {signingIn ? 'Signing in...' : 'Sign in'}
             </button>
           </div>
         </div>
@@ -99,14 +106,14 @@ function LandingPage() {
       <section className="max-w-6xl mx-auto px-6 pt-20 pb-16 text-center">
         <div className="inline-flex items-center gap-2 bg-indigo-50 text-indigo-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-6 border border-indigo-100">
           <SparklesIcon className="w-3.5 h-3.5" />
-          Free WKT Viewer Online · Para desarrolladores GIS
+          For GIS Developers &amp; Data Engineers
         </div>
         <h1 className="text-5xl font-extrabold text-slate-900 tracking-tight mb-5 leading-tight">
-          WKT Viewer &amp; Editor<br />
-          <span className="text-indigo-600">para equipos que trabajan con datos reales</span>
+          The GIS Map Editor<br />
+          <span className="text-indigo-600">Built for Developers</span>
         </h1>
         <p className="text-xl text-slate-500 max-w-2xl mx-auto mb-3">
-          Pega geometrías WKT directamente desde PostGIS o Shapely y visualízalas en el mapa al instante. Exporta como CSV o KML. Sin conversiones, sin fricciones.
+          Paste WKT from PostGIS, import GeoJSON &amp; Shapefiles, run spatial analysis, export PostGIS SQL, and collaborate with your team — all in one tool.
         </p>
         <p className="text-sm text-slate-400 max-w-xl mx-auto mb-8">
           Supports POLYGON · MULTIPOLYGON · LINESTRING · MULTILINESTRING · POINT · GEOMETRYCOLLECTION
@@ -116,7 +123,7 @@ function LandingPage() {
             href="/editor"
             className="bg-indigo-600 text-white font-semibold px-6 py-3 rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200"
           >
-            Open WKT Viewer — free, no signup
+            Open editor — free, no signup
           </Link>
           <button
             onClick={handleGoogleSignIn}
@@ -124,10 +131,10 @@ function LandingPage() {
             className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 font-semibold px-6 py-3 rounded-xl hover:bg-slate-50 transition-colors shadow-sm"
           >
             <GoogleIcon />
-            {signingIn ? 'Abriendo...' : 'Continuar con Google'}
+            {signingIn ? 'Signing in...' : 'Sign in with Google'}
           </button>
         </div>
-        <p className="text-xs text-slate-400 mt-4">Gratis para siempre · Sin tarjeta de crédito · Upgrade cuando quieras</p>
+        <p className="text-xs text-slate-400 mt-4">Free forever · No credit card required · Upgrade anytime</p>
       </section>
 
       {/* Code preview */}
@@ -144,32 +151,48 @@ function LandingPage() {
 -- POLYGON ((-77.03 -12.04, -77.02 -12.04,
 --           -77.02 -12.03, -77.03 -12.03, -77.03 -12.04))
 
--- Pega ese WKT en WKT Map Creator → visualiza al instante ✓`}</pre>
+-- Paste that WKT into WKT Studio → visualize instantly ✓`}</pre>
         </div>
       </section>
 
-      {/* Differentiators */}
+      {/* Features grid */}
       <section className="bg-slate-50 py-20">
         <div className="max-w-6xl mx-auto px-6">
-          <h2 className="text-3xl font-bold text-slate-900 text-center mb-12">
-            Diseñado para el flujo de trabajo GIS real
+          <h2 className="text-3xl font-bold text-slate-900 text-center mb-3">
+            Built for the real GIS workflow
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
+          <p className="text-slate-500 text-center mb-12">Everything you need from data ingestion to production — in one tool.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-16">
             {[
               {
                 icon: '🗺️',
-                title: 'WKT Nativo',
-                desc: 'Pega directamente POLYGON, MULTIPOLYGON, LINESTRING desde PostGIS, Shapely, GDAL o cualquier herramienta. Sin conversión de formatos.',
+                title: 'Native WKT Support',
+                desc: 'Paste POLYGON, MULTIPOLYGON, LINESTRING directly from PostGIS, Shapely, or GDAL. No format conversion. No friction.',
+              },
+              {
+                icon: '📂',
+                title: 'Import Everything',
+                desc: 'Import GeoJSON, Shapefile (.shp + .dbf), CSV with WKT column, or CSV with lat/lng columns. Drop a file and it\'s on the map.',
+              },
+              {
+                icon: '💾',
+                title: 'Export & SQL',
+                desc: 'Export to CSV, KML, GeoJSON, or generate PostGIS SQL INSERT statements ready to run in psql or any PostgreSQL client.',
               },
               {
                 icon: '⚡',
-                title: 'API REST por Proyecto',
-                desc: 'Cada proyecto expone un endpoint REST con tu API key. Integra con Python, R, Node.js o cualquier stack en minutos.',
+                title: 'REST API per Project',
+                desc: 'Every project exposes GET, POST, and DELETE endpoints. Integrate with Python, R, Node.js, or any HTTP client using your API key.',
               },
               {
-                icon: '📊',
-                title: 'Attribute Table Visual',
-                desc: 'Inspecciona y edita los atributos de cada feature en un spreadsheet visual. La herramienta que Google My Maps nunca tendrá.',
+                icon: '🎨',
+                title: 'Layer Style Editor',
+                desc: 'Set fill color, stroke color, opacity, and point radius per layer. Live preview on the map. Make your data presentation-ready.',
+              },
+              {
+                icon: '💬',
+                title: 'Team Collaboration',
+                desc: 'Add comments to specific features, resolve threads, and invite collaborators with editor or viewer roles. Real-time updates.',
               },
             ].map((item, i) => (
               <div key={i} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
@@ -186,7 +209,7 @@ function LandingPage() {
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50">
                   <th className="text-left py-3 px-5 text-slate-500 font-medium">Feature</th>
-                  <th className="text-center py-3 px-4 font-bold text-indigo-700">WKT Map Creator</th>
+                  <th className="text-center py-3 px-4 font-bold text-indigo-700">WKT Studio</th>
                   <th className="text-center py-3 px-4 text-slate-500 font-medium">Google My Maps</th>
                   <th className="text-center py-3 px-4 text-slate-500 font-medium">ArcGIS Online</th>
                 </tr>
@@ -202,7 +225,7 @@ function LandingPage() {
                 ))}
               </tbody>
             </table>
-            <p className="text-xs text-slate-400 px-5 py-3">* Google My Maps tiene límites severos de features y sin API de acceso programático</p>
+            <p className="text-xs text-slate-400 px-5 py-3">* Google My Maps has severe feature limits and no programmatic API access</p>
           </div>
         </div>
       </section>
@@ -210,8 +233,8 @@ function LandingPage() {
       {/* Pricing */}
       <section className="py-20">
         <div className="max-w-4xl mx-auto px-6">
-          <h2 className="text-3xl font-bold text-slate-900 text-center mb-3">Precios simples y transparentes</h2>
-          <p className="text-slate-500 text-center mb-10">Empieza gratis. Upgrade cuando necesites más.</p>
+          <h2 className="text-3xl font-bold text-slate-900 text-center mb-3">Simple, transparent pricing</h2>
+          <p className="text-slate-500 text-center mb-10">Start free. Upgrade when you need more.</p>
 
           <div className="flex justify-center mb-10">
             <div className="flex items-center gap-1 bg-slate-100 rounded-full p-1">
@@ -219,13 +242,13 @@ function LandingPage() {
                 onClick={() => setBillingInterval('month')}
                 className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${billingInterval === 'month' ? 'bg-white shadow text-slate-900' : 'text-slate-500'}`}
               >
-                Mensual
+                Monthly
               </button>
               <button
                 onClick={() => setBillingInterval('year')}
                 className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-medium transition-all ${billingInterval === 'year' ? 'bg-white shadow text-slate-900' : 'text-slate-500'}`}
               >
-                Anual
+                Yearly
                 <span className="bg-green-100 text-green-700 text-xs px-1.5 py-0.5 rounded-full font-semibold">−30%</span>
               </button>
             </div>
@@ -249,24 +272,24 @@ function LandingPage() {
                 href="/editor"
                 className="w-full py-2.5 rounded-xl font-semibold text-sm text-center bg-slate-100 text-slate-800 hover:bg-slate-200 transition-all"
               >
-                Empezar gratis
+                Get started free
               </Link>
             </div>
 
             {/* Pro */}
             <div className="rounded-2xl border-2 border-indigo-500 p-6 flex flex-col shadow-lg shadow-indigo-50">
-              <div className="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-2">Recomendado</div>
+              <div className="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-2">Most popular</div>
               <h3 className="text-xl font-bold text-slate-900 mb-1">{proPlan.name}</h3>
               <p className="text-slate-500 text-sm mb-4">{proPlan.description}</p>
               <div className="flex items-end gap-1 mb-1">
                 <span className="text-4xl font-extrabold text-slate-900">
                   ${billingInterval === 'month' ? proPlan.monthlyPrice : proPlan.yearlyPrice}
                 </span>
-                <span className="text-slate-500 text-sm mb-1">/{billingInterval === 'month' ? 'mes' : 'año'}</span>
+                <span className="text-slate-500 text-sm mb-1">/{billingInterval === 'month' ? 'mo' : 'yr'}</span>
               </div>
               {billingInterval === 'year' && (
                 <p className="text-xs text-green-600 font-medium mb-4">
-                  Ahorra ${proPlan.monthlyPrice * 12 - proPlan.yearlyPrice} vs mensual
+                  Save ${proPlan.monthlyPrice * 12 - proPlan.yearlyPrice} vs monthly
                 </p>
               )}
               <ul className="space-y-2 flex-1 mb-6 mt-2">
@@ -282,51 +305,51 @@ function LandingPage() {
                 disabled={signingIn}
                 className="w-full py-2.5 rounded-xl font-semibold text-sm bg-indigo-600 text-white hover:bg-indigo-700 transition-all disabled:opacity-60"
               >
-                {signingIn ? 'Abriendo...' : `Empezar con ${proPlan.name}`}
+                {signingIn ? 'Signing in...' : `Get ${proPlan.name}`}
               </button>
             </div>
           </div>
 
           <p className="text-center text-xs text-slate-400 mt-6">
-            Pago seguro con Lemon Squeezy · Cancela cuando quieras · Sin compromisos
+            Secure payment via Lemon Squeezy · Cancel anytime · No hidden fees
           </p>
         </div>
       </section>
 
-      {/* Use cases — English content for SEO */}
+      {/* How it works + FAQ */}
       <section className="bg-slate-50 py-20">
         <div className="max-w-4xl mx-auto px-6">
           <h2 className="text-2xl font-bold text-slate-900 text-center mb-3">
-            How to use WKT Map Creator as a WKT Viewer
+            How WKT Studio works
           </h2>
           <p className="text-slate-500 text-center text-sm mb-10">
-            The fastest free WKT viewer online — no installation, no account required.
+            From raw geometry to a shareable, styled map in minutes.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {[
               {
                 step: '1',
-                title: 'Copy your WKT geometry',
-                desc: 'Run ST_AsText() in PostGIS, call .wkt on a Shapely geometry, or export from GDAL/OGR. Any valid WKT string works.',
-                code: 'SELECT ST_AsText(geom) FROM table;',
+                title: 'Paste WKT or import a file',
+                desc: 'Run ST_AsText() in PostGIS, call .wkt on a Shapely geometry, or import GeoJSON, Shapefile, CSV, or Excel. Any source works.',
+                code: 'SELECT ST_AsText(geom) FROM parcelas;',
               },
               {
                 step: '2',
-                title: 'Paste into the WKT viewer',
-                desc: 'Click "Open WKT Viewer", paste your geometry in the input field. Supports POLYGON, MULTIPOLYGON, LINESTRING, POINT and GEOMETRYCOLLECTION.',
-                code: 'POLYGON ((-77.03 -12.04, ...))',
+                title: 'Edit, style, and analyze',
+                desc: 'Draw new features, run Buffer or Union, edit the Attribute Table, and style each layer with custom colors and opacity.',
+                code: 'Buffer(500m) · Union · Subtract · Style',
               },
               {
                 step: '3',
-                title: 'Visualize on the map',
-                desc: 'Your geometry renders instantly on an interactive map. Zoom, pan, inspect attributes. No page reload needed.',
-                code: '→ Renders on map in < 1 second',
+                title: 'Export or call the API',
+                desc: 'Export as CSV, KML, GeoJSON, or PostGIS SQL. Or push features programmatically via the REST API with your API key.',
+                code: 'POST /api/v1/projects/{id}/features',
               },
               {
                 step: '4',
-                title: 'Export or share',
-                desc: 'Export as CSV with WKT column, KML for Google Earth, or share a public link. The WKT viewer also works as a team collaboration tool.',
-                code: 'Export → CSV / KML / Public link',
+                title: 'Share or collaborate',
+                desc: 'Make the project public, embed as an iframe, or invite collaborators. Add comments to specific features and resolve them as a team.',
+                code: 'Share link · Embed iframe · Invite team',
               },
             ].map((item) => (
               <div key={item.step} className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm">
@@ -344,25 +367,33 @@ function LandingPage() {
             ))}
           </div>
 
-          {/* FAQ for featured snippets */}
+          {/* FAQ */}
           <div className="mt-12 space-y-4">
-            <h3 className="text-lg font-bold text-slate-800 mb-6">Frequently asked questions about WKT viewers</h3>
+            <h3 className="text-lg font-bold text-slate-800 mb-6">Frequently asked questions</h3>
             {[
               {
-                q: 'What is a WKT viewer?',
-                a: 'A WKT (Well-Known Text) viewer is a tool that renders geographic geometries — like POLYGON, LINESTRING or POINT — described in WKT format onto an interactive map. WKT is the standard text representation used by PostGIS, Shapely, GDAL, and most GIS databases.',
+                q: 'What is WKT Studio?',
+                a: 'WKT Studio is a full-featured GIS map editor and spatial data platform for developers. It lets you paste WKT geometry, import GeoJSON/Shapefiles, run spatial analysis (Buffer, Union, Subtract), export PostGIS SQL, access a REST API, and collaborate with your team — all from the browser.',
               },
               {
-                q: 'How do I view WKT geometry on a map?',
-                a: 'Paste your WKT string (e.g. POLYGON ((30 10, 40 40, 20 40, 10 20, 30 10))) into WKT Map Creator and it renders on the map instantly. You can also import multiple geometries via CSV.',
+                q: 'What file formats can I import?',
+                a: 'WKT Studio supports GeoJSON (.geojson), Shapefile (.shp + .dbf), CSV with a WKT column, and CSV with latitude/longitude columns. All imports create a new layer in your project.',
               },
               {
                 q: 'What WKT geometry types are supported?',
-                a: 'WKT Map Creator supports POINT, LINESTRING, POLYGON, MULTIPOINT, MULTILINESTRING, MULTIPOLYGON and GEOMETRYCOLLECTION — the full WKT standard as defined by the OGC.',
+                a: 'WKT Studio supports the full OGC WKT standard: POINT, LINESTRING, POLYGON, MULTIPOINT, MULTILINESTRING, MULTIPOLYGON, and GEOMETRYCOLLECTION.',
               },
               {
-                q: 'Can I use this as a PostGIS WKT viewer?',
-                a: 'Yes. Run SELECT ST_AsText(your_geom) in PostgreSQL/PostGIS, copy the result, and paste it into WKT Map Creator. It\'s the fastest way to visually debug PostGIS geometries.',
+                q: 'Can I use WKT Studio with PostGIS?',
+                a: 'Yes. Run SELECT ST_AsText(your_geom) in PostgreSQL/PostGIS, copy the result, and paste it into WKT Studio. You can also use the REST API to push geometries directly from your SQL pipeline.',
+              },
+              {
+                q: 'What is the REST API?',
+                a: 'Every project exposes GET, POST, and DELETE endpoints. You can list features, add new ones, or remove them programmatically using a Bearer API key generated in your account Settings. See the API Docs for curl examples and rate limits by plan.',
+              },
+              {
+                q: 'Is WKT Studio free?',
+                a: 'Yes. The free plan gives you 3 projects, up to 200 features per layer, WKT paste, GeoJSON import, and CSV/KML export. The Pro plan adds unlimited projects, REST API access, layer style editor, feature comments, and more.',
               },
             ].map((item, i) => (
               <details key={i} className="bg-white border border-slate-100 rounded-xl p-5 shadow-sm group">
@@ -384,11 +415,17 @@ function LandingPage() {
             <svg className="w-5 h-5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 01-.553-.894L15 4m0 13V4m0 0L9 7" />
             </svg>
-            <span className="font-medium text-slate-500">WKT Map Creator</span>
+            <span className="font-medium text-slate-500">WKT Studio</span>
+            <span className="text-slate-300 hidden md:inline">·</span>
+            <span className="hidden md:inline">© 2025 WKT Studio. All rights reserved.</span>
           </div>
-          <div className="flex items-center gap-6">
-            <Link href="/terms" className="hover:text-slate-600 transition-colors">Términos de Servicio</Link>
-            <Link href="/privacy" className="hover:text-slate-600 transition-colors">Política de Privacidad</Link>
+          <div className="flex items-center gap-6 flex-wrap justify-center">
+            <Link href="/convert" className="hover:text-slate-600 transition-colors">WKT / GeoJSON Converter</Link>
+            <Link href="/explore" className="hover:text-slate-600 transition-colors">Explore maps</Link>
+            <Link href="/templates" className="hover:text-slate-600 transition-colors">Templates</Link>
+            <Link href="/api-docs" className="hover:text-slate-600 transition-colors">API Docs</Link>
+            <Link href="/terms" className="hover:text-slate-600 transition-colors">Terms</Link>
+            <Link href="/privacy" className="hover:text-slate-600 transition-colors">Privacy</Link>
           </div>
         </div>
       </footer>
@@ -479,7 +516,7 @@ function Dashboard() {
       router.push(`/${id}`);
     } catch (e) {
       console.error(e);
-      showToast('Error al crear proyecto. Intenta de nuevo.', 'error');
+      showToast('Error creating project. Please try again.', 'error');
       setCreating(false);
     }
   };
@@ -493,7 +530,7 @@ function Dashboard() {
       loadProjects();
     } catch (e) {
       console.error(e);
-      showToast('Error al renombrar. Intenta de nuevo.', 'error');
+      showToast('Error renaming project. Please try again.', 'error');
     } finally {
       setActionLoading(false);
       setActionProject(null);
@@ -509,7 +546,7 @@ function Dashboard() {
       loadProjects();
     } catch (e) {
       console.error(e);
-      showToast('Error al eliminar. Intenta de nuevo.', 'error');
+      showToast('Error deleting project. Please try again.', 'error');
     } finally {
       setActionLoading(false);
       setActionProject(null);
@@ -524,11 +561,11 @@ function Dashboard() {
       {userProfile?.subscriptionStatus === 'past_due' && (
         <div className="bg-red-50 border-b border-red-200 px-6 py-3 flex items-center justify-between">
           <span className="text-sm font-medium text-red-700">
-            ⚠️ Hay un problema con tu pago. Tu plan Pro se desactivará pronto.
+            ⚠️ There is a problem with your payment. Your Pro plan will be deactivated soon.
           </span>
           {userProfile.lsCustomerPortalUrl && (
             <a href={userProfile.lsCustomerPortalUrl} className="text-sm font-semibold text-red-600 hover:underline ml-4 flex-shrink-0">
-              Actualizar método de pago →
+              Update payment method →
             </a>
           )}
         </div>
@@ -536,7 +573,7 @@ function Dashboard() {
 
       {upgradeSuccess && (
         <div className="bg-indigo-600 text-white px-6 py-3 flex items-center justify-between">
-          <span className="text-sm font-semibold">🎉 ¡Plan Pro activado! Ya tienes acceso a todas las funciones Pro.</span>
+          <span className="text-sm font-semibold">🎉 Pro plan activated! You now have access to all Pro features.</span>
           <button onClick={() => setUpgradeSuccess(false)} className="text-white/70 hover:text-white ml-4 flex-shrink-0">
             <XMarkIcon className="w-5 h-5" />
           </button>
@@ -548,7 +585,7 @@ function Dashboard() {
           <svg className="w-6 h-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 01-.553-.894L15 4m0 13V4m0 0L9 7" />
           </svg>
-          WKT Map Creator
+          WKT Studio
         </h1>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-2 bg-slate-100 rounded-full pl-1.5 pr-3 py-1.5">
@@ -560,7 +597,7 @@ function Dashboard() {
             <span className="text-sm font-semibold text-slate-800 truncate max-w-[160px]">{user?.displayName}</span>
             <button
               onClick={() => { if (plan === 'free') setShowUpgrade(true); }}
-              title={plan === 'free' ? 'Upgrade a Pro' : `Plan ${plan}`}
+              title={plan === 'free' ? 'Upgrade to Pro' : `Plan ${plan}`}
               className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-white text-xs font-bold flex-shrink-0 ${plan === 'free' ? 'cursor-pointer hover:opacity-80 transition-opacity' : 'cursor-default'}`}
               style={{ background: plan === 'pro' ? '#6366f1' : plan === 'business' ? '#f59e0b' : '#6b7280' }}
             >
@@ -568,16 +605,31 @@ function Dashboard() {
               {plan === 'pro' ? 'Pro' : plan === 'business' ? 'Business' : 'Free'}
             </button>
           </div>
-          <Link href="/settings" className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors" title="Configuración">
+          <Link href="/settings" className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors" title="Settings">
             <Cog6ToothIcon className="w-5 h-5" />
           </Link>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-8">
+        {/* Quick links */}
+        <div className="flex gap-2 mb-6 flex-wrap">
+          {[
+            { href: '/templates', label: '⚡ Templates', desc: 'Start with real data' },
+            { href: '/explore', label: '🌍 Explore', desc: 'Public maps' },
+            { href: '/convert', label: '⇄ Converter', desc: 'WKT · GeoJSON · WKB' },
+            { href: '/api-docs', label: '</> API Docs', desc: 'Integrate with your stack' },
+          ].map(l => (
+            <Link key={l.href} href={l.href} className="flex flex-col px-4 py-2.5 bg-white border border-slate-200 rounded-xl hover:border-indigo-200 hover:bg-indigo-50 transition-colors group">
+              <span className="text-sm font-semibold text-slate-700 group-hover:text-indigo-700">{l.label}</span>
+              <span className="text-xs text-slate-400">{l.desc}</span>
+            </Link>
+          ))}
+        </div>
+
         <div className="flex justify-between items-start mb-8">
           <div>
-            <h2 className="text-3xl font-bold text-slate-900">Mis Proyectos</h2>
+            <h2 className="text-3xl font-bold text-slate-900">My Projects</h2>
             {plan === 'free' && maxProjects !== null && (
               <div className="flex items-center gap-2 mt-2">
                 <div className="h-1.5 w-28 bg-slate-200 rounded-full overflow-hidden">
@@ -590,9 +642,9 @@ function Dashboard() {
                   />
                 </div>
                 <span className="text-sm text-slate-500">
-                  {projects.length} de {maxProjects} proyectos ·{' '}
+                  {projects.length} of {maxProjects} projects ·{' '}
                   <button onClick={() => setShowUpgrade(true)} className="text-indigo-600 hover:underline font-medium">
-                    Upgrade para ilimitados
+                    Upgrade for unlimited
                   </button>
                 </span>
               </div>
@@ -603,7 +655,7 @@ function Dashboard() {
             className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-medium transition-colors shadow-sm shadow-indigo-200"
           >
             <PlusIcon className="w-5 h-5" />
-            Nuevo Proyecto
+            New Project
           </button>
         </div>
 
@@ -612,13 +664,13 @@ function Dashboard() {
             <div className="inline-flex bg-slate-50 p-4 rounded-full mb-4">
               <PlusIcon className="w-8 h-8 text-slate-400" />
             </div>
-            <h3 className="text-lg font-medium text-slate-900">No tienes proyectos aún</h3>
-            <p className="text-slate-500 mt-1 mb-6">Crea tu primer proyecto para empezar a mapear</p>
+            <h3 className="text-lg font-medium text-slate-900">No projects yet</h3>
+            <p className="text-slate-500 mt-1 mb-6">Create your first project to start mapping</p>
             <button
               onClick={() => { setNewProjectName(""); setIsModalOpen(true); }}
               className="text-indigo-600 font-medium hover:underline"
             >
-              Crear Proyecto ahora
+              Create a project
             </button>
           </div>
         ) : (
@@ -636,15 +688,15 @@ function Dashboard() {
                       </svg>
                     </div>
                     <span className="text-xs font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded-md">
-                      {project.updatedAt ? new Date(project.updatedAt.seconds * 1000).toLocaleDateString() : 'Reciente'}
+                      {project.updatedAt ? new Date(project.updatedAt.seconds * 1000).toLocaleDateString() : 'Recent'}
                     </span>
                   </div>
                   <h3 className="text-lg font-bold text-slate-800 group-hover:text-indigo-600 mb-1 pr-6">{project.name}</h3>
                   <p className="text-sm text-slate-500 line-clamp-2 flex-1">
-                    {project.layers?.length || 0} capas &bull; {project.layers?.reduce((acc, l) => acc + (l.features?.features?.length || 0), 0) || 0} objetos
+                    {project.layers?.length || 0} layers &bull; {project.layers?.reduce((acc, l) => acc + (l.features?.features?.length || 0), 0) || 0} features
                   </p>
                   <div className="mt-auto pt-4 border-t border-slate-100 flex items-center text-sm text-indigo-600 font-medium">
-                    Abrir Proyecto &rarr;
+                    Open Project &rarr;
                   </div>
                 </Link>
 
@@ -673,7 +725,7 @@ function Dashboard() {
                         className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 flex items-center gap-2"
                       >
                         <PencilIcon className="w-4 h-4" />
-                        Cambiar nombre
+                        Rename
                       </button>
                       <button
                         onClick={(e) => {
@@ -685,7 +737,7 @@ function Dashboard() {
                         className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 flex items-center gap-2"
                       >
                         <ShareIcon className="w-4 h-4" />
-                        Compartir
+                        Share
                       </button>
                       <div className="h-px bg-slate-100 my-1" />
                       <button
@@ -698,7 +750,7 @@ function Dashboard() {
                         className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
                       >
                         <TrashIcon className="w-4 h-4" />
-                        Eliminar
+                        Delete
                       </button>
                     </div>
                   )}
@@ -710,7 +762,7 @@ function Dashboard() {
 
         {sharedProjects.length > 0 && (
           <div className="mt-12">
-            <h2 className="text-3xl font-bold text-slate-900 mb-6">Compartidos Conmigo</h2>
+            <h2 className="text-3xl font-bold text-slate-900 mb-6">Shared with Me</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {sharedProjects.map(project => (
                 <Link
@@ -725,15 +777,15 @@ function Dashboard() {
                       </svg>
                     </div>
                     <span className="text-xs font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded-md">
-                      {project.updatedAt ? new Date(project.updatedAt.seconds * 1000).toLocaleDateString() : 'Reciente'}
+                      {project.updatedAt ? new Date(project.updatedAt.seconds * 1000).toLocaleDateString() : 'Recent'}
                     </span>
                   </div>
                   <h3 className="text-lg font-bold text-slate-800 group-hover:text-green-600 mb-1">{project.name}</h3>
                   <p className="text-sm text-slate-500 line-clamp-2 flex-1">
-                    De: {project.ownerName ? `${project.ownerName} (${project.ownerEmail})` : (project.ownerEmail || project.ownerId)}
+                    By: {project.ownerName ? `${project.ownerName} (${project.ownerEmail})` : (project.ownerEmail || project.ownerId)}
                   </p>
                   <div className="mt-auto pt-4 border-t border-slate-100 flex items-center text-sm text-green-600 font-medium">
-                    Abrir Compartido &rarr;
+                    Open Shared &rarr;
                   </div>
                 </Link>
               ))}
@@ -745,11 +797,11 @@ function Dashboard() {
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title="Crear Nuevo Proyecto"
+        title="Create New Project"
         footer={
           <>
             <button onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-lg transition-colors">
-              Cancelar
+              Cancel
             </button>
             <button
               onClick={handleCreateProject}
@@ -762,21 +814,21 @@ function Dashboard() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
-                  Creando...
+                  Creating...
                 </>
-              ) : 'Crear Proyecto'}
+              ) : 'Create Project'}
             </button>
           </>
         }
       >
         <div className="flex flex-col gap-2">
-          <label className="text-sm font-medium text-slate-700">Nombre del Proyecto</label>
+          <label className="text-sm font-medium text-slate-700">Project Name</label>
           <input
             type="text"
             value={newProjectName}
             onChange={(e) => setNewProjectName(e.target.value)}
             className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            placeholder="Ej. Mapa de Cultivos 2024"
+            placeholder="e.g. Crop Map 2024"
             autoFocus
             onKeyDown={(e) => { if (e.key === 'Enter') handleCreateProject(); }}
           />
@@ -786,12 +838,12 @@ function Dashboard() {
       <Modal
         isOpen={renameModalOpen}
         onClose={() => setRenameModalOpen(false)}
-        title="Cambiar nombre"
+        title="Rename project"
         footer={
           <>
-            <button onClick={() => setRenameModalOpen(false)} className="btn-outline">Cancelar</button>
+            <button onClick={() => setRenameModalOpen(false)} className="btn-outline">Cancel</button>
             <button onClick={handleRename} disabled={actionLoading} className="btn-primary">
-              {actionLoading ? 'Guardando...' : 'Guardar'}
+              {actionLoading ? 'Saving...' : 'Save'}
             </button>
           </>
         }
@@ -808,18 +860,18 @@ function Dashboard() {
       <Modal
         isOpen={deleteModalOpen}
         onClose={() => setDeleteModalOpen(false)}
-        title="Eliminar Proyecto"
+        title="Delete Project"
         footer={
           <>
-            <button onClick={() => setDeleteModalOpen(false)} className="btn-outline">Cancelar</button>
+            <button onClick={() => setDeleteModalOpen(false)} className="btn-outline">Cancel</button>
             <button onClick={handleDelete} disabled={actionLoading} className="btn-primary bg-red-600 hover:bg-red-700">
-              {actionLoading ? 'Eliminando...' : 'Eliminar'}
+              {actionLoading ? 'Deleting...' : 'Delete'}
             </button>
           </>
         }
       >
         <p className="text-slate-600">
-          ¿Estás seguro de que quieres eliminar <b>{actionProject?.name}</b>? Esta acción no se puede deshacer.
+          Are you sure you want to delete <b>{actionProject?.name}</b>? This action cannot be undone.
         </p>
       </Modal>
 
@@ -845,7 +897,7 @@ function PageContent() {
   const { user, loading } = useAuth();
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
-      <div className="text-slate-500 text-sm">Cargando...</div>
+      <div className="text-slate-500 text-sm">Loading...</div>
     </div>
   );
   if (!user) return <LandingPage />;

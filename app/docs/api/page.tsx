@@ -24,7 +24,7 @@ export default function ApiDocsPage() {
                         <h2 className="text-2xl font-bold">Introducción</h2>
                     </div>
                     <p className="text-slate-600 leading-relaxed">
-                        La API REST de WKT Map Creator te permite extraer los datos geográficos de tus proyectos en tiempo real. 
+                        The WKT Studio REST API allows you to extract geographic data from your projects in real time.
                         Nuestra API responde utilizando el formato estándar <strong>GeoJSON</strong>, y adicionalmente inyecta el formato 
                         <strong> WKT (Well-Known Text)</strong> dentro de las propiedades de cada objeto para que sea compatible con cualquier base de datos espacial como PostGIS, BigQuery o tu propio frontend.
                     </p>

@@ -50,7 +50,7 @@ export default function EmbedViewer({ project, hideWatermark = false }: EmbedVie
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth={2.5}>
                             <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
                         </svg>
-                        <span>WKT Map Creator</span>
+                        <span>WKT Studio</span>
                     </div>
                 </a>
             )}
