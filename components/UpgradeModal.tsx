@@ -9,6 +9,7 @@ import type { ToastType } from './Toast';
 declare global {
     interface Window {
         Paddle?: {
+            Environment: { set: (env: 'sandbox' | 'production') => void };
             Initialize: (opts: { token: string; eventCallback?: (e: any) => void }) => void;
             Checkout: {
                 open: (opts: {
@@ -74,7 +75,13 @@ export default function UpgradeModal({ isOpen, onClose, onShowToast, reason }: U
         try {
             await loadPaddleScript();
             const clientToken = process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN ?? '';
-            window.Paddle!.Initialize({ token: clientToken });
+            if (process.env.NEXT_PUBLIC_PADDLE_ENVIRONMENT !== 'production') {
+                window.Paddle!.Environment.set('sandbox');
+            }
+            window.Paddle!.Initialize({
+                token: clientToken,
+                eventCallback: (e: any) => console.log('[Paddle event]', e.name, e),
+            });
 
             const priceId = interval === 'month' ? PADDLE_PRICES.pro_monthly : PADDLE_PRICES.pro_yearly;
             window.Paddle!.Checkout.open({
