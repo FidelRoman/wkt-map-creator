@@ -92,34 +92,87 @@ export default function ApiDocsPage() {
                 </section>
 
                 {/* Endpoints */}
-                <section className="space-y-6">
+                <section className="space-y-8">
                     <h3 className="text-lg font-semibold text-slate-800">Endpoints</h3>
 
-                    <Endpoint method="GET" path="/api/v1/projects/{projectId}/features" description="Returns all features in a project as a GeoJSON FeatureCollection.">
-                        <div>
-                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Query parameters</p>
-                            <table className="w-full text-xs border border-slate-200 rounded-lg overflow-hidden">
-                                <thead className="bg-slate-100 text-slate-600">
-                                    <tr>
-                                        <th className="px-3 py-1.5 text-left font-semibold">Param</th>
-                                        <th className="px-3 py-1.5 text-left font-semibold">Type</th>
-                                        <th className="px-3 py-1.5 text-left font-semibold">Description</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-slate-100 font-mono">
-                                    <tr><td className="px-3 py-1.5">layer</td><td className="px-3 py-1.5">string</td><td className="px-3 py-1.5 font-sans">Filter by layer ID</td></tr>
-                                    <tr><td className="px-3 py-1.5">name</td><td className="px-3 py-1.5">string</td><td className="px-3 py-1.5 font-sans">Filter features by name (contains)</td></tr>
-                                    <tr><td className="px-3 py-1.5">bbox</td><td className="px-3 py-1.5">string</td><td className="px-3 py-1.5 font-sans">Bounding box: minLng,minLat,maxLng,maxLat</td></tr>
-                                    <tr><td className="px-3 py-1.5">limit</td><td className="px-3 py-1.5">number</td><td className="px-3 py-1.5 font-sans">Max results (default 100, max 1000/10000)</td></tr>
-                                    <tr><td className="px-3 py-1.5">offset</td><td className="px-3 py-1.5">number</td><td className="px-3 py-1.5 font-sans">Pagination offset (default 0)</td></tr>
-                                </tbody>
-                            </table>
+                    {/* Layers */}
+                    <div>
+                        <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Layers</h4>
+                        <div className="space-y-6">
+
+                            <Endpoint method="POST" path="/api/v1/projects/{projectId}/layers" description="Create a new layer in a project. Optionally include features to populate it immediately.">
+                                <div>
+                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Request body</p>
+                                    <CodeBlock lang="json">
+{`{
+  "name": "My layer",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": { "type": "Polygon", "coordinates": [[...]] },
+      "properties": { "name": "Zone A" }
+    }
+  ]
+}`}
+                                    </CodeBlock>
+                                    <p className="text-xs text-slate-400 mt-2"><code className="bg-slate-100 px-1 rounded">features</code> is optional — omit it to create an empty layer.</p>
+                                </div>
+                                <CodeBlock lang="curl">
+{`curl -X POST "${BASE}/api/v1/projects/abc123/layers" \\
+     -H "Authorization: Bearer wkt_live_xxxxxxxx" \\
+     -H "Content-Type: application/json" \\
+     -d '{
+       "name": "Lima polygons",
+       "features": [
+         {
+           "type": "Feature",
+           "geometry": {
+             "type": "Polygon",
+             "coordinates": [[[-77.0428,-12.0464],[-77.0328,-12.0464],[-77.0328,-12.0364],[-77.0428,-12.0364],[-77.0428,-12.0464]]]
+           },
+           "properties": { "name": "Plaza Mayor" }
+         }
+       ]
+     }'`}
+                                </CodeBlock>
+                                <CodeBlock lang="response">
+{`{ "layerId": "layer_1748000000000", "name": "Lima polygons", "featuresAdded": 1 }`}
+                                </CodeBlock>
+                            </Endpoint>
+
                         </div>
-                        <CodeBlock lang="curl">
+                    </div>
+
+                    {/* Features */}
+                    <div>
+                        <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Features</h4>
+                        <div className="space-y-6">
+
+                            <Endpoint method="GET" path="/api/v1/projects/{projectId}/features" description="Returns all features in a project as a GeoJSON FeatureCollection.">
+                                <div>
+                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Query parameters</p>
+                                    <table className="w-full text-xs border border-slate-200 rounded-lg overflow-hidden">
+                                        <thead className="bg-slate-100 text-slate-600">
+                                            <tr>
+                                                <th className="px-3 py-1.5 text-left font-semibold">Param</th>
+                                                <th className="px-3 py-1.5 text-left font-semibold">Type</th>
+                                                <th className="px-3 py-1.5 text-left font-semibold">Description</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white divide-y divide-slate-100 font-mono">
+                                            <tr><td className="px-3 py-1.5">layer</td><td className="px-3 py-1.5">string</td><td className="px-3 py-1.5 font-sans">Filter by layer ID</td></tr>
+                                            <tr><td className="px-3 py-1.5">name</td><td className="px-3 py-1.5">string</td><td className="px-3 py-1.5 font-sans">Filter features by name (contains)</td></tr>
+                                            <tr><td className="px-3 py-1.5">bbox</td><td className="px-3 py-1.5">string</td><td className="px-3 py-1.5 font-sans">Bounding box: minLng,minLat,maxLng,maxLat</td></tr>
+                                            <tr><td className="px-3 py-1.5">limit</td><td className="px-3 py-1.5">number</td><td className="px-3 py-1.5 font-sans">Max results (default 100, max 1,000)</td></tr>
+                                            <tr><td className="px-3 py-1.5">offset</td><td className="px-3 py-1.5">number</td><td className="px-3 py-1.5 font-sans">Pagination offset (default 0)</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <CodeBlock lang="curl">
 {`curl "${BASE}/api/v1/projects/abc123/features?bbox=-77.1,-12.1,-76.9,-11.9&limit=50" \\
      -H "Authorization: Bearer wkt_live_xxxxxxxx"`}
-                        </CodeBlock>
-                        <CodeBlock lang="response">
+                                </CodeBlock>
+                                <CodeBlock lang="response">
 {`{
   "type": "FeatureCollection",
   "features": [
@@ -128,65 +181,68 @@ export default function ApiDocsPage() {
       "geometry": { "type": "Polygon", "coordinates": [[...]] },
       "properties": {
         "name": "Zona 1",
-        "color": "#6366f1",
         "_layerId": "layer_1234",
-        "_layerName": "Polígonos",
+        "_layerName": "Lima polygons",
         "_wkt": "POLYGON((-77.03 -12.04, ...))"
       }
     }
   ],
   "meta": { "total": 42, "limit": 50, "offset": 0, "hasMore": false }
 }`}
-                        </CodeBlock>
-                    </Endpoint>
+                                </CodeBlock>
+                            </Endpoint>
 
-                    <Endpoint method="POST" path="/api/v1/projects/{projectId}/features" description="Add features to an existing layer.">
-                        <div>
-                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Request body</p>
-                            <CodeBlock lang="json">
+                            <Endpoint method="POST" path="/api/v1/projects/{projectId}/features" description="Append features to an existing layer. Does not replace existing features.">
+                                <div>
+                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Request body</p>
+                                    <CodeBlock lang="json">
 {`{
   "layerId": "layer_1234",
   "features": [
     {
       "type": "Feature",
       "geometry": { "type": "Point", "coordinates": [-77.03, -12.04] },
-      "properties": { "name": "Lima Centro", "category": "capital" }
+      "properties": { "name": "Lima Centro" }
     }
   ]
 }`}
-                            </CodeBlock>
-                        </div>
-                        <CodeBlock lang="curl">
+                                    </CodeBlock>
+                                </div>
+                                <CodeBlock lang="curl">
 {`curl -X POST "${BASE}/api/v1/projects/abc123/features" \\
      -H "Authorization: Bearer wkt_live_xxxxxxxx" \\
      -H "Content-Type: application/json" \\
      -d '{"layerId":"layer_1234","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[-77.03,-12.04]},"properties":{"name":"Lima Centro"}}]}'`}
-                        </CodeBlock>
-                        <CodeBlock lang="response">
+                                </CodeBlock>
+                                <CodeBlock lang="response">
 {`{ "added": 1, "total": 43 }`}
-                        </CodeBlock>
-                    </Endpoint>
+                                </CodeBlock>
+                            </Endpoint>
 
-                    <Endpoint method="DELETE" path="/api/v1/projects/{projectId}/features" description="Delete a feature by index from a layer. Only the project owner can delete.">
-                        <div>
-                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Request body</p>
-                            <CodeBlock lang="json">
+                            <Endpoint method="DELETE" path="/api/v1/projects/{projectId}/features" description="Delete a single feature by index. Only the project owner can delete.">
+                                <div>
+                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Request body</p>
+                                    <CodeBlock lang="json">
 {`{
   "layerId": "layer_1234",
   "featureIndex": 0
 }`}
-                            </CodeBlock>
-                        </div>
-                        <CodeBlock lang="curl">
+                                    </CodeBlock>
+                                    <p className="text-xs text-slate-400 mt-2"><code className="bg-slate-100 px-1 rounded">featureIndex</code> is zero-based. Use GET first to identify the index of the feature you want to remove.</p>
+                                </div>
+                                <CodeBlock lang="curl">
 {`curl -X DELETE "${BASE}/api/v1/projects/abc123/features" \\
      -H "Authorization: Bearer wkt_live_xxxxxxxx" \\
      -H "Content-Type: application/json" \\
      -d '{"layerId":"layer_1234","featureIndex":0}'`}
-                        </CodeBlock>
-                        <CodeBlock lang="response">
+                                </CodeBlock>
+                                <CodeBlock lang="response">
 {`{ "deleted": true, "remaining": 42 }`}
-                        </CodeBlock>
-                    </Endpoint>
+                                </CodeBlock>
+                            </Endpoint>
+
+                        </div>
+                    </div>
                 </section>
 
                 {/* Errors */}

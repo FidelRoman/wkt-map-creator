@@ -35,6 +35,20 @@ export default function AuthWrapper({ children }: { children: React.ReactNode })
                 firebaseUser.displayName ?? ''
             );
         }
+        // Fallback: if webhook missed and period already ended, downgrade locally
+        if (
+            profile &&
+            profile.plan === 'pro' &&
+            profile.subscriptionStatus === 'canceled' &&
+            profile.currentPeriodEnd
+        ) {
+            const endMs = profile.currentPeriodEnd?.seconds
+                ? profile.currentPeriodEnd.seconds * 1000
+                : new Date(profile.currentPeriodEnd).getTime();
+            if (Date.now() > endMs) {
+                profile = { ...profile, plan: 'free' };
+            }
+        }
         setUserProfile(profile);
     }, []);
 

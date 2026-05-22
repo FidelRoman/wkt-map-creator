@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
             case 'subscription.canceled': {
                 const uid = firebaseUid ?? (await getUidFromSubscription(subscriptionId));
                 if (!uid) break;
-                await updateUser(uid, { subscriptionStatus: 'canceled' });
+                await updateUser(uid, { subscriptionStatus: 'canceled', plan: 'free' });
                 break;
             }
 

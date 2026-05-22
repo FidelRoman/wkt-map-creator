@@ -10,6 +10,7 @@ import AuthWrapper, { useAuth } from '@/components/AuthWrapper';
 import UpgradeModal from '@/components/UpgradeModal';
 import Modal from '@/components/Modal';
 import { PLAN_LIMITS, type PlanId } from '@/lib/plans';
+import { getUserProjects } from '@/lib/firebase';
 import {
     ArrowLeftIcon, CheckIcon, SparklesIcon,
     ArrowRightStartOnRectangleIcon, TrashIcon, ShieldCheckIcon,
@@ -78,6 +79,8 @@ function SettingsContent() {
     const [generatingKey, setGeneratingKey] = useState(false);
     const [newKeyName, setNewKeyName] = useState('');
     const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
+    const [maxLayersInProject, setMaxLayersInProject] = useState(0);
+    const [maxFeaturesInLayer, setMaxFeaturesInLayer] = useState(0);
 
     useEffect(() => {
         if (!loading && !user) router.replace('/');
@@ -86,6 +89,23 @@ function SettingsContent() {
     useEffect(() => {
         if (userProfile) setDisplayName(userProfile.displayName ?? '');
     }, [userProfile]);
+
+    useEffect(() => {
+        if (!user) return;
+        getUserProjects(user.uid).then(projects => {
+            let maxLayers = 0;
+            let maxFeatures = 0;
+            for (const project of projects) {
+                if (project.layers.length > maxLayers) maxLayers = project.layers.length;
+                for (const layer of project.layers) {
+                    const count = layer.features?.features?.length ?? 0;
+                    if (count > maxFeatures) maxFeatures = count;
+                }
+            }
+            setMaxLayersInProject(maxLayers);
+            setMaxFeaturesInLayer(maxFeatures);
+        });
+    }, [user]);
 
     const showToast = (message: string, type: ToastType = 'info') =>
         setToast({ message, type });
@@ -105,8 +125,25 @@ function SettingsContent() {
         }
     };
 
-    const handleManageSubscription = () => {
-        window.open('https://customer.paddle.com/', '_blank');
+    const [loadingPortal, setLoadingPortal] = useState(false);
+
+    const handleManageSubscription = async () => {
+        if (!user) return;
+        setLoadingPortal(true);
+        try {
+            const token = await user.getIdToken();
+            const res = await fetch('/api/paddle/portal', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error ?? 'Unknown error');
+            window.open(data.url, '_blank');
+        } catch (err: any) {
+            showToast(err.message ?? 'Could not open subscription portal.', 'error');
+        } finally {
+            setLoadingPortal(false);
+        }
     };
 
     const handleSignOut = async () => {
@@ -179,11 +216,15 @@ function SettingsContent() {
     const apiCalls = userProfile.usageCounters?.apiCallsThisMonth ?? 0;
 
     const renewalDate = userProfile.currentPeriodEnd
-        ? new Date(userProfile.currentPeriodEnd.seconds * 1000).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })
+        ? new Date(
+            userProfile.currentPeriodEnd?.seconds
+                ? userProfile.currentPeriodEnd.seconds * 1000
+                : userProfile.currentPeriodEnd
+          ).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })
         : null;
 
     const memberSince = userProfile.createdAt?.seconds
-        ? new Date(userProfile.createdAt.seconds * 1000).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })
+        ? new Date(userProfile.createdAt.seconds * 1000).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })
         : null;
 
     return (
@@ -267,29 +308,28 @@ function SettingsContent() {
                             max={limits.maxProjects}
                         />
                         <UsageBar
-                            label="Layers per project"
-                            value={0}
+                            label="Layers (busiest project)"
+                            value={maxLayersInProject}
                             max={limits.maxLayersPerProject}
                         />
                         <UsageBar
-                            label="Features per layer"
-                            value={0}
+                            label="Features (busiest layer)"
+                            value={maxFeaturesInLayer}
                             max={limits.maxFeaturesPerLayer}
                         />
-                        {apiCalls > 0 && (
+                        {isPaid && (
                             <UsageBar
                                 label="API calls this month"
                                 value={apiCalls}
-                                max={plan === 'free' ? 100 : null}
+                                max={limits.apiRateLimitPerDay}
                             />
                         )}
-                        {plan === 'free' && (
+                        {!isPaid && (
                             <p className="text-xs text-slate-400 pt-1">
-                                Limits shown for the Free plan.{' '}
                                 <button onClick={() => setShowUpgrade(true)} className="text-indigo-600 font-medium hover:underline">
                                     Upgrade to Pro
                                 </button>{' '}
-                                for higher limits.
+                                for unlimited projects and higher limits.
                             </p>
                         )}
                     </div>
@@ -330,9 +370,10 @@ function SettingsContent() {
                             {isPaid ? (
                                 <button
                                     onClick={handleManageSubscription}
-                                    className="btn-outline text-sm px-4 py-2"
+                                    disabled={loadingPortal}
+                                    className="btn-outline text-sm px-4 py-2 disabled:opacity-50"
                                 >
-                                    Manage subscription
+                                    {loadingPortal ? 'Loading...' : 'Manage subscription'}
                                 </button>
                             ) : (
                                 <button
@@ -344,20 +385,6 @@ function SettingsContent() {
                             )}
                         </div>
 
-                        {!isPaid && (
-                            <div className="mt-5 grid grid-cols-3 gap-3 text-center text-xs text-slate-500">
-                                {[
-                                    { value: PLAN_LIMITS.free.maxProjects, label: 'projects' },
-                                    { value: PLAN_LIMITS.free.maxLayersPerProject, label: 'layers / project' },
-                                    { value: PLAN_LIMITS.free.maxFeaturesPerLayer, label: 'features / layer' },
-                                ].map(({ value, label }) => (
-                                    <div key={label} className="bg-slate-50 rounded-xl p-3 border border-slate-200">
-                                        <p className="text-lg font-bold text-slate-800">{value}</p>
-                                        <p>{label}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
                     </div>
                 </section>
 
@@ -401,7 +428,7 @@ function SettingsContent() {
                                         type="text"
                                         value={newKeyName}
                                         onChange={(e) => setNewKeyName(e.target.value)}
-                                        placeholder="Nombre de la nueva API Key"
+                                        placeholder="New API key name"
                                         className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                         onKeyDown={(e) => e.key === 'Enter' && handleGenerateApiKey()}
                                     />
@@ -415,7 +442,7 @@ function SettingsContent() {
                                     </button>
                                 </div>
                             ) : (
-                                <p className="text-xs text-amber-600">Has alcanzado el límite de 5 API Keys.</p>
+                                <p className="text-xs text-amber-600">You've reached the 5 API key limit.</p>
                             )}
                         </div>
                     </section>
