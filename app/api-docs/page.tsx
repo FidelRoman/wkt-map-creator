@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 
-const BASE = 'https://wktmap.com';
+const BASE = 'https://wktstudio.com';
 
 interface CodeBlockProps {
     lang: string;

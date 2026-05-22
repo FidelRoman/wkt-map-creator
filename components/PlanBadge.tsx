@@ -9,13 +9,11 @@ import type { ToastType } from './Toast';
 const PLAN_COLORS: Record<PlanId, string> = {
     free: '#6b7280',
     pro: '#6366f1',
-    business: '#f59e0b',
 };
 
 const PLAN_LABELS: Record<PlanId, string> = {
     free: 'Free',
     pro: 'Pro',
-    business: 'Business',
 };
 
 interface PlanBadgeProps {
@@ -42,7 +40,7 @@ export default function PlanBadge({ plan, projectCount, onShowToast }: PlanBadge
         <>
             <button
                 onClick={handleManage}
-                aria-label={plan === 'free' ? 'Upgrade a Pro' : 'Gestionar suscripción'}
+                aria-label={plan === 'free' ? 'Upgrade to Pro' : 'Manage subscription'}
                 className="flex items-center gap-2 w-full px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors text-left group"
             >
                 <div
@@ -56,7 +54,7 @@ export default function PlanBadge({ plan, projectCount, onShowToast }: PlanBadge
                 {plan === 'free' && maxProjects !== null && projectCount !== undefined && (
                     <div className="flex-1 min-w-0">
                         <div className="flex justify-between text-xs text-gray-500 mb-0.5">
-                            <span>Proyectos</span>
+                            <span>Projects</span>
                             <span>{projectCount}/{maxProjects}</span>
                         </div>
                         <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
@@ -73,7 +71,7 @@ export default function PlanBadge({ plan, projectCount, onShowToast }: PlanBadge
 
                 {plan !== 'free' && (
                     <span className="ml-auto text-xs text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                        Gestionar →
+                        Manage →
                     </span>
                 )}
             </button>

@@ -32,8 +32,8 @@ import LayerStyleEditor from "@/components/map/LayerStyleEditor";
 import type { LayerStyle } from "@/lib/firebase";
 import type { ToastType } from "@/components/Toast";
 
-const PLAN_COLORS: Record<string, string> = { free: '#6b7280', pro: '#6366f1', business: '#f59e0b' };
-const PLAN_LABELS: Record<string, string> = { free: 'Free', pro: 'Pro', business: 'Business' };
+const PLAN_COLORS: Record<string, string> = { free: '#6b7280', pro: '#6366f1' };
+const PLAN_LABELS: Record<string, string> = { free: 'Free', pro: 'Pro' };
 
 interface SidebarProps {
     projects: Project[];

@@ -31,9 +31,8 @@ export interface UserProfile {
     email: string;
     displayName: string;
     plan: PlanId;
-    lsCustomerId: string | null;
-    lsSubscriptionId: string | null;
-    lsCustomerPortalUrl: string | null;
+    paddleCustomerId: string | null;
+    paddleSubscriptionId: string | null;
     subscriptionStatus: 'active' | 'trialing' | 'past_due' | 'canceled' | null;
     currentPeriodEnd: any | null;
     usageCounters: {
@@ -65,9 +64,8 @@ export async function createUserProfile(uid: string, email: string, displayName:
         email,
         displayName,
         plan: 'free',
-        lsCustomerId: null,
-        lsSubscriptionId: null,
-        lsCustomerPortalUrl: null,
+        paddleCustomerId: null,
+        paddleSubscriptionId: null,
         subscriptionStatus: null,
         currentPeriodEnd: null,
         usageCounters: {

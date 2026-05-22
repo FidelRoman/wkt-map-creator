@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { signOut, deleteUser } from 'firebase/auth';
-import { getIdToken } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { updateUserProfile } from '@/lib/firebase';
 import AuthWrapper, { useAuth } from '@/components/AuthWrapper';
@@ -22,13 +21,11 @@ import Toast, { type ToastType } from '@/components/Toast';
 const PLAN_COLORS: Record<PlanId, string> = {
     free: '#6b7280',
     pro: '#6366f1',
-    business: '#f59e0b',
 };
 
 const PLAN_LABELS: Record<PlanId, string> = {
     free: 'Free',
     pro: 'Pro',
-    business: 'Business',
 };
 
 function SectionHeader({ icon: Icon, title }: { icon: React.ElementType; title: string }) {
@@ -73,7 +70,7 @@ function SettingsContent() {
     const [displayName, setDisplayName] = useState('');
     const [savingName, setSavingName] = useState(false);
     const [nameSaved, setNameSaved] = useState(false);
-    const [loadingPortal, setLoadingPortal] = useState(false);
+
     const [showUpgrade, setShowUpgrade] = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [deleteConfirmText, setDeleteConfirmText] = useState('');
@@ -102,32 +99,14 @@ function SettingsContent() {
             setNameSaved(true);
             setTimeout(() => setNameSaved(false), 2000);
         } catch {
-            showToast('Error al guardar. Intenta de nuevo.', 'error');
+            showToast('Error saving. Please try again.', 'error');
         } finally {
             setSavingName(false);
         }
     };
 
-    const handleManageSubscription = async () => {
-        if (!user) return;
-        setLoadingPortal(true);
-        try {
-            const token = await getIdToken(auth.currentUser!);
-            const res = await fetch('/api/ls/customer-portal', {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            const data = await res.json();
-            if (data.url) {
-                window.location.href = data.url;
-            } else {
-                showToast(data.error ?? 'No se encontró un portal de suscripción. Contacta a soporte.', 'error');
-            }
-        } catch {
-            showToast('Error al abrir el portal. Intenta de nuevo.', 'error');
-        } finally {
-            setLoadingPortal(false);
-        }
+    const handleManageSubscription = () => {
+        window.open('https://customer.paddle.com/', '_blank');
     };
 
     const handleSignOut = async () => {
@@ -136,16 +115,16 @@ function SettingsContent() {
     };
 
     const handleDeleteAccount = async () => {
-        if (!user || deleteConfirmText !== 'ELIMINAR') return;
+        if (!user || deleteConfirmText !== 'DELETE') return;
         setDeletingAccount(true);
         try {
             await deleteUser(user);
             router.replace('/');
         } catch (err: any) {
             if (err?.code === 'auth/requires-recent-login') {
-                showToast('Por seguridad, cierra sesión y vuelve a ingresar antes de eliminar tu cuenta.', 'warning');
+                showToast('For security, sign out and sign in again before deleting your account.', 'warning');
             } else {
-                showToast('Error al eliminar la cuenta. Intenta de nuevo.', 'error');
+                showToast('Error deleting account. Please try again.', 'error');
             }
             setDeletingAccount(false);
             setShowDeleteModal(false);
@@ -165,9 +144,9 @@ function SettingsContent() {
             await updateUserProfile(user.uid, { apiKeys });
             await refreshProfile();
             setNewKeyName('');
-            showToast('API Key generada con éxito.', 'success');
+            showToast('API key generated successfully.', 'success');
         } catch (error) {
-            showToast('Error al generar la API Key.', 'error');
+            showToast('Error generating API key. Please try again.', 'error');
         } finally {
             setGeneratingKey(false);
         }
@@ -179,9 +158,9 @@ function SettingsContent() {
             const apiKeys = (userProfile.apiKeys || []).filter(k => k.key !== keyToDelete);
             await updateUserProfile(user.uid, { apiKeys });
             await refreshProfile();
-            showToast('API Key eliminada.', 'success');
+            showToast('API key deleted.', 'success');
         } catch (error) {
-            showToast('Error al eliminar la API Key.', 'error');
+            showToast('Error deleting API key. Please try again.', 'error');
         }
     };
 
@@ -194,7 +173,7 @@ function SettingsContent() {
     }
 
     const plan = userProfile.plan;
-    const isPaid = plan === 'pro' || plan === 'business';
+    const isPaid = plan === 'pro';
     const limits = PLAN_LIMITS[plan];
     const projectCount = userProfile.usageCounters?.projectCount ?? 0;
     const apiCalls = userProfile.usageCounters?.apiCallsThisMonth ?? 0;
@@ -215,7 +194,7 @@ function SettingsContent() {
                     <Link href="/" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
                         <ArrowLeftIcon className="w-5 h-5" />
                     </Link>
-                    <h1 className="text-base font-semibold text-slate-800">Configuración</h1>
+                    <h1 className="text-base font-semibold text-slate-800">Settings</h1>
                 </div>
             </div>
 
@@ -223,7 +202,7 @@ function SettingsContent() {
 
                 {/* ── Perfil ── */}
                 <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-                    <SectionHeader icon={UserCircleIcon} title="Perfil" />
+                    <SectionHeader icon={UserCircleIcon} title="Profile" />
                     <div className="px-6 py-5 space-y-5">
                         <div className="flex items-center gap-4">
                             {user?.photoURL ? (
@@ -237,13 +216,13 @@ function SettingsContent() {
                                 <p className="font-semibold text-slate-800">{userProfile.displayName}</p>
                                 <p className="text-sm text-slate-500">{userProfile.email}</p>
                                 {memberSince && (
-                                    <p className="text-xs text-slate-400 mt-0.5">Miembro desde {memberSince}</p>
+                                    <p className="text-xs text-slate-400 mt-0.5">Member since {memberSince}</p>
                                 )}
                             </div>
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1.5">Nombre</label>
+                            <label className="block text-sm font-medium text-slate-700 mb-1.5">Name</label>
                             <div className="flex gap-2">
                                 <input
                                     type="text"
@@ -251,7 +230,7 @@ function SettingsContent() {
                                     onChange={e => setDisplayName(e.target.value)}
                                     onKeyDown={e => e.key === 'Enter' && handleSaveName()}
                                     className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 transition-shadow"
-                                    placeholder="Tu nombre"
+                                    placeholder="Your name"
                                 />
                                 <button
                                     onClick={handleSaveName}
@@ -259,58 +238,58 @@ function SettingsContent() {
                                     className="btn-primary text-sm px-4 py-2 disabled:opacity-50"
                                 >
                                     {nameSaved ? (
-                                        <span className="flex items-center gap-1"><CheckIcon className="w-4 h-4" /> Guardado</span>
-                                    ) : savingName ? 'Guardando...' : 'Guardar'}
+                                        <span className="flex items-center gap-1"><CheckIcon className="w-4 h-4" /> Saved</span>
+                                    ) : savingName ? 'Saving...' : 'Save'}
                                 </button>
                             </div>
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1.5">Correo electrónico</label>
+                            <label className="block text-sm font-medium text-slate-700 mb-1.5">Email</label>
                             <input
                                 type="email"
                                 value={userProfile.email}
                                 readOnly
                                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-500 bg-slate-50 cursor-not-allowed"
                             />
-                            <p className="text-xs text-slate-400 mt-1">Vinculado a tu cuenta de Google. No se puede cambiar.</p>
+                            <p className="text-xs text-slate-400 mt-1">Linked to your Google account. Cannot be changed.</p>
                         </div>
                     </div>
                 </section>
 
                 {/* ── Uso ── */}
                 <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-                    <SectionHeader icon={ChartBarIcon} title="Uso" />
+                    <SectionHeader icon={ChartBarIcon} title="Usage" />
                     <div className="px-6 py-5 space-y-4">
                         <UsageBar
-                            label="Proyectos"
+                            label="Projects"
                             value={projectCount}
                             max={limits.maxProjects}
                         />
                         <UsageBar
-                            label="Capas por proyecto"
+                            label="Layers per project"
                             value={0}
                             max={limits.maxLayersPerProject}
                         />
                         <UsageBar
-                            label="Objetos por capa"
+                            label="Features per layer"
                             value={0}
                             max={limits.maxFeaturesPerLayer}
                         />
                         {apiCalls > 0 && (
                             <UsageBar
-                                label="Llamadas API este mes"
+                                label="API calls this month"
                                 value={apiCalls}
                                 max={plan === 'free' ? 100 : null}
                             />
                         )}
                         {plan === 'free' && (
                             <p className="text-xs text-slate-400 pt-1">
-                                Los límites se muestran para el plan Free.{' '}
+                                Limits shown for the Free plan.{' '}
                                 <button onClick={() => setShowUpgrade(true)} className="text-indigo-600 font-medium hover:underline">
-                                    Upgrade a Pro
+                                    Upgrade to Pro
                                 </button>{' '}
-                                para límites más altos.
+                                for higher limits.
                             </p>
                         )}
                     </div>
@@ -318,7 +297,7 @@ function SettingsContent() {
 
                 {/* ── Suscripción ── */}
                 <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-                    <SectionHeader icon={CreditCardIcon} title="Suscripción" />
+                    <SectionHeader icon={CreditCardIcon} title="Subscription" />
                     <div className="px-6 py-5">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
@@ -332,36 +311,35 @@ function SettingsContent() {
                                 <div>
                                     {isPaid ? (
                                         <>
-                                            <p className="text-sm font-medium text-slate-800">Plan activo</p>
+                                            <p className="text-sm font-medium text-slate-800">Active plan</p>
                                             {renewalDate && userProfile.subscriptionStatus !== 'canceled' && (
-                                                <p className="text-xs text-slate-500">Renueva el {renewalDate}</p>
+                                                <p className="text-xs text-slate-500">Renews on {renewalDate}</p>
                                             )}
                                             {userProfile.subscriptionStatus === 'canceled' && renewalDate && (
-                                                <p className="text-xs text-amber-600">Acceso hasta el {renewalDate}</p>
+                                                <p className="text-xs text-amber-600">Access until {renewalDate}</p>
                                             )}
                                             {userProfile.subscriptionStatus === 'past_due' && (
-                                                <p className="text-xs text-red-600">Pago fallido — actualiza tu método de pago</p>
+                                                <p className="text-xs text-red-600">Payment failed — update your payment method</p>
                                             )}
                                         </>
                                     ) : (
-                                        <p className="text-sm text-slate-500">Proyectos y capas limitadas</p>
+                                        <p className="text-sm text-slate-500">Limited projects and layers</p>
                                     )}
                                 </div>
                             </div>
                             {isPaid ? (
                                 <button
                                     onClick={handleManageSubscription}
-                                    disabled={loadingPortal}
                                     className="btn-outline text-sm px-4 py-2"
                                 >
-                                    {loadingPortal ? 'Cargando...' : 'Gestionar'}
+                                    Manage subscription
                                 </button>
                             ) : (
                                 <button
                                     onClick={() => setShowUpgrade(true)}
                                     className="btn-primary text-sm px-4 py-2"
                                 >
-                                    Upgrade a Pro
+                                    Upgrade to Pro
                                 </button>
                             )}
                         </div>
@@ -369,9 +347,9 @@ function SettingsContent() {
                         {!isPaid && (
                             <div className="mt-5 grid grid-cols-3 gap-3 text-center text-xs text-slate-500">
                                 {[
-                                    { value: PLAN_LIMITS.free.maxProjects, label: 'proyectos' },
-                                    { value: PLAN_LIMITS.free.maxLayersPerProject, label: 'capas / proyecto' },
-                                    { value: PLAN_LIMITS.free.maxFeaturesPerLayer, label: 'objetos / capa' },
+                                    { value: PLAN_LIMITS.free.maxProjects, label: 'projects' },
+                                    { value: PLAN_LIMITS.free.maxLayersPerProject, label: 'layers / project' },
+                                    { value: PLAN_LIMITS.free.maxFeaturesPerLayer, label: 'features / layer' },
                                 ].map(({ value, label }) => (
                                     <div key={label} className="bg-slate-50 rounded-xl p-3 border border-slate-200">
                                         <p className="text-lg font-bold text-slate-800">{value}</p>
@@ -389,7 +367,7 @@ function SettingsContent() {
                         <SectionHeader icon={KeyIcon} title="API Keys" />
                         <div className="px-6 py-5 space-y-5">
                             <p className="text-sm text-slate-600">
-                                Las API Keys te permiten acceder de forma programática a los datos de tus proyectos.
+                                API keys let you access your project data programmatically via the REST API.
                             </p>
                             
                             {userProfile.apiKeys && userProfile.apiKeys.length > 0 && (
@@ -445,12 +423,12 @@ function SettingsContent() {
 
                 {/* ── Seguridad ── */}
                 <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-                    <SectionHeader icon={ShieldCheckIcon} title="Seguridad" />
+                    <SectionHeader icon={ShieldCheckIcon} title="Security" />
                     <div className="px-6 py-5 space-y-4">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm font-medium text-slate-700">Proveedor de autenticación</p>
-                                <p className="text-xs text-slate-500 mt-0.5">Tu acceso está vinculado a tu cuenta de Google.</p>
+                                <p className="text-sm font-medium text-slate-700">Authentication provider</p>
+                                <p className="text-xs text-slate-500 mt-0.5">Your access is linked to your Google account.</p>
                             </div>
                             <div className="flex items-center gap-2 bg-slate-100 rounded-full px-3 py-1.5">
                                 <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-4 h-4" />
@@ -459,9 +437,9 @@ function SettingsContent() {
                         </div>
                         {user?.metadata?.lastSignInTime && (
                             <div>
-                                <p className="text-sm font-medium text-slate-700">Última sesión</p>
+                                <p className="text-sm font-medium text-slate-700">Last sign-in</p>
                                 <p className="text-xs text-slate-500 mt-0.5">
-                                    {new Date(user.metadata.lastSignInTime).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                    {new Date(user.metadata.lastSignInTime).toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                 </p>
                             </div>
                         )}
@@ -472,7 +450,7 @@ function SettingsContent() {
                                 className="flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-slate-900 px-3 py-2 rounded-lg hover:bg-slate-100 transition-colors w-full"
                             >
                                 <ArrowRightStartOnRectangleIcon className="w-4 h-4 text-slate-400" />
-                                Cerrar sesión
+                                Sign out
                             </button>
                         </div>
                     </div>
@@ -482,14 +460,14 @@ function SettingsContent() {
                 <section className="bg-white rounded-2xl border border-red-200 overflow-hidden">
                     <div className="px-6 py-4 border-b border-red-100 flex items-center gap-2">
                         <ExclamationTriangleIcon className="w-4 h-4 text-red-400" />
-                        <h2 className="text-sm font-semibold text-red-700 uppercase tracking-wide">Zona de peligro</h2>
+                        <h2 className="text-sm font-semibold text-red-700 uppercase tracking-wide">Danger zone</h2>
                     </div>
                     <div className="px-6 py-5">
                         <div className="flex items-start justify-between gap-4">
                             <div>
-                                <p className="text-sm font-medium text-slate-800">Eliminar cuenta</p>
+                                <p className="text-sm font-medium text-slate-800">Delete account</p>
                                 <p className="text-xs text-slate-500 mt-0.5">
-                                    Elimina permanentemente tu cuenta y todos tus proyectos. Esta acción no se puede deshacer.
+                                    Permanently delete your account and all your projects. This action cannot be undone.
                                 </p>
                             </div>
                             <button
@@ -497,7 +475,7 @@ function SettingsContent() {
                                 className="shrink-0 flex items-center gap-2 text-sm font-medium text-red-600 border border-red-200 hover:bg-red-50 px-3 py-2 rounded-lg transition-colors"
                             >
                                 <TrashIcon className="w-4 h-4" />
-                                Eliminar
+                                Delete
                             </button>
                         </div>
                     </div>
@@ -505,11 +483,11 @@ function SettingsContent() {
 
                 {/* Legal links */}
                 <div className="flex items-center justify-center gap-4 text-xs text-slate-400 pb-4">
-                    <Link href="/terms" className="hover:text-slate-600 transition-colors">Términos de Servicio</Link>
+                    <Link href="/terms" className="hover:text-slate-600 transition-colors">Terms of Service</Link>
                     <span>·</span>
-                    <Link href="/privacy" className="hover:text-slate-600 transition-colors">Política de Privacidad</Link>
+                    <Link href="/privacy" className="hover:text-slate-600 transition-colors">Privacy Policy</Link>
                     <span>·</span>
-                    <a href="mailto:soporte@wktmap.com" className="hover:text-slate-600 transition-colors">Soporte</a>
+                    <a href="mailto:support@wktstudio.com" className="hover:text-slate-600 transition-colors">Support</a>
                 </div>
             </div>
 
@@ -517,21 +495,21 @@ function SettingsContent() {
             <Modal
                 isOpen={showDeleteModal}
                 onClose={() => { setShowDeleteModal(false); setDeleteConfirmText(''); }}
-                title="Eliminar cuenta"
+                title="Delete account"
                 footer={
                     <>
                         <button
                             onClick={() => { setShowDeleteModal(false); setDeleteConfirmText(''); }}
                             className="btn-outline"
                         >
-                            Cancelar
+                            Cancel
                         </button>
                         <button
                             onClick={handleDeleteAccount}
-                            disabled={deleteConfirmText !== 'ELIMINAR' || deletingAccount}
+                            disabled={deleteConfirmText !== 'DELETE' || deletingAccount}
                             className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-40"
                         >
-                            {deletingAccount ? 'Eliminando...' : 'Eliminar cuenta'}
+                            {deletingAccount ? 'Deleting...' : 'Delete account'}
                         </button>
                     </>
                 }
@@ -540,19 +518,19 @@ function SettingsContent() {
                     <div className="flex items-start gap-3 p-3 bg-red-50 border border-red-200 rounded-lg">
                         <ExclamationTriangleIcon className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
                         <div className="text-sm text-red-700">
-                            <p className="font-semibold mb-1">Esta acción es irreversible</p>
-                            <p className="text-xs text-red-600">Se eliminarán tu perfil, todos tus proyectos y capas. No podrás recuperar esta información.</p>
+                            <p className="font-semibold mb-1">This action is irreversible</p>
+                            <p className="text-xs text-red-600">Your profile, all your projects, and layers will be permanently deleted. This cannot be undone.</p>
                         </div>
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                            Escribe <span className="font-mono font-bold text-red-600">ELIMINAR</span> para confirmar
+                            Type <span className="font-mono font-bold text-red-600">DELETE</span> to confirm
                         </label>
                         <input
                             type="text"
                             value={deleteConfirmText}
                             onChange={e => setDeleteConfirmText(e.target.value)}
-                            placeholder="ELIMINAR"
+                            placeholder="DELETE"
                             className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                             autoComplete="off"
                         />

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://wktmap.com';
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://wktstudio.com';
 
 export const metadata: Metadata = {
   title: {

@@ -1,4 +1,4 @@
-export type PlanId = 'free' | 'pro' | 'business';
+export type PlanId = 'free' | 'pro';
 export type BillingInterval = 'month' | 'year';
 
 export interface PlanLimits {
@@ -62,91 +62,52 @@ export const PLAN_LIMITS: Record<PlanId, PlanLimits> = {
     hasWhiteLabel: false,
     apiRateLimitPerDay: 1000,
   },
-  business: {
-    maxProjects: null,
-    maxLayersPerProject: null,
-    maxFeaturesPerLayer: null,
-    maxCollaborators: null,
-    hasApiAccess: true,
-    hasKmlExport: true,
-    hasVersionHistory: true,
-    hasSpatialAnalysis: true,
-    hasStyleRules: true,
-    hasEmbedWidget: true,
-    hasWebhooks: true,
-    hasTeamWorkspaces: true,
-    hasWhiteLabel: true,
-    apiRateLimitPerDay: 10000,
-  },
 };
 
 export const PLANS: PlanInfo[] = [
   {
     id: 'free',
     name: 'Free',
-    description: 'Comienza a explorar',
+    description: 'Start exploring',
     monthlyPrice: 0,
     yearlyPrice: 0,
     limits: PLAN_LIMITS.free,
     color: '#6b7280',
     features: [
-      '3 proyectos',
-      '2 capas por proyecto',
-      '10 features por capa',
-      'Link público de solo lectura',
-      'Importar/exportar CSV',
-      'Operaciones WKT (unión, diferencia)',
+      '3 projects',
+      '2 layers per project',
+      '10 features per layer',
+      'Public read-only link',
+      'Import / export CSV',
+      'WKT paste & visualize',
     ],
   },
   {
     id: 'pro',
     name: 'Pro',
-    description: 'Para profesionales GIS',
-    monthlyPrice: 12,
+    description: 'For GIS professionals',
+    monthlyPrice: 10,
     yearlyPrice: 99,
     limits: PLAN_LIMITS.pro,
     color: '#6366f1',
     features: [
-      'Proyectos ilimitados',
-      '20 capas por proyecto',
-      '5,000 features por capa',
-      '5 colaboradores por proyecto',
-      'Attribute Table visual',
-      'API REST por proyecto',
-      'Export KML',
-      'Historial de versiones (20 snapshots)',
-      'Herramientas espaciales: Buffer',
-      'Embed iframe en tu sitio web',
-    ],
-  },
-  {
-    id: 'business',
-    name: 'Business',
-    description: 'Para equipos y empresas',
-    monthlyPrice: 39,
-    yearlyPrice: 299,
-    limits: PLAN_LIMITS.business,
-    color: '#f59e0b',
-    features: [
-      'Todo lo de Pro',
-      'Capas y features ilimitadas',
-      'Colaboradores ilimitados',
-      'API con 10,000 calls/día',
-      'Embed sin watermark (white-label)',
-      'Webhooks',
-      'Team Workspaces',
-      'Snapshots ilimitados',
-      'Soporte prioritario',
+      'Unlimited projects',
+      '20 layers per project',
+      '5,000 features per layer',
+      '5 collaborators per project',
+      'Visual Attribute Table',
+      'REST API per project (1,000 calls/day)',
+      'KML export',
+      'Version history (20 snapshots)',
+      'Spatial analysis: Buffer, Union',
+      'Embed iframe on your website',
     ],
   },
 ];
 
-// Lemon Squeezy variant IDs — configurar en .env.local
-export const LS_VARIANTS = {
-  pro_monthly: process.env.NEXT_PUBLIC_LS_VARIANT_PRO_MONTHLY ?? '',
-  pro_yearly: process.env.NEXT_PUBLIC_LS_VARIANT_PRO_YEARLY ?? '',
-  business_monthly: process.env.NEXT_PUBLIC_LS_VARIANT_BUSINESS_MONTHLY ?? '',
-  business_yearly: process.env.NEXT_PUBLIC_LS_VARIANT_BUSINESS_YEARLY ?? '',
+export const PADDLE_PRICES = {
+  pro_monthly: process.env.NEXT_PUBLIC_PADDLE_PRO_MONTHLY_PRICE_ID ?? '',
+  pro_yearly: process.env.NEXT_PUBLIC_PADDLE_PRO_YEARLY_PRICE_ID ?? '',
 };
 
 export type LimitKey = keyof Pick<
@@ -190,8 +151,7 @@ export function checkLimit(
     return { allowed: true, limit, current: currentValue, upgradeRequired: null };
   }
 
-  const upgradeRequired: PlanId = plan === 'free' ? 'pro' : 'business';
-  return { allowed: false, limit, current: currentValue, upgradeRequired };
+  return { allowed: false, limit, current: currentValue, upgradeRequired: 'pro' };
 }
 
 export function hasFeature(plan: PlanId, featureKey: FeatureKey): boolean {
@@ -199,20 +159,20 @@ export function hasFeature(plan: PlanId, featureKey: FeatureKey): boolean {
 }
 
 export const LIMIT_LABELS: Record<LimitKey, string> = {
-  maxProjects: 'proyectos',
-  maxLayersPerProject: 'capas en este proyecto',
-  maxFeaturesPerLayer: 'features en esta capa',
-  maxCollaborators: 'colaboradores',
+  maxProjects: 'projects',
+  maxLayersPerProject: 'layers in this project',
+  maxFeaturesPerLayer: 'features in this layer',
+  maxCollaborators: 'collaborators',
 };
 
 export const FEATURE_LABELS: Record<FeatureKey, string> = {
-  hasApiAccess: 'API REST',
-  hasKmlExport: 'exportar KML',
-  hasVersionHistory: 'historial de versiones',
-  hasSpatialAnalysis: 'herramientas de análisis espacial',
-  hasStyleRules: 'reglas de estilo condicional',
-  hasEmbedWidget: 'embed en tu sitio web',
+  hasApiAccess: 'REST API',
+  hasKmlExport: 'KML export',
+  hasVersionHistory: 'version history',
+  hasSpatialAnalysis: 'spatial analysis tools',
+  hasStyleRules: 'conditional style rules',
+  hasEmbedWidget: 'embed on your website',
   hasWebhooks: 'webhooks',
   hasTeamWorkspaces: 'team workspaces',
-  hasWhiteLabel: 'white-label sin watermark',
+  hasWhiteLabel: 'white-label embed',
 };

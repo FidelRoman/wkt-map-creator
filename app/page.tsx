@@ -426,6 +426,7 @@ function LandingPage() {
             <Link href="/api-docs" className="hover:text-slate-600 transition-colors">API Docs</Link>
             <Link href="/terms" className="hover:text-slate-600 transition-colors">Terms</Link>
             <Link href="/privacy" className="hover:text-slate-600 transition-colors">Privacy</Link>
+            <Link href="/refund" className="hover:text-slate-600 transition-colors">Refund Policy</Link>
           </div>
         </div>
       </footer>
@@ -563,11 +564,9 @@ function Dashboard() {
           <span className="text-sm font-medium text-red-700">
             ⚠️ There is a problem with your payment. Your Pro plan will be deactivated soon.
           </span>
-          {userProfile.lsCustomerPortalUrl && (
-            <a href={userProfile.lsCustomerPortalUrl} className="text-sm font-semibold text-red-600 hover:underline ml-4 flex-shrink-0">
-              Update payment method →
-            </a>
-          )}
+          <a href="https://customer.paddle.com/" target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-red-600 hover:underline ml-4 flex-shrink-0">
+            Update payment method →
+          </a>
         </div>
       )}
 
@@ -599,10 +598,10 @@ function Dashboard() {
               onClick={() => { if (plan === 'free') setShowUpgrade(true); }}
               title={plan === 'free' ? 'Upgrade to Pro' : `Plan ${plan}`}
               className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-white text-xs font-bold flex-shrink-0 ${plan === 'free' ? 'cursor-pointer hover:opacity-80 transition-opacity' : 'cursor-default'}`}
-              style={{ background: plan === 'pro' ? '#6366f1' : plan === 'business' ? '#f59e0b' : '#6b7280' }}
+              style={{ background: plan === 'pro' ? '#6366f1' : '#6b7280' }}
             >
               {plan !== 'free' && <SparklesIcon className="w-3 h-3" />}
-              {plan === 'pro' ? 'Pro' : plan === 'business' ? 'Business' : 'Free'}
+              {plan === 'pro' ? 'Pro' : 'Free'}
             </button>
           </div>
           <Link href="/settings" className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors" title="Settings">

@@ -103,7 +103,7 @@ export default function ApiDocsPage() {
                     <h3 className="text-lg font-semibold mb-3">Ejemplo en Node.js (fetch)</h3>
                     <div className="bg-slate-900 rounded-xl p-4 overflow-x-auto mb-6 text-sm font-mono text-slate-300">
 <pre>
-<span className="text-blue-400">const</span> response = <span className="text-blue-400">await</span> <span className="text-yellow-200">fetch</span>(<span className="text-green-300">'https://wktmap.com/api/v1/projects/my_project_123/features?limit=50'</span>, {'{'}
+<span className="text-blue-400">const</span> response = <span className="text-blue-400">await</span> <span className="text-yellow-200">fetch</span>(<span className="text-green-300">'https://wktstudio.com/api/v1/projects/my_project_123/features?limit=50'</span>, {'{'}
     <span className="text-blue-300">headers</span>: {'{'}
         <span className="text-green-300">'Authorization'</span>: <span className="text-green-300">'Bearer wk_tuaPiKeyAqi...'</span>
     {'}'}
@@ -149,7 +149,7 @@ export default function ApiDocsPage() {
                 </section>
                 
                 <div className="py-8 text-center text-slate-500 text-sm border-t border-slate-200 mt-12">
-                    Si tienes dudas sobre la integración, contáctanos a soporte@wktmap.com
+                    Si tienes dudas sobre la integración, contáctanos a soporte@wktstudio.com
                 </div>
             </main>
         </div>

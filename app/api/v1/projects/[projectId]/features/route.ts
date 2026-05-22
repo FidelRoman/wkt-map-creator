@@ -19,7 +19,7 @@ async function verifyApiKey(apiKey: string): Promise<{ uid: string; plan: string
     }
 
     // Fallback: search by scanning (Firestore doesn't support nested array-contains-any easily)
-    const allUsersSnapshot = await db.collection('users').where('plan', 'in', ['pro', 'business']).get();
+    const allUsersSnapshot = await db.collection('users').where('plan', '==', 'pro').get();
     for (const userDoc of allUsersSnapshot.docs) {
         const userData = userDoc.data();
         const apiKeys: any[] = userData.apiKeys ?? [];
@@ -64,7 +64,7 @@ export async function GET(
         return NextResponse.json({ error: 'Invalid API key' }, { status: 403 });
     }
 
-    if (!['pro', 'business'].includes(user.plan)) {
+    if (user.plan !== 'pro') {
         return NextResponse.json({ error: 'API access requires Pro or Business plan', upgradeUrl: '/?upgrade=api' }, { status: 403 });
     }
 
@@ -83,7 +83,7 @@ export async function GET(
     // Rate limiting
     const userDoc = await db.collection('users').doc(user.uid).get();
     const userData = userDoc.data()!;
-    const limits = PLAN_LIMITS[user.plan as 'pro' | 'business'];
+    const limits = PLAN_LIMITS['pro'];
     const dailyLimit = limits.apiRateLimitPerDay ?? 1000;
     const apiCallsToday = userData.usageCounters?.apiCallsThisMonth ?? 0;
 
@@ -101,7 +101,7 @@ export async function GET(
     const layerFilter = searchParams.get('layer');
     const nameFilter = searchParams.get('name')?.toLowerCase();
     const bboxStr = searchParams.get('bbox');
-    const limit = Math.min(parseInt(searchParams.get('limit') ?? '100'), user.plan === 'business' ? 10000 : 1000);
+    const limit = Math.min(parseInt(searchParams.get('limit') ?? '100'), 1000);
     const offset = parseInt(searchParams.get('offset') ?? '0');
 
     let bbox: [number, number, number, number] | null = null;
@@ -186,7 +186,7 @@ export async function POST(
     const apiKey = authHeader.split('Bearer ')[1].trim();
     const user = await verifyApiKey(apiKey);
     if (!user) return NextResponse.json({ error: 'Invalid API key' }, { status: 403, headers: { 'Access-Control-Allow-Origin': '*' } });
-    if (!['pro', 'business'].includes(user.plan)) {
+    if (user.plan !== 'pro') {
         return NextResponse.json({ error: 'API access requires Pro or Business plan' }, { status: 403, headers: { 'Access-Control-Allow-Origin': '*' } });
     }
 
@@ -220,7 +220,7 @@ export async function POST(
         } catch { return []; }
     })();
 
-    const limits = PLAN_LIMITS[user.plan as 'pro' | 'business'];
+    const limits = PLAN_LIMITS['pro'];
     const maxFeatures = limits.maxFeaturesPerLayer ?? 500;
     if (existingFeatures.length + features.length > maxFeatures) {
         return NextResponse.json({ error: `Exceeds maxFeaturesPerLayer limit (${maxFeatures})` }, { status: 422, headers: { 'Access-Control-Allow-Origin': '*' } });
@@ -249,7 +249,7 @@ export async function DELETE(
     const apiKey = authHeader.split('Bearer ')[1].trim();
     const user = await verifyApiKey(apiKey);
     if (!user) return NextResponse.json({ error: 'Invalid API key' }, { status: 403, headers: { 'Access-Control-Allow-Origin': '*' } });
-    if (!['pro', 'business'].includes(user.plan)) {
+    if (user.plan !== 'pro') {
         return NextResponse.json({ error: 'API access requires Pro or Business plan' }, { status: 403, headers: { 'Access-Control-Allow-Origin': '*' } });
     }
 
