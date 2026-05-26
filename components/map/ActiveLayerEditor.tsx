@@ -147,7 +147,7 @@ export default function ActiveLayerEditor({
             const validTypes = ['Polygon', 'MultiPolygon'];
             // @ts-ignore
             if (!validTypes.includes(sGTyped.geometry.type) || !validTypes.includes(cGTyped.geometry.type)) {
-                onShowToast?.("Error: Solo se pueden restar Polígonos", 'error');
+                onShowToast?.("Subtract only works on Polygon or MultiPolygon geometries", 'error');
                 return;
             }
 
@@ -156,7 +156,7 @@ export default function ActiveLayerEditor({
             const difference = turf.difference(collection as any);
 
             if (!difference) {
-                onShowToast?.("Aviso: El polígono fue eliminado completamente", 'warning');
+                onShowToast?.("Warning: The polygon was completely subtracted and removed", 'warning');
 
                 const currentGeoJSON = featureGroupRef.current.toGeoJSON() as any;
                 const features = currentGeoJSON.features.filter((_: any, i: number) => i !== subjectIndex);
@@ -175,7 +175,7 @@ export default function ActiveLayerEditor({
 
             if (activeLayerId) {
                 onUpdateLayer(activeLayerId, { ...currentGeoJSON, features: newFeatures });
-                onShowToast?.("Resta completada exitosamente", 'success');
+                onShowToast?.("Subtract completed", 'success');
             }
 
             setMenu(null);
@@ -183,7 +183,7 @@ export default function ActiveLayerEditor({
 
         } catch (err: any) {
             console.error("Subtract error:", err);
-            onShowToast?.(`Error: ${err.message || "Fallo en resta"}`, 'error');
+            onShowToast?.(`Subtract failed: ${err.message || "invalid geometry"}`, 'error');
         }
     };
 
@@ -219,7 +219,7 @@ export default function ActiveLayerEditor({
             const validTypes = ['Polygon', 'MultiPolygon'];
             // @ts-ignore
             if (!validTypes.includes(sGTyped.geometry.type) || !validTypes.includes(cGTyped.geometry.type)) {
-                onShowToast?.("Error: Solo se pueden sumar Polígonos", 'error');
+                onShowToast?.("Union only works on Polygon or MultiPolygon geometries", 'error');
                 return;
             }
 
@@ -228,12 +228,12 @@ export default function ActiveLayerEditor({
             const unionFeature = turf.union(collection as any);
 
             if (!unionFeature) {
-                onShowToast?.("Error: No se pudo realizar la suma.", 'error');
+                onShowToast?.("Union failed: could not merge the geometries.", 'error');
                 return;
             }
 
             if (unionFeature.geometry.type === 'MultiPolygon') {
-                onShowToast?.("Aviso: Los polígonos no se intersectan (el resultado es MultiPolygon). Acerquelos para unirlos en 1 solo.", 'warning');
+                onShowToast?.("Warning: Polygons don't overlap (result is MultiPolygon). Move them closer to merge into one.", 'warning');
                 return;
             }
 
@@ -246,15 +246,15 @@ export default function ActiveLayerEditor({
 
             if (activeLayerId) {
                 onUpdateLayer(activeLayerId, { ...currentGeoJSON, features: newFeatures });
-                onShowToast?.("Suma completada exitosamente", 'success');
+                onShowToast?.("Union completed", 'success');
             }
 
             setMenu(null);
             if (onClearSelection) onClearSelection();
 
         } catch (err: any) {
-            console.error("Add error:", err);
-            onShowToast?.(`Error: ${err.message || "Fallo en suma"}`, 'error');
+            console.error("Union error:", err);
+            onShowToast?.(`Union failed: ${err.message || "invalid geometry"}`, 'error');
         }
     };
 
@@ -377,7 +377,7 @@ export default function ActiveLayerEditor({
             // @ts-ignore
             const wkt = stringifyWKT(menu.layer.toGeoJSON());
             navigator.clipboard.writeText(wkt);
-            onShowToast?.("WKT Copiado", 'success');
+            onShowToast?.("WKT copied", 'success');
         }
         setMenu(null);
     };
@@ -415,7 +415,7 @@ export default function ActiveLayerEditor({
     const handleBufferConfirm = () => {
         const distMeters = parseFloat(bufferDistance);
         if (isNaN(distMeters) || distMeters <= 0) {
-            onShowToast?.("Distancia inválida", 'warning');
+            onShowToast?.("Invalid distance — enter a positive number", 'warning');
             return;
         }
         if (!menu?.layer || !activeLayerId || !featureGroupRef.current) { setMenu(null); setBufferInputOpen(false); return; }
@@ -423,15 +423,15 @@ export default function ActiveLayerEditor({
             // @ts-ignore
             const feature = menu.layer.toGeoJSON();
             const buffered = turf.buffer(feature, distMeters / 1000, { units: 'kilometers' });
-            if (!buffered) { onShowToast?.("Error al crear buffer", 'error'); setMenu(null); setBufferInputOpen(false); return; }
+            if (!buffered) { onShowToast?.("Buffer failed: could not generate geometry", 'error'); setMenu(null); setBufferInputOpen(false); return; }
             buffered.properties = { name: `Buffer ${distMeters}m`, color: '#f59e0b' };
 
             const currentGeoJSON = featureGroupRef.current.toGeoJSON() as any;
             const newFeatures = [...currentGeoJSON.features, buffered];
             onUpdateLayer(activeLayerId, { ...currentGeoJSON, features: newFeatures });
-            onShowToast?.(`Buffer de ${distMeters}m creado`, 'success');
-        } catch {
-            onShowToast?.("Error al crear buffer", 'error');
+            onShowToast?.(`Buffer of ${distMeters}m created`, 'success');
+        } catch (err: any) {
+            onShowToast?.(`Buffer failed: ${err.message || "invalid geometry"}`, 'error');
         }
         setMenu(null);
         setBufferInputOpen(false);
@@ -478,11 +478,11 @@ export default function ActiveLayerEditor({
                         <>
                             <div onClick={handleSubtract} className="menu-item" style={{ display: 'flex', gap: '10px', padding: '10px', cursor: 'pointer', alignItems: 'center' }}>
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M5 12h14" /></svg>
-                                <span>Restar selección</span>
+                                <span>Subtract selection</span>
                             </div>
                             <div onClick={handleAdd} className="menu-item" style={{ display: 'flex', gap: '10px', padding: '10px', cursor: 'pointer', alignItems: 'center' }}>
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                                <span>Sumar selección</span>
+                                <span>Union selection</span>
                             </div>
                         </>
                     ) : null}

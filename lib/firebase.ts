@@ -86,6 +86,18 @@ export async function updateUserProfile(uid: string, updates: Partial<UserProfil
     await updateDoc(docRef, updates as Record<string, unknown>);
 }
 
+// ── API key index (O(1) lookup) ────────────────────────────────────────────────
+// Each document in `apiKeyIndex` has the API key as its ID and stores { uid }.
+// This avoids scanning all users when verifying a key server-side.
+
+export async function addApiKeyToIndex(key: string, uid: string): Promise<void> {
+    await setDoc(doc(db, 'apiKeyIndex', key), { uid, createdAt: serverTimestamp() });
+}
+
+export async function removeApiKeyFromIndex(key: string): Promise<void> {
+    await deleteDoc(doc(db, 'apiKeyIndex', key));
+}
+
 export async function incrementProjectCount(uid: string, delta: number): Promise<void> {
     try {
         const profile = await getUserProfile(uid);
@@ -123,18 +135,26 @@ export async function createSnapshot(projectId: string, ownerId: string, name: s
     return docRef.id;
 }
 
-export async function getSnapshots(projectId: string, limitCount: number = 20): Promise<Snapshot[]> {
+export async function getSnapshots(projectId: string, ownerId: string, limitCount: number = 20): Promise<Snapshot[]> {
     try {
+        // Query by ownerId (matches the security rule) + filter projectId client-side.
+        // This avoids needing a composite index and satisfies the Firestore rule:
+        // "allow read: if request.auth.uid == resource.data.ownerId"
         const q = query(
             collection(db, 'snapshots'),
-            where('projectId', '==', projectId),
-            orderBy('createdAt', 'desc')
+            where('ownerId', '==', ownerId)
+            // No orderBy — avoids composite index requirement; we sort client-side below
         );
         const snapshot = await getDocs(q);
-        return snapshot.docs.slice(0, limitCount).map(d => ({
-            id: d.id,
-            ...d.data()
-        })) as Snapshot[];
+        return snapshot.docs
+            .map(d => ({ id: d.id, ...d.data() }) as Snapshot)
+            .filter(s => s.projectId === projectId)
+            .sort((a, b) => {
+                const tsA = a.createdAt?.seconds ?? 0;
+                const tsB = b.createdAt?.seconds ?? 0;
+                return tsB - tsA; // desc
+            })
+            .slice(0, limitCount);
     } catch (error) {
         console.error("Error fetching snapshots:", error);
         return [];

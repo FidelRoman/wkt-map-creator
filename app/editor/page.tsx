@@ -118,7 +118,10 @@ function SandboxEditor() {
     const handleImportCsv = async (file: File) => {
         const text = await file.text();
         const lines = text.split(/\r?\n/);
-        if (lines.length < 2) return;
+        if (lines.length < 2) {
+            setToast('El archivo CSV está vacío o no tiene datos.');
+            return;
+        }
         const newFeatures: any[] = [];
         for (let i = 1; i < lines.length; i++) {
             const line = lines[i].trim();
@@ -130,6 +133,10 @@ function SandboxEditor() {
             if (!geojson) continue;
             newFeatures.push({ type: 'Feature', geometry: geojson, properties: { name: cols[1] || `Objeto ${i}`, color: generateColor() } });
         }
+        if (newFeatures.length === 0) {
+            setToast('No se encontraron geometrías WKT en el CSV. Asegúrate de que haya columnas con POLYGON, POINT, etc.');
+            return;
+        }
         const currentCount = layersRef.current[0]?.features?.features?.length ?? 0;
         const remaining = SANDBOX_LIMITS.maxFeatures - currentCount;
         const toAdd = newFeatures.slice(0, remaining);
@@ -138,9 +145,109 @@ function SandboxEditor() {
             features: { type: 'FeatureCollection', features: [...(prev[0].features?.features ?? []), ...toAdd] }
         }]);
         if (toAdd.length < newFeatures.length) {
-            setToast(`Solo se agregaron ${toAdd.length} objetos (límite demo: ${SANDBOX_LIMITS.maxFeatures}). Guarda para continuar.`);
+            setToast(`Solo se agregaron ${toAdd.length} de ${newFeatures.length} objetos (límite demo: ${SANDBOX_LIMITS.maxFeatures}). Guarda para continuar.`);
         } else {
-            setToast(`${toAdd.length} objetos importados`);
+            setToast(`${toAdd.length} objetos importados correctamente.`);
+        }
+    };
+
+    const handleImportFile = async (file: File) => {
+        const ext = file.name.split('.').pop()?.toLowerCase();
+        const currentCount = layersRef.current[0]?.features?.features?.length ?? 0;
+        const remaining = SANDBOX_LIMITS.maxFeatures - currentCount;
+
+        if (ext === 'geojson' || ext === 'json') {
+            try {
+                const text = await file.text();
+                const parsed = JSON.parse(text);
+                let features: any[] = [];
+                if (parsed.type === 'FeatureCollection') features = parsed.features ?? [];
+                else if (parsed.type === 'Feature') features = [parsed];
+                else if (parsed.type && parsed.coordinates) features = [{ type: 'Feature', geometry: parsed, properties: {} }];
+                else { setToast('Formato GeoJSON no reconocido.'); return; }
+
+                const normalized = features.filter(f => f?.geometry).map((f, i) => ({
+                    ...f,
+                    properties: { ...f.properties, name: f.properties?.name ?? `Objeto ${i + 1}`, color: generateColor() },
+                }));
+                if (normalized.length === 0) { setToast('No se encontraron geometrías en el GeoJSON.'); return; }
+
+                const toAdd = normalized.slice(0, remaining);
+                setLayers(prev => [{
+                    ...prev[0],
+                    features: { type: 'FeatureCollection', features: [...(prev[0].features?.features ?? []), ...toAdd] }
+                }]);
+                const msg = toAdd.length < normalized.length
+                    ? `Solo se agregaron ${toAdd.length} de ${normalized.length} objetos (límite demo). Guarda para continuar.`
+                    : `${toAdd.length} objetos importados desde GeoJSON.`;
+                setToast(msg);
+            } catch {
+                setToast('Error leyendo el GeoJSON. Verifica que sea JSON válido.');
+            }
+
+        } else if (ext === 'shp') {
+            try {
+                const shapefile = await import('shapefile');
+                const arrayBuffer = await file.arrayBuffer();
+                const source = await shapefile.open(arrayBuffer as any);
+                const features: any[] = [];
+                let result = await source.read();
+                while (!result.done) {
+                    if (result.value) features.push(result.value);
+                    result = await source.read();
+                }
+                if (features.length === 0) { setToast('No se encontraron geometrías en el Shapefile.'); return; }
+                const normalized = features.map((f, i) => ({
+                    ...f,
+                    properties: { ...f.properties, name: f.properties?.name ?? `Objeto ${i + 1}`, color: generateColor() },
+                }));
+                const toAdd = normalized.slice(0, remaining);
+                setLayers(prev => [{
+                    ...prev[0],
+                    features: { type: 'FeatureCollection', features: [...(prev[0].features?.features ?? []), ...toAdd] }
+                }]);
+                setToast(toAdd.length < normalized.length
+                    ? `Solo se agregaron ${toAdd.length} de ${normalized.length} objetos (límite demo). Guarda para continuar.`
+                    : `${toAdd.length} objetos importados desde Shapefile.`);
+            } catch {
+                setToast('Error leyendo el Shapefile. Asegúrate de seleccionar un .shp válido.');
+            }
+
+        } else if (ext === 'csv' || ext === 'txt') {
+            const text = await file.text();
+            const firstLine = text.split('\n')[0].toLowerCase();
+            const hasLatLng = /\blat(itude|itud)?\b/.test(firstLine) && /\b(lon(gitude|gitud)?|lng)\b/.test(firstLine);
+            if (hasLatLng) {
+                const lines = text.split(/\r?\n/).filter(l => l.trim());
+                if (lines.length < 2) { setToast('El archivo CSV está vacío o no tiene datos.'); return; }
+                const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim().replace(/"/g, ''));
+                const latIdx = headers.findIndex(h => ['lat', 'latitude', 'latitud', 'y'].includes(h));
+                const lngIdx = headers.findIndex(h => ['lon', 'lng', 'longitude', 'longitud', 'x'].includes(h));
+                const nameIdx = headers.findIndex(h => ['name', 'nombre', 'label'].includes(h));
+                if (latIdx === -1 || lngIdx === -1) { setToast('No se encontraron columnas lat/lng. Usa encabezados: lat, lng.'); return; }
+                const features: any[] = [];
+                for (let i = 1; i < lines.length; i++) {
+                    const cols = parseCSVLine(lines[i]);
+                    const lat = parseFloat(cols[latIdx]);
+                    const lng = parseFloat(cols[lngIdx]);
+                    if (isNaN(lat) || isNaN(lng)) continue;
+                    const name = nameIdx !== -1 && cols[nameIdx] ? cols[nameIdx].trim().replace(/^"|"$/g, '') : `Punto ${features.length + 1}`;
+                    features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [lng, lat] }, properties: { name, color: generateColor() } });
+                }
+                if (features.length === 0) { setToast('No se encontraron coordenadas válidas en el archivo.'); return; }
+                const toAdd = features.slice(0, remaining);
+                setLayers(prev => [{
+                    ...prev[0],
+                    features: { type: 'FeatureCollection', features: [...(prev[0].features?.features ?? []), ...toAdd] }
+                }]);
+                setToast(toAdd.length < features.length
+                    ? `Solo se agregaron ${toAdd.length} de ${features.length} puntos (límite demo). Guarda para continuar.`
+                    : `${toAdd.length} puntos importados.`);
+            } else {
+                await handleImportCsv(file);
+            }
+        } else {
+            setToast('Formato no soportado. Usa .csv, .geojson o .shp');
         }
     };
 
@@ -212,6 +319,7 @@ function SandboxEditor() {
                     onLoadProject={() => {}}
                     isSaving={false}
                     onImportCsv={handleImportCsv}
+                    onImportFile={handleImportFile}
                     onExportLayer={handleExportLayer}
                     onAddFeature={() => setDrawRequest({ type: 'polygon', id: Date.now() })}
                     onCopyWkt={handleCopyWkt}

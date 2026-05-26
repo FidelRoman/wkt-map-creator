@@ -1,12 +1,12 @@
 "use client";
-import { useState, Dispatch, SetStateAction, useRef } from "react";
+import { useState, Dispatch, SetStateAction, useRef, useEffect } from "react";
 import Link from "next/link";
 import Modal from "@/components/Modal";
 import { Project, Layer, createProject } from "@/lib/firebase";
 import { useAuth } from "@/components/AuthWrapper";
 import { signInWithPopup, signOut } from "firebase/auth";
 import { auth, googleProvider } from "@/lib/firebase";
-import { checkLimit, hasFeature } from "@/lib/plans";
+import { checkLimit, hasFeature, PLAN_LIMITS } from "@/lib/plans";
 import UpgradeModal from "@/components/UpgradeModal";
 import PlanBadge from "@/components/PlanBadge";
 import {
@@ -24,6 +24,7 @@ import {
     SparklesIcon,
     CircleStackIcon,
     PaintBrushIcon,
+    ClockIcon,
 } from "@heroicons/react/24/outline";
 import ShareModal from "@/components/ShareModal";
 import { generateColor, parseWKT } from "@/lib/map-utils";
@@ -65,6 +66,12 @@ interface SidebarProps {
     isSandboxSaving?: boolean;
     onShowToast?: (message: string, type?: ToastType) => void;
     onImportFile?: (file: File) => void;
+    onOpenVersionHistory?: () => void;
+    onUndo?: () => void;
+    onRedo?: () => void;
+    canUndo?: boolean;
+    canRedo?: boolean;
+    isImporting?: boolean;
 }
 
 export default function Sidebar({
@@ -92,6 +99,12 @@ export default function Sidebar({
     isSandboxSaving = false,
     onShowToast,
     onImportFile,
+    onOpenVersionHistory,
+    onUndo,
+    onRedo,
+    canUndo = false,
+    canRedo = false,
+    isImporting = false,
 }: SidebarProps) {
     const { user, userProfile } = useAuth();
     const [projectListOpen, setProjectListOpen] = useState(false);
@@ -104,6 +117,25 @@ export default function Sidebar({
     const fileInputRef = useRef<HTMLInputElement>(null);
     const importFileRef = useRef<HTMLInputElement>(null);
     const [showImportMenu, setShowImportMenu] = useState(false);
+
+    // ── 80% feature-limit warning ──────────────────────────────────────────────
+    const warnedLayersRef = useRef<Set<string>>(new Set());
+    useEffect(() => {
+        if (!activeLayerId || !onShowToast || sandboxMode) return;
+        const activeLayer = layers.find(l => l.id === activeLayerId);
+        const count = activeLayer?.features?.features?.length ?? 0;
+        const max = PLAN_LIMITS[plan].maxFeaturesPerLayer;
+        if (max === null) return; // Pro unlimited — no warning needed
+        const pct = count / max;
+        if (pct >= 0.8 && pct < 1 && !warnedLayersRef.current.has(activeLayerId)) {
+            warnedLayersRef.current.add(activeLayerId);
+            onShowToast(
+                `You've used ${count}/${max} features (${Math.round(pct * 100)}%). Upgrade to Pro for unlimited.`,
+                'warning'
+            );
+        }
+        if (pct < 0.8) warnedLayersRef.current.delete(activeLayerId); // reset if they free up space
+    }, [layers, activeLayerId, plan, sandboxMode, onShowToast]);
 
     // Modal States
     const [modalAction, setModalAction] = useState<'newProject' | 'newLayer' | 'deleteLayer' | null>(null);
@@ -217,7 +249,7 @@ export default function Sidebar({
             setUpgradeModal({ type: 'limit', limitKey: 'maxLayersPerProject', current: layers.length, limit: check.limit!, requiredPlan: check.upgradeRequired! });
             return;
         }
-        setInputValue("Nueva Capa");
+        setInputValue("New Layer");
         setModalAction('newLayer');
     };
 
@@ -276,7 +308,7 @@ export default function Sidebar({
     const handlePasteWkt = () => {
         if (!wktInput.trim()) return;
         if (!activeLayerId) {
-            onShowToast?.('Selecciona una capa primero', 'warning');
+            onShowToast?.('Select a layer first', 'warning');
             return;
         }
         const activeLayer = layers.find(l => l.id === activeLayerId);
@@ -290,7 +322,7 @@ export default function Sidebar({
 
         const geojson = parseWKT(wktInput);
         if (!geojson) {
-            onShowToast?.('WKT inválido o no soportado', 'error');
+            onShowToast?.('Invalid or unsupported WKT', 'error');
             return;
         }
 
@@ -360,10 +392,10 @@ export default function Sidebar({
         return (
             <div id="login-overlay">
                 <div className="login-card">
-                    <h2>Bienvenido</h2>
+                    <h2>Welcome</h2>
                     <button onClick={handleLogin} className="btn-google">
                         <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="G" width="18" height="18" />
-                        Continuar con Google
+                        Continue with Google
                     </button>
                 </div>
             </div>
@@ -392,13 +424,24 @@ export default function Sidebar({
                                     &larr; Volver al Dashboard
                                 </a>
                                 {!isReadOnly && (
-                                    <button
-                                        onClick={() => setShareModalOpen(true)}
-                                        className="bg-blue-600 hover:bg-blue-700 text-white p-1.5 rounded-lg transition-colors shadow-sm"
-                                        title="Compartir Proyecto"
-                                    >
-                                        <ShareIcon className="w-4 h-4" />
-                                    </button>
+                                    <div className="flex items-center gap-1">
+                                        {onOpenVersionHistory && (
+                                            <button
+                                                onClick={onOpenVersionHistory}
+                                                className="text-slate-500 hover:bg-slate-100 p-1.5 rounded-lg transition-colors"
+                                                title="Version History"
+                                            >
+                                                <ClockIcon className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={() => setShareModalOpen(true)}
+                                            className="bg-blue-600 hover:bg-blue-700 text-white p-1.5 rounded-lg transition-colors shadow-sm"
+                                            title="Compartir Proyecto"
+                                        >
+                                            <ShareIcon className="w-4 h-4" />
+                                        </button>
+                                    </div>
                                 )}
                             </div>
                             <div className="flex items-center justify-between mb-1">
@@ -407,9 +450,12 @@ export default function Sidebar({
                                         {currentProject ? currentProject.name : 'Cargando...'}
                                     </div>
                                     {isReadOnly && (
-                                        <div className="mt-1">
-                                            <span className="text-[10px] bg-slate-100 text-slate-500 border border-slate-200 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium">
-                                                Lector
+                                        <div className="mt-1 flex items-center gap-1.5">
+                                            <span className="text-[10px] bg-amber-50 text-amber-600 border border-amber-200 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium">
+                                                Vista
+                                            </span>
+                                            <span className="text-[10px] text-slate-400" title="Puedes explorar y dibujar localmente, pero los cambios no se guardan">
+                                                Cambios locales únicamente
                                             </span>
                                         </div>
                                     )}
@@ -437,14 +483,41 @@ export default function Sidebar({
 
                 {/* Capas Section */}
                 <div className="layers-header">
-                    <h2 style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>Capas</h2>
+                    <h2 style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>Layers</h2>
                     <div className="layers-actions">
+                        {/* Undo / Redo — only in project mode */}
+                        {!sandboxMode && (onUndo || onRedo) && (
+                            <>
+                                <button
+                                    onClick={onUndo}
+                                    disabled={!canUndo}
+                                    title="Undo (Ctrl+Z)"
+                                    style={{ background: 'none', border: 'none', cursor: canUndo ? 'pointer' : 'not-allowed', opacity: canUndo ? 1 : 0.3 }}
+                                    aria-label="Undo"
+                                >
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>
+                                    </svg>
+                                </button>
+                                <button
+                                    onClick={onRedo}
+                                    disabled={!canRedo}
+                                    title="Redo (Ctrl+Shift+Z)"
+                                    style={{ background: 'none', border: 'none', cursor: canRedo ? 'pointer' : 'not-allowed', opacity: canRedo ? 1 : 0.3 }}
+                                    aria-label="Redo"
+                                >
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"/>
+                                    </svg>
+                                </button>
+                            </>
+                        )}
                         {/* Legacy CSV input kept for backward compat */}
                         <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept=".csv,.txt" onChange={handleFileChange} />
                         {/* Multi-format import input */}
                         <input type="file" ref={importFileRef} style={{ display: 'none' }} accept=".csv,.txt,.geojson,.json,.shp" onChange={handleImportFileChange} />
 
-                        <button onClick={openNewLayerModal} style={{ background: 'none', border: 'none', cursor: 'pointer' }} title="Nueva Capa" aria-label="Nueva Capa">
+                        <button onClick={openNewLayerModal} style={{ background: 'none', border: 'none', cursor: 'pointer' }} title="New Layer" aria-label="New Layer">
                             <PlusIcon style={{ width: 18, height: 18, color: '#64748b' }} />
                         </button>
 
@@ -453,18 +526,26 @@ export default function Sidebar({
                             <button
                                 onClick={() => setShowImportMenu(v => !v)}
                                 style={{ background: 'none', border: 'none', cursor: 'pointer' }}
-                                title="Importar Capa"
-                                aria-label="Importar Capa"
+                                title="Import Layer"
+                                aria-label="Import Layer"
+                                disabled={isImporting}
                             >
-                                <FolderOpenIcon style={{ width: 18, height: 18, color: '#64748b' }} />
+                                {isImporting ? (
+                                    <svg className="animate-spin" style={{ width: 18, height: 18, color: '#6366f1' }} fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                    </svg>
+                                ) : (
+                                    <FolderOpenIcon style={{ width: 18, height: 18, color: '#64748b' }} />
+                                )}
                             </button>
-                            {showImportMenu && (
+                            {showImportMenu && !isImporting && (
                                 <>
                                     <div className="fixed inset-0 z-30" onClick={() => setShowImportMenu(false)} />
                                     <div className="absolute right-0 top-7 z-40 bg-white border border-slate-200 rounded-xl shadow-lg py-1 w-48">
-                                        <p className="px-3 pt-1 pb-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Formato</p>
+                                        <p className="px-3 pt-1 pb-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Format</p>
                                         {[
-                                            { label: 'CSV con WKT', ext: '.csv,.txt', desc: 'WKT', onClick: () => fileInputRef.current?.click() },
+                                            { label: 'CSV with WKT', ext: '.csv,.txt', desc: 'WKT', onClick: () => fileInputRef.current?.click() },
                                             { label: 'GeoJSON', ext: '.geojson,.json', desc: 'GeoJSON', onClick: () => importFileRef.current?.click() },
                                             { label: 'Shapefile', ext: '.shp', desc: '.shp', onClick: () => importFileRef.current?.click() },
                                             { label: 'CSV lat/lng', ext: '.csv,.txt', desc: 'lat, lng cols', onClick: () => importFileRef.current?.click() },
@@ -534,19 +615,34 @@ export default function Sidebar({
                     );
                 })()}
 
-                {/* Objetos Section */}
+                {/* Features Section */}
                 <div className="layers-header" style={{ borderTop: 'none' }}>
-                    <h2 style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>Objetos</h2>
+                    <h2 style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }} className="flex items-center gap-2">
+                        Features
+                        {activeLayerId && (() => {
+                            const activeLayer = layers.find(l => l.id === activeLayerId);
+                            const count = activeLayer?.features?.features?.length ?? 0;
+                            const max = PLAN_LIMITS[plan].maxFeaturesPerLayer;
+                            if (max === null) return null;
+                            const pct = count / max;
+                            const color = pct >= 1 ? 'text-red-500' : pct >= 0.8 ? 'text-amber-500' : 'text-slate-400';
+                            return (
+                                <span className={`text-xs font-normal ${color}`}>
+                                    {count}/{max}
+                                </span>
+                            );
+                        })()}
+                    </h2>
                     <div className="layers-actions">
                         <button
                             onClick={() => setPasteModalOpen(true)}
                             className="flex items-center gap-1 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2 py-1 rounded-lg transition-colors"
-                            title="Pegar WKT"
+                            title="Paste WKT"
                         >
                             <ClipboardDocumentCheckIcon style={{ width: 13, height: 13 }} />
-                            Pegar WKT
+                            Paste WKT
                         </button>
-                        <button onClick={onAddFeature} style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: 4 }} title="Dibujar en mapa">
+                        <button onClick={onAddFeature} style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: 4 }} title="Draw on map">
                             <PlusIcon style={{ width: 18, height: 18, color: '#64748b' }} />
                         </button>
                     </div>
@@ -558,7 +654,7 @@ export default function Sidebar({
                             <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center mb-3">
                                 <ClipboardDocumentCheckIcon className="w-6 h-6 text-indigo-400" />
                             </div>
-                            <p className="text-sm font-semibold text-slate-600 mb-1">Pega tu geometría WKT</p>
+                            <p className="text-sm font-semibold text-slate-600 mb-1">Paste your WKT geometry</p>
                             <p className="text-[11px] text-slate-400 font-mono mb-4 leading-relaxed">
                                 POLYGON ((-77.03 -12.04,<br />-77.02 -12.05, ...))
                             </p>
@@ -567,9 +663,9 @@ export default function Sidebar({
                                 className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors shadow-sm"
                             >
                                 <ClipboardDocumentCheckIcon className="w-4 h-4" />
-                                Pegar WKT
+                                Paste WKT
                             </button>
-                            <p className="text-[11px] text-slate-400 mt-3">o dibuja directamente en el mapa →</p>
+                            <p className="text-[11px] text-slate-400 mt-3">or draw directly on the map →</p>
                         </div>
                     )}
                     <ul className="list-none p-0 m-0 px-4 pb-4">
@@ -703,7 +799,7 @@ export default function Sidebar({
                         <Link href="/settings" title="Configuración" className="btn-logout" style={{ color: '#64748b', textDecoration: 'none' }}>
                             <Cog6ToothIcon width={16} height={16} />
                         </Link>
-                        <button onClick={handleLogout} title="Cerrar Sesión" className="btn-logout">
+                        <button onClick={handleLogout} title="Sign out" className="btn-logout">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
                                 <polyline points="16 17 21 12 16 7" />
@@ -718,25 +814,25 @@ export default function Sidebar({
             <Modal
                 isOpen={!!modalAction}
                 onClose={() => setModalAction(null)}
-                title={modalAction === 'newProject' ? 'Nuevo Proyecto' : modalAction === 'newLayer' ? 'Nueva Capa' : 'Eliminar Capa'}
+                title={modalAction === 'newProject' ? 'New Project' : modalAction === 'newLayer' ? 'New Layer' : 'Delete Layer'}
                 footer={
                     <>
-                        <button onClick={() => setModalAction(null)} className="btn-outline">Cancelar</button>
+                        <button onClick={() => setModalAction(null)} className="btn-outline">Cancel</button>
                         {modalAction === 'deleteLayer' ? (
-                            <button onClick={confirmDeleteLayer} className="btn-primary bg-red-600 hover:bg-red-700">Eliminar</button>
+                            <button onClick={confirmDeleteLayer} className="btn-primary bg-red-600 hover:bg-red-700">Delete</button>
                         ) : (
-                            <button onClick={handleModalSubmit} className="btn-primary">Crear</button>
+                            <button onClick={handleModalSubmit} className="btn-primary">Create</button>
                         )}
                     </>
                 }
             >
                 {modalAction === 'deleteLayer' ? (
                     <p className="text-slate-600">
-                        ¿Estás seguro de que deseas eliminar esta capa? Esta acción no se puede deshacer.
+                        Are you sure you want to delete this layer? This action cannot be undone.
                     </p>
                 ) : (
                     <div className="flex flex-col gap-2">
-                        <label className="text-sm font-medium text-slate-700">Nombre</label>
+                        <label className="text-sm font-medium text-slate-700">Name</label>
                         <input
                             type="text"
                             value={inputValue}
@@ -753,11 +849,11 @@ export default function Sidebar({
             <Modal
                 isOpen={pasteModalOpen}
                 onClose={() => { setPasteModalOpen(false); setWktInput(""); }}
-                title="Pegar geometría WKT"
+                title="Paste WKT geometry"
                 footer={
                     <>
-                        <button onClick={() => { setPasteModalOpen(false); setWktInput(""); }} className="btn-outline">Cancelar</button>
-                        <button onClick={handlePasteWkt} className="btn-primary" disabled={!wktInput.trim()}>Visualizar</button>
+                        <button onClick={() => { setPasteModalOpen(false); setWktInput(""); }} className="btn-outline">Cancel</button>
+                        <button onClick={handlePasteWkt} className="btn-primary" disabled={!wktInput.trim()}>Visualize</button>
                     </>
                 }
             >

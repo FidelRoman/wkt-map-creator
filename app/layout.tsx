@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import PostHogProvider from '@/components/PostHogProvider';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://wktstudio.com';
 
@@ -88,7 +89,11 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <PostHogProvider>
+          {children}
+        </PostHogProvider>
+      </body>
     </html>
   );
 }

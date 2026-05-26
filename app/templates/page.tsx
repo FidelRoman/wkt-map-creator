@@ -34,7 +34,7 @@ function TemplateCard({ template, onUse, isUsing }: { template: Template; onUse:
                     {template.tags.includes('puntos') ? '·' : template.tags.includes('líneas') ? '~' : '□'}
                 </div>
                 <div className="absolute top-3 right-3 text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full border" style={{ color: template.color, borderColor: `${template.color}40`, background: `${template.color}12` }}>
-                    {template.featureCount} objetos
+                    {template.featureCount} features
                 </div>
             </div>
 
@@ -56,7 +56,7 @@ function TemplateCard({ template, onUse, isUsing }: { template: Template; onUse:
                     {isUsing ? (
                         <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
                     ) : <MapIcon className="w-4 h-4" />}
-                    {isUsing ? 'Creando...' : 'Usar template'}
+                    {isUsing ? 'Creating…' : 'Use template'}
                 </button>
             </div>
         </div>
@@ -76,14 +76,14 @@ function TemplatesApp() {
 
     const handleUseTemplate = async (template: Template) => {
         if (!user) {
-            showToast('Inicia sesión para usar templates', 'error');
+            showToast('Sign in to use templates', 'error');
             return;
         }
 
         const projectCount = userProfile?.usageCounters?.projectCount ?? 0;
         const check = checkLimit(plan, 'maxProjects', projectCount);
         if (!check.allowed) {
-            showToast(`Límite de proyectos alcanzado. Actualiza a Pro para crear más.`, 'error');
+            showToast('Project limit reached. Upgrade to Pro to create more.', 'error');
             return;
         }
 
@@ -98,8 +98,7 @@ function TemplatesApp() {
                 }))
             };
 
-            const { id } = await createProject(template.name, user.uid, user.displayName ?? 'Usuario', user.email ?? '');
-            // We need to immediately update the project with the template layer
+            const { id } = await createProject(template.name, user.uid, user.displayName ?? 'User', user.email ?? '');
             const { saveProjectLayers } = await import('@/lib/firebase');
             await saveProjectLayers(id, [{
                 id: 'layer_' + Date.now(),
@@ -108,11 +107,11 @@ function TemplatesApp() {
                 features: layerFeatures,
             }]);
 
-            showToast(`Proyecto "${template.name}" creado. Abriendo...`, 'success');
+            showToast(`Project "${template.name}" created. Opening…`, 'success');
             setTimeout(() => { window.location.href = `/${id}`; }, 1000);
         } catch (e) {
             console.error(e);
-            showToast('Error al crear el proyecto con template', 'error');
+            showToast('Error creating project from template', 'error');
             setUsingId(null);
         }
     };
@@ -126,22 +125,22 @@ function TemplatesApp() {
                     </Link>
                     <div className="flex items-center gap-2">
                         <SparklesIcon className="w-5 h-5 text-indigo-600" />
-                        <h1 className="text-base font-semibold text-slate-800">Templates de Mapas</h1>
+                        <h1 className="text-base font-semibold text-slate-800">Map Templates</h1>
                     </div>
-                    <span className="ml-auto text-xs text-slate-400">{TEMPLATES.length} templates disponibles</span>
+                    <span className="ml-auto text-xs text-slate-400">{TEMPLATES.length} templates available</span>
                 </div>
             </div>
 
             <div className="max-w-5xl mx-auto px-6 py-8">
                 <div className="mb-6">
-                    <h2 className="text-2xl font-bold text-slate-900">Empieza con datos reales</h2>
-                    <p className="text-slate-500 mt-1 text-sm">Crea un proyecto pre-cargado con datos geográficos en un solo clic. Los templates cuentan hacia tu límite de proyectos.</p>
+                    <h2 className="text-2xl font-bold text-slate-900">Start with real data</h2>
+                    <p className="text-slate-500 mt-1 text-sm">Create a project pre-loaded with geographic data in one click. Templates count toward your project limit.</p>
                 </div>
 
                 {!user && (
                     <div className="mb-6 p-4 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-indigo-800">
-                        <strong>Inicia sesión</strong> para usar templates y guardar proyectos.{' '}
-                        <Link href="/" className="underline font-medium">Ir al inicio →</Link>
+                        <strong>Sign in</strong> to use templates and save projects.{' '}
+                        <Link href="/" className="underline font-medium">Go to home →</Link>
                     </div>
                 )}
 
@@ -158,8 +157,8 @@ function TemplatesApp() {
 
                 <div className="mt-10 text-center">
                     <p className="text-sm text-slate-500">
-                        ¿Quieres explorar mapas de otros usuarios?{' '}
-                        <Link href="/explore" className="text-indigo-600 font-medium hover:underline">Explorar galería pública →</Link>
+                        Want to explore maps from other users?{' '}
+                        <Link href="/explore" className="text-indigo-600 font-medium hover:underline">Browse public gallery →</Link>
                     </p>
                 </div>
             </div>

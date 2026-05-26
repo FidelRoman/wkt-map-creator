@@ -10,10 +10,10 @@ function timeAgo(ts: any): string {
     try {
         const date = ts?.toDate ? ts.toDate() : new Date(ts?.seconds ? ts.seconds * 1000 : ts);
         const diff = (Date.now() - date.getTime()) / 1000;
-        if (diff < 60) return 'justo ahora';
-        if (diff < 3600) return `hace ${Math.floor(diff / 60)} min`;
-        if (diff < 86400) return `hace ${Math.floor(diff / 3600)} h`;
-        return `hace ${Math.floor(diff / 86400)} días`;
+        if (diff < 60) return 'just now';
+        if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+        if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+        return `${Math.floor(diff / 86400)}d ago`;
     } catch { return ''; }
 }
 
@@ -43,11 +43,11 @@ function ProjectCard({ project, onFork, isForking }: { project: Project; onFork:
 
             <div className="p-4">
                 <h3 className="font-semibold text-slate-800 text-sm truncate" title={project.name}>{project.name}</h3>
-                <p className="text-xs text-slate-400 mt-0.5 truncate">{project.ownerName || 'Anónimo'}</p>
+                <p className="text-xs text-slate-400 mt-0.5 truncate">{project.ownerName || 'Anonymous'}</p>
 
                 <div className="flex items-center gap-3 mt-3 text-xs text-slate-500">
-                    <span className="flex items-center gap-1"><MapIcon className="w-3.5 h-3.5" />{layers.length} {layers.length === 1 ? 'capa' : 'capas'}</span>
-                    <span className="flex items-center gap-1"><SquaresPlusIcon className="w-3.5 h-3.5" />{features} objetos</span>
+                    <span className="flex items-center gap-1"><MapIcon className="w-3.5 h-3.5" />{layers.length} {layers.length === 1 ? 'layer' : 'layers'}</span>
+                    <span className="flex items-center gap-1"><SquaresPlusIcon className="w-3.5 h-3.5" />{features} features</span>
                     <span className="ml-auto text-slate-400">{timeAgo(project.updatedAt)}</span>
                 </div>
 
@@ -56,15 +56,15 @@ function ProjectCard({ project, onFork, isForking }: { project: Project; onFork:
                         href={`/${project.id}`}
                         className="flex-1 text-center text-xs font-medium px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors"
                     >
-                        Ver mapa →
+                        View map →
                     </Link>
                     <button
                         onClick={() => onFork(project.id!)}
                         disabled={isForking}
                         className="text-xs font-medium px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
-                        title="Duplicar a mi cuenta"
+                        title="Duplicate to my account"
                     >
-                        {isForking ? '...' : 'Duplicar'}
+                        {isForking ? '…' : 'Fork'}
                     </button>
                 </div>
             </div>
@@ -91,16 +91,16 @@ export default function ExplorePage() {
 
     const handleFork = async (projectId: string) => {
         if (!user) {
-            showToast('Inicia sesión para duplicar proyectos', 'error');
+            showToast('Sign in to fork projects', 'error');
             return;
         }
         setForkingId(projectId);
         try {
-            const newId = await forkProject(projectId, user.uid, user.displayName ?? 'Usuario', user.email ?? '');
-            showToast('Proyecto duplicado. Abriendo...', 'success');
+            const newId = await forkProject(projectId, user.uid, user.displayName ?? 'User', user.email ?? '');
+            showToast('Project forked. Opening…', 'success');
             setTimeout(() => { window.location.href = `/${newId}`; }, 1200);
-        } catch (e) {
-            showToast('Error al duplicar el proyecto', 'error');
+        } catch {
+            showToast('Error forking project', 'error');
         } finally {
             setForkingId(null);
         }
@@ -120,11 +120,11 @@ export default function ExplorePage() {
                     </Link>
                     <div className="flex items-center gap-2">
                         <GlobeAltIcon className="w-5 h-5 text-indigo-600" />
-                        <h1 className="text-base font-semibold text-slate-800">Explorar mapas públicos</h1>
+                        <h1 className="text-base font-semibold text-slate-800">Explore public maps</h1>
                     </div>
                     <input
                         type="search"
-                        placeholder="Buscar mapas..."
+                        placeholder="Search maps…"
                         value={search}
                         onChange={e => setSearch(e.target.value)}
                         className="ml-auto w-52 px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
@@ -148,17 +148,19 @@ export default function ExplorePage() {
                 ) : filtered.length === 0 ? (
                     <div className="text-center py-20">
                         <GlobeAltIcon className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                        <p className="text-slate-500 font-medium">{search ? 'Sin resultados para tu búsqueda' : 'Aún no hay proyectos públicos'}</p>
+                        <p className="text-slate-500 font-medium">
+                            {search ? 'No results for your search' : 'No public projects yet'}
+                        </p>
                         <p className="text-slate-400 text-sm mt-1">
-                            {search ? 'Intenta con otro término.' : 'Sé el primero en compartir un proyecto público.'}
+                            {search ? 'Try a different term.' : 'Be the first to share a public project.'}
                         </p>
                         <Link href="/" className="mt-4 inline-block text-sm text-indigo-600 font-medium hover:underline">
-                            Crear un proyecto →
+                            Create a project →
                         </Link>
                     </div>
                 ) : (
                     <>
-                        <p className="text-xs text-slate-400 mb-4">{filtered.length} proyecto{filtered.length !== 1 ? 's' : ''} público{filtered.length !== 1 ? 's' : ''}</p>
+                        <p className="text-xs text-slate-400 mb-4">{filtered.length} public project{filtered.length !== 1 ? 's' : ''}</p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                             {filtered.map(project => (
                                 <ProjectCard

@@ -40,7 +40,7 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-xl font-bold text-slate-800 mb-3">4. Free Plan and Paid Plans</h2>
-            <p>The free plan is subject to the limits published on the pricing page. Paid plans are processed through Lemon Squeezy and are subject to their billing terms. Subscriptions renew automatically and you may cancel at any time from your customer portal. Prices are listed in USD and may change with 30 days&apos; notice.</p>
+            <p>The free plan is subject to the limits published on the pricing page. Paid plans are processed through Paddle and are subject to their billing terms. Subscriptions renew automatically and you may cancel at any time from your customer portal. Prices are listed in USD and may change with 30 days&apos; notice.</p>
           </section>
 
           <section>

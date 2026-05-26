@@ -15,7 +15,7 @@ export interface PlanLimits {
   hasWebhooks: boolean;
   hasTeamWorkspaces: boolean;
   hasWhiteLabel: boolean;
-  apiRateLimitPerDay: number | null;
+  apiRateLimitPerMonth: number | null;
 }
 
 export interface PlanInfo {
@@ -44,7 +44,7 @@ export const PLAN_LIMITS: Record<PlanId, PlanLimits> = {
     hasWebhooks: false,
     hasTeamWorkspaces: false,
     hasWhiteLabel: false,
-    apiRateLimitPerDay: null,
+    apiRateLimitPerMonth: null,
   },
   pro: {
     maxProjects: null,
@@ -60,7 +60,7 @@ export const PLAN_LIMITS: Record<PlanId, PlanLimits> = {
     hasWebhooks: false,
     hasTeamWorkspaces: false,
     hasWhiteLabel: false,
-    apiRateLimitPerDay: 1000,
+    apiRateLimitPerMonth: 1000,
   },
 };
 
@@ -96,7 +96,7 @@ export const PLANS: PlanInfo[] = [
       '5,000 features per layer',
       '5 collaborators per project',
       'Visual Attribute Table',
-      'REST API per project (1,000 calls/day)',
+      'REST API per project (1,000 calls/month)',
       'KML export',
       'Version history (20 snapshots)',
       'Spatial analysis: Buffer, Union',

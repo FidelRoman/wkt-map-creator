@@ -3,6 +3,7 @@ import { useEffect, useState, createContext, useContext, useCallback } from "rea
 import { onAuthStateChanged, User } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { getUserProfile, createUserProfile, type UserProfile } from "@/lib/firebase";
+import { analytics, identify } from "@/lib/analytics";
 
 
 interface AuthContextType {
@@ -28,12 +29,22 @@ export default function AuthWrapper({ children }: { children: React.ReactNode })
 
     const loadProfile = useCallback(async (firebaseUser: User) => {
         let profile = await getUserProfile(firebaseUser.uid);
+        const isNewUser = !profile;
         if (!profile) {
             profile = await createUserProfile(
                 firebaseUser.uid,
                 firebaseUser.email ?? '',
                 firebaseUser.displayName ?? ''
             );
+        }
+        // Fire analytics after we know the plan
+        if (profile) {
+            identify(firebaseUser.uid, { email: firebaseUser.email ?? '', plan: profile.plan });
+            if (isNewUser) {
+                analytics.signUp();
+            } else {
+                analytics.signIn(profile.plan);
+            }
         }
         // Fallback: if webhook missed and period already ended, downgrade locally
         if (

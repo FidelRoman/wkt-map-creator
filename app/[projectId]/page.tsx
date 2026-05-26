@@ -1,16 +1,19 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { useParams } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import AuthWrapper, { useAuth } from '@/components/AuthWrapper';
 import { Project, Layer, getUserProjects, getProject, saveProjectLayers, forkProject } from '@/lib/firebase';
+import VersionHistoryPanel from '@/components/VersionHistoryPanel';
+import { analytics } from '@/lib/analytics';
 import { parseWKT, calculateStats, generateColor } from '@/lib/map-utils';
 import { parseCSVLine } from '@/lib/csv-utils';
 import Modal from '@/components/Modal';
 import Toast, { type ToastType } from '@/components/Toast';
 import UpgradeModal from '@/components/UpgradeModal';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import { stringify } from 'wellknown';
 import { checkLimit, hasFeature } from '@/lib/plans';
 // @ts-ignore
@@ -38,6 +41,69 @@ function ProjectApp() {
     const [currentProject, setCurrentProject] = useState<Project | null>(null);
     const [layers, setLayers] = useState<Layer[]>([]);
     const [activeLayerId, setActiveLayerId] = useState<string | null>(null);
+
+    // ── Undo / Redo ────────────────────────────────────────────────────────────
+    const MAX_HISTORY = 10;
+    const [layerPast, setLayerPast] = useState<Layer[][]>([]);
+    const [layerFuture, setLayerFuture] = useState<Layer[][]>([]);
+    // Use a ref to gate history tracking — we don't want to track the initial load
+    const trackHistoryRef = useRef(false);
+
+    /** Wrap setLayers for undoable operations (drawing, imports, spatial ops) */
+    const setLayersUndoable = useCallback((action: Layer[] | ((prev: Layer[]) => Layer[])) => {
+        setLayers(prev => {
+            const next = typeof action === 'function' ? action(prev) : action;
+            if (trackHistoryRef.current) {
+                setLayerPast(p => [...p.slice(-(MAX_HISTORY - 1)), prev]);
+                setLayerFuture([]);
+            }
+            return next;
+        });
+    }, []);
+
+    const undo = useCallback(() => {
+        setLayerPast(past => {
+            if (past.length === 0) return past;
+            const previous = past[past.length - 1];
+            setLayers(current => {
+                setLayerFuture(f => [current, ...f.slice(0, MAX_HISTORY - 1)]);
+                return previous;
+            });
+            return past.slice(0, -1);
+        });
+    }, []);
+
+    const redo = useCallback(() => {
+        setLayerFuture(future => {
+            if (future.length === 0) return future;
+            const next = future[0];
+            setLayers(current => {
+                setLayerPast(p => [...p.slice(-(MAX_HISTORY - 1)), current]);
+                return next;
+            });
+            return future.slice(1);
+        });
+    }, []);
+
+    // Keyboard shortcuts (Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y)
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (!trackHistoryRef.current) return;
+            const tag = (e.target as HTMLElement)?.tagName;
+            // Don't intercept when typing in inputs, textareas, etc.
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) return;
+            if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+                e.preventDefault();
+                if (e.shiftKey) redo(); else undo();
+            }
+            if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+                e.preventDefault();
+                redo();
+            }
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [undo, redo]);
 
     // States for feedback
     const [drawRequest, setDrawRequest] = useState<{ type: 'polygon' | 'point', id: number } | null>(null);
@@ -75,6 +141,7 @@ function ProjectApp() {
 
     // States for feedback
     const [isSaving, setIsSaving] = useState(false);
+    const [isImporting, setIsImporting] = useState(false);
 
     // Initial Load Projects for Sidebar context
     useEffect(() => {
@@ -102,6 +169,7 @@ function ProjectApp() {
 
     // Access Control
     const [accessDenied, setAccessDenied] = useState(false);
+
 
     useEffect(() => {
         if (loading) return; // Waiting for auth to initialize
@@ -158,18 +226,23 @@ function ProjectApp() {
     };
 
     const loadProject = (project: Project) => {
+        trackHistoryRef.current = false; // pause tracking during load
         setCurrentProject(project);
         let loadedLayers = project.layers || [];
         if (loadedLayers.length === 0) {
             loadedLayers = [{ id: 'l1', name: 'Base', visible: true, features: { type: 'FeatureCollection', features: [] } }];
         }
         setLayers(loadedLayers);
+        setLayerPast([]);
+        setLayerFuture([]);
         setActiveLayerId(loadedLayers[0].id);
-        setIsSaving(false); // Reset saving state after load
+        setIsSaving(false);
+        // Enable history after initial load settles
+        setTimeout(() => { trackHistoryRef.current = true; }, 300);
     };
 
     const handleUpdateLayer = (layerId: string, features: any) => {
-        setLayers(prev => prev.map(l => l.id === layerId ? { ...l, features } : l));
+        setLayersUndoable(prev => prev.map(l => l.id === layerId ? { ...l, features } : l));
     };
 
     // --- Handlers for Sidebar ---
@@ -236,15 +309,15 @@ function ProjectApp() {
             const newLayerId = 'layer_' + Date.now();
             const newLayer: Layer = {
                 id: newLayerId,
-                name: file.name.replace('.csv', '').replace('.txt', '') || 'Capa Importada',
+                name: file.name.replace('.csv', '').replace('.txt', '') || 'Imported Layer',
                 visible: true,
                 features: { type: 'FeatureCollection', features: newFeatures }
             };
-            setLayers(prev => [...prev, newLayer]);
+            setLayersUndoable(prev => [...prev, newLayer]);
             setActiveLayerId(newLayerId);
-            showToast(`Importados ${addedCount} objetos en nueva capa "${newLayer.name}".`, 'success');
+            showToast(`Imported ${addedCount} features into new layer "${newLayer.name}".`, 'success');
         } else {
-            showToast('No se encontraron geometrías WKT válidas en el archivo.', 'warning');
+            showToast('No valid WKT geometries found in the file. Make sure rows contain a WKT column.', 'warning');
         }
     };
 
@@ -276,15 +349,15 @@ function ProjectApp() {
                     },
                 }));
 
-            if (normalized.length === 0) { showToast('No se encontraron geometrías en el archivo GeoJSON.', 'warning'); return; }
+            if (normalized.length === 0) { showToast('No geometries found in the GeoJSON file.', 'warning'); return; }
 
             const newLayerId = 'layer_' + Date.now();
-            const layerName = file.name.replace(/\.(geojson|json)$/i, '') || 'Capa GeoJSON';
-            setLayers(prev => [...prev, { id: newLayerId, name: layerName, visible: true, features: { type: 'FeatureCollection', features: normalized } }]);
+            const layerName = file.name.replace(/\.(geojson|json)$/i, '') || 'GeoJSON Layer';
+            setLayersUndoable(prev => [...prev, { id: newLayerId, name: layerName, visible: true, features: { type: 'FeatureCollection', features: normalized } }]);
             setActiveLayerId(newLayerId);
-            showToast(`Importados ${normalized.length} objetos desde "${layerName}".`, 'success');
+            showToast(`Imported ${normalized.length} features from "${layerName}".`, 'success');
         } catch {
-            showToast('Error leyendo el archivo GeoJSON. Verifica que sea JSON válido.', 'error');
+            showToast('Error reading GeoJSON file. Make sure it is valid JSON.', 'error');
         }
     };
 
@@ -300,25 +373,25 @@ function ProjectApp() {
                 result = await source.read();
             }
 
-            if (features.length === 0) { showToast('No se encontraron geometrías en el Shapefile.', 'warning'); return; }
+            if (features.length === 0) { showToast('No geometries found in the Shapefile.', 'warning'); return; }
 
             const normalized = features.map((f, i) => ({
                 ...f,
                 properties: {
                     ...f.properties,
-                    name: f.properties?.name ?? f.properties?.NAME ?? f.properties?.nombre ?? `Objeto ${i + 1}`,
+                    name: f.properties?.name ?? f.properties?.NAME ?? f.properties?.nombre ?? `Feature ${i + 1}`,
                     color: generateColor(),
                 },
             }));
 
             const newLayerId = 'layer_' + Date.now();
             const layerName = file.name.replace(/\.shp$/i, '') || 'Shapefile';
-            setLayers(prev => [...prev, { id: newLayerId, name: layerName, visible: true, features: { type: 'FeatureCollection', features: normalized } }]);
+            setLayersUndoable(prev => [...prev, { id: newLayerId, name: layerName, visible: true, features: { type: 'FeatureCollection', features: normalized } }]);
             setActiveLayerId(newLayerId);
-            showToast(`Importados ${normalized.length} objetos desde "${layerName}".`, 'success');
+            showToast(`Imported ${normalized.length} features from "${layerName}".`, 'success');
         } catch (err) {
             console.error(err);
-            showToast('Error leyendo Shapefile. Asegúrate de seleccionar un archivo .shp válido.', 'error');
+            showToast('Error reading Shapefile. Make sure you selected a valid .shp file.', 'error');
         }
     };
 
@@ -333,7 +406,7 @@ function ProjectApp() {
         const nameIdx = headers.findIndex(h => ['name', 'nombre', 'label', 'titulo', 'title'].includes(h));
 
         if (latIdx === -1 || lngIdx === -1) {
-            showToast('Columnas lat/lng no encontradas. Usa encabezados: lat, lng (o latitude/longitude).', 'warning');
+            showToast('lat/lng columns not found. Use headers: lat, lng (or latitude/longitude).', 'warning');
             return;
         }
 
@@ -353,13 +426,22 @@ function ProjectApp() {
             features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [lng, lat] }, properties: { name, color: generateColor(), ...extra } });
         }
 
-        if (features.length === 0) { showToast('No se encontraron coordenadas válidas en el archivo.', 'warning'); return; }
+        if (features.length === 0) { showToast('No valid coordinates found in the file.', 'warning'); return; }
 
         const newLayerId = 'layer_' + Date.now();
-        const layerName = file.name.replace(/\.(csv|txt)$/i, '') || 'Puntos';
-        setLayers(prev => [...prev, { id: newLayerId, name: layerName, visible: true, features: { type: 'FeatureCollection', features } }]);
+        const layerName = file.name.replace(/\.(csv|txt)$/i, '') || 'Points';
+        setLayersUndoable(prev => [...prev, { id: newLayerId, name: layerName, visible: true, features: { type: 'FeatureCollection', features } }]);
         setActiveLayerId(newLayerId);
-        showToast(`Importados ${features.length} puntos desde "${layerName}".`, 'success');
+        showToast(`Imported ${features.length} points from "${layerName}".`, 'success');
+    };
+
+    const handleImportFileWithLoading = async (file: File) => {
+        setIsImporting(true);
+        try {
+            await handleImportFile(file);
+        } finally {
+            setIsImporting(false);
+        }
     };
 
     const handleImportFile = async (file: File) => {
@@ -379,13 +461,15 @@ function ProjectApp() {
                 await handleImportCsv(file);
             }
         } else {
-            showToast('Formato no soportado. Usa .csv, .geojson, o .shp', 'warning');
+            showToast('Unsupported format. Use .csv, .geojson, or .shp', 'warning');
         }
     };
 
     const handleExportLayer = (layerId: string, format: 'csv' | 'geojson' | 'kml' = 'csv') => {
         const layer = layers.find(l => l.id === layerId);
         if (!layer) return;
+
+        analytics.exportStarted(format);
 
         if (format === 'kml') {
             if (!hasFeature(plan, 'hasKmlExport')) {
@@ -447,11 +531,11 @@ function ProjectApp() {
         try {
             const wkt = stringify(feature.geometry);
             navigator.clipboard.writeText(wkt).then(() => {
-                showToast('WKT copiado al portapapeles', 'success');
+                showToast('WKT copied to clipboard', 'success');
             });
         } catch (e) {
             console.error("Error copying WKT", e);
-            showToast('Error generando WKT', 'error');
+            showToast('Error generating WKT', 'error');
         }
     };
 
@@ -469,16 +553,19 @@ function ProjectApp() {
         setFlyToRequest(feature);
     };
 
+    const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
+
     const [isForkingProject, setIsForkingProject] = useState(false);
     const handleForkProject = async () => {
         if (!user || !currentProject?.id) return;
         setIsForkingProject(true);
         try {
             const newId = await forkProject(currentProject.id, user.uid, user.displayName ?? 'Usuario', user.email ?? '');
-            showToast('Proyecto duplicado a tu cuenta. Abriendo...', 'success');
+            analytics.projectForked();
+            showToast('Project forked to your account. Opening…', 'success');
             setTimeout(() => { window.location.href = `/${newId}`; }, 1200);
         } catch (e) {
-            showToast('Error al duplicar el proyecto', 'error');
+            showToast('Error forking project', 'error');
             setIsForkingProject(false);
         }
     };
@@ -489,33 +576,55 @@ function ProjectApp() {
         return (
             <div className="flex h-screen w-screen items-center justify-center bg-gray-50 flex-col gap-4">
                 <div className="p-4 bg-white rounded-xl shadow-sm border border-slate-200 text-center max-w-md">
-                    <h1 className="text-xl font-bold text-slate-800 mb-2">Acceso Restringido</h1>
-                    <p className="text-slate-600 mb-4 text-sm">Este proyecto es privado y no tienes permisos para verlo.</p>
+                    <h1 className="text-xl font-bold text-slate-800 mb-2">Access Denied</h1>
+                    <p className="text-slate-600 mb-4 text-sm">This project is private and you don't have permission to view it.</p>
                     <a href="/" className="inline-block px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors">
-                        Volver al Inicio
+                        Back to Dashboard
                     </a>
                 </div>
             </div>
         );
     }
 
-    if (loading) return <div>Cargando...</div>;
+    if (loading) return (
+        <div className="flex h-screen w-screen items-center justify-center bg-slate-50">
+            <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+        </div>
+    );
 
     return (
+        <ErrorBoundary>
         <div className="flex h-screen w-screen overflow-hidden">
+            {/* View-mode banner for collaborators with viewer role */}
+            {isReadOnly && !accessDenied && currentProject && (
+                <div className="fixed top-0 left-0 right-0 z-[500] bg-amber-50 border-b border-amber-200 px-4 py-1.5 flex items-center justify-center gap-2 text-xs text-amber-800">
+                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                    <span><strong>View mode</strong> — your changes are local and won't be saved.</span>
+                    {currentProject.isPublic && (
+                        <button
+                            onClick={handleForkProject}
+                            disabled={isForkingProject}
+                            className="ml-2 underline font-semibold hover:text-amber-900"
+                        >
+                            Fork to edit →
+                        </button>
+                    )}
+                </div>
+            )}
             <Sidebar
                 projects={projects}
                 currentProject={currentProject}
                 layers={layers}
-                setLayers={setLayers}
+                setLayers={setLayersUndoable}
                 activeLayerId={activeLayerId}
                 setActiveLayerId={handleSetActiveLayerId}
                 onLoadProject={loadProject}
                 isSaving={isSaving}
                 isReadOnly={isReadOnly}
+                isImporting={isImporting}
                 // New Props
                 onImportCsv={handleImportCsv}
-                onImportFile={handleImportFile}
+                onImportFile={handleImportFileWithLoading}
                 onExportLayer={handleExportLayer}
                 onAddFeature={handleAddFeature}
                 onCopyWkt={handleCopyWkt}
@@ -527,9 +636,16 @@ function ProjectApp() {
                 onToggleSelection={handleSelectionChange}
                 onClearSelection={() => setSelectedIndices(new Set())}
                 onShowToast={showToast}
+                // Version history
+                onOpenVersionHistory={!isReadOnly ? () => setVersionHistoryOpen(true) : undefined}
+                // Undo / Redo
+                onUndo={!isReadOnly ? undo : undefined}
+                onRedo={!isReadOnly ? redo : undefined}
+                canUndo={layerPast.length > 0}
+                canRedo={layerFuture.length > 0}
             />
-            <div className="flex-1 relative">
-                {canFork && (
+            <div className={`flex-1 relative ${isReadOnly && currentProject ? 'pt-8' : ''}`}>
+                {canFork && !isReadOnly && (
                     <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[400]">
                         <button
                             onClick={handleForkProject}
@@ -541,7 +657,7 @@ function ProjectApp() {
                             ) : (
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                             )}
-                            {isForkingProject ? 'Duplicando...' : 'Duplicar a mi cuenta'}
+                            {isForkingProject ? 'Forking…' : 'Fork to my account'}
                         </button>
                     </div>
                 )}
@@ -577,7 +693,28 @@ function ProjectApp() {
                 reason={upgradeModalReason}
                 onShowToast={showToast}
             />
+
+            {currentProject && user && (
+                <VersionHistoryPanel
+                    isOpen={versionHistoryOpen}
+                    onClose={() => setVersionHistoryOpen(false)}
+                    projectId={projectId}
+                    ownerId={user.uid}
+                    layers={layers}
+                    onRestore={(restoredLayers) => {
+                        setLayers(restoredLayers);
+                        setLayerPast([]);
+                        setLayerFuture([]);
+                    }}
+                    plan={plan}
+                    onUpgradeRequired={() => {
+                        setVersionHistoryOpen(false);
+                        setUpgradeModalReason({ type: 'feature', featureKey: 'hasVersionHistory', requiredPlan: 'pro' });
+                    }}
+                />
+            )}
         </div>
+        </ErrorBoundary>
     );
 }
 

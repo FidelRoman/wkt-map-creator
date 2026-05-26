@@ -1,0 +1,272 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "WKT Studio REST API",
+    "version": "1.0.0",
+    "description": "Programmatically read and write geographic features in your WKT Studio projects. All responses are GeoJSON or JSON. Requires a Pro plan API key.",
+    "contact": {
+      "name": "WKT Studio",
+      "url": "https://wktstudio.com"
+    },
+    "license": {
+      "name": "Proprietary"
+    }
+  },
+  "servers": [
+    { "url": "https://wktstudio.com", "description": "Production" }
+  ],
+  "security": [{ "bearerAuth": [] }],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "API Key",
+        "description": "Your WKT Studio API key. Generate one at https://wktstudio.com/settings under API Keys."
+      }
+    },
+    "schemas": {
+      "GeoJSONGeometry": {
+        "type": "object",
+        "description": "A GeoJSON geometry object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["Point","LineString","Polygon","MultiPoint","MultiLineString","MultiPolygon","GeometryCollection"]
+          },
+          "coordinates": { "type": "array" }
+        },
+        "required": ["type"]
+      },
+      "Feature": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string", "enum": ["Feature"] },
+          "geometry": { "$ref": "#/components/schemas/GeoJSONGeometry" },
+          "properties": { "type": "object", "nullable": true }
+        },
+        "required": ["type", "geometry"]
+      },
+      "FeatureCollection": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string", "enum": ["FeatureCollection"] },
+          "features": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Feature" }
+          }
+        },
+        "required": ["type", "features"]
+      },
+      "Layer": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "visible": { "type": "boolean" },
+          "features": { "$ref": "#/components/schemas/FeatureCollection" }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": { "type": "string" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/v1/projects/{projectId}/features": {
+      "parameters": [
+        {
+          "name": "projectId",
+          "in": "path",
+          "required": true,
+          "schema": { "type": "string" },
+          "description": "The ID of the project"
+        }
+      ],
+      "get": {
+        "summary": "List features",
+        "description": "Returns all features from all layers in the project as a GeoJSON FeatureCollection.",
+        "operationId": "listFeatures",
+        "tags": ["Features"],
+        "parameters": [
+          {
+            "name": "layerId",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" },
+            "description": "Filter results to a single layer by ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A GeoJSON FeatureCollection",
+            "headers": {
+              "X-Rate-Limit-Remaining": {
+                "schema": { "type": "integer" },
+                "description": "API calls remaining this month"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FeatureCollection" },
+                "example": {
+                  "type": "FeatureCollection",
+                  "features": [
+                    {
+                      "type": "Feature",
+                      "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [[[-77.03,-12.04],[-77.02,-12.04],[-77.02,-12.03],[-77.03,-12.03],[-77.03,-12.04]]]
+                      },
+                      "properties": { "name": "Zone A", "color": "#6366f1" }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "description": "Missing or invalid API key", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "403": { "description": "API access requires a Pro plan", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "404": { "description": "Project not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "429": { "description": "Monthly API limit reached", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      },
+      "post": {
+        "summary": "Add a feature",
+        "description": "Adds a GeoJSON Feature to a specific layer in the project.",
+        "operationId": "addFeature",
+        "tags": ["Features"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["layerId", "feature"],
+                "properties": {
+                  "layerId": { "type": "string", "description": "The layer to add the feature to" },
+                  "feature": { "$ref": "#/components/schemas/Feature" }
+                }
+              },
+              "example": {
+                "layerId": "layer_1",
+                "feature": {
+                  "type": "Feature",
+                  "geometry": { "type": "Point", "coordinates": [-77.03, -12.04] },
+                  "properties": { "name": "My point" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Feature added successfully",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "success": { "type": "boolean" } } } } }
+          },
+          "400": { "description": "Invalid GeoJSON", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "401": { "description": "Missing or invalid API key", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "429": { "description": "Monthly API limit reached", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      },
+      "delete": {
+        "summary": "Delete a feature",
+        "description": "Removes a feature from a layer by index.",
+        "operationId": "deleteFeature",
+        "tags": ["Features"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["layerId", "featureIndex"],
+                "properties": {
+                  "layerId": { "type": "string" },
+                  "featureIndex": { "type": "integer", "description": "Zero-based index of the feature to delete" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Feature deleted", "content": { "application/json": { "schema": { "type": "object", "properties": { "success": { "type": "boolean" } } } } } },
+          "401": { "description": "Missing or invalid API key", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "404": { "description": "Project or feature not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/api/v1/projects/{projectId}/layers": {
+      "parameters": [
+        {
+          "name": "projectId",
+          "in": "path",
+          "required": true,
+          "schema": { "type": "string" }
+        }
+      ],
+      "get": {
+        "summary": "List layers",
+        "description": "Returns all layers in the project (metadata only, no features).",
+        "operationId": "listLayers",
+        "tags": ["Layers"],
+        "responses": {
+          "200": {
+            "description": "Array of layers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "layers": { "type": "array", "items": { "$ref": "#/components/schemas/Layer" } }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "Unauthorized" }
+        }
+      },
+      "post": {
+        "summary": "Create a layer",
+        "description": "Creates a new layer in the project, optionally pre-populated with features.",
+        "operationId": "createLayer",
+        "tags": ["Layers"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "features": {
+                    "type": "array",
+                    "items": { "$ref": "#/components/schemas/Feature" },
+                    "description": "Optional initial features"
+                  }
+                }
+              },
+              "example": { "name": "Lima polygons", "features": [] }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Layer created",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "layerId": { "type": "string" } } } } }
+          },
+          "401": { "description": "Unauthorized" }
+        }
+      }
+    }
+  },
+  "tags": [
+    { "name": "Features", "description": "Read and write geographic features" },
+    { "name": "Layers", "description": "Manage project layers" }
+  ]
+}

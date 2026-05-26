@@ -16,6 +16,8 @@ import {
   PencilIcon, ShareIcon, CheckIcon, SparklesIcon, XMarkIcon, Cog6ToothIcon,
 } from '@heroicons/react/24/outline';
 import Toast, { type ToastType } from '@/components/Toast';
+import { analytics } from '@/lib/analytics';
+import OnboardingTour from '@/components/OnboardingTour';
 
 type UpgradeReason =
   | { type: 'limit'; limitKey: LimitKey; current: number; limit: number; requiredPlan: PlanId }
@@ -311,7 +313,7 @@ function LandingPage() {
           </div>
 
           <p className="text-center text-xs text-slate-400 mt-6">
-            Secure payment via Lemon Squeezy · Cancel anytime · No hidden fees
+            Secure payment via Paddle · Cancel anytime · No hidden fees
           </p>
         </div>
       </section>
@@ -459,6 +461,8 @@ function Dashboard() {
   const [upgradeSuccess, setUpgradeSuccess] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const showToast = (message: string, type: ToastType = 'info') => setToast({ message, type });
+  const [projectsLoaded, setProjectsLoaded] = useState(false);
+  const [onboardingDone, setOnboardingDone] = useState(false);
 
   useEffect(() => {
     const handleClick = () => setMenuOpenId(null);
@@ -483,6 +487,7 @@ function Dashboard() {
     if (!user || !user.email) return;
     const pros = await getUserProjects(user.uid);
     setProjects(pros);
+    setProjectsLoaded(true);
     const shared = await getSharedProjects(user.email);
     setSharedProjects(shared);
   };
@@ -514,6 +519,7 @@ function Dashboard() {
         user.displayName || "Usuario",
         user.email || ""
       );
+      analytics.projectCreated(newProjectName);
       router.push(`/${id}`);
     } catch (e) {
       console.error(e);
@@ -595,6 +601,7 @@ function Dashboard() {
             )}
             <span className="text-sm font-semibold text-slate-800 truncate max-w-[160px]">{user?.displayName}</span>
             <button
+              data-tour="plan-badge"
               onClick={() => { if (plan === 'free') setShowUpgrade(true); }}
               title={plan === 'free' ? 'Upgrade to Pro' : `Plan ${plan}`}
               className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-white text-xs font-bold flex-shrink-0 ${plan === 'free' ? 'cursor-pointer hover:opacity-80 transition-opacity' : 'cursor-default'}`}
@@ -604,7 +611,7 @@ function Dashboard() {
               {plan === 'pro' ? 'Pro' : 'Free'}
             </button>
           </div>
-          <Link href="/settings" className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors" title="Settings">
+          <Link data-tour="settings-link" href="/settings" className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors" title="Settings">
             <Cog6ToothIcon className="w-5 h-5" />
           </Link>
         </div>
@@ -612,7 +619,7 @@ function Dashboard() {
 
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Quick links */}
-        <div className="flex gap-2 mb-6 flex-wrap">
+        <div data-tour="quick-links" className="flex gap-2 mb-6 flex-wrap">
           {[
             { href: '/templates', label: '⚡ Templates', desc: 'Start with real data' },
             { href: '/explore', label: '🌍 Explore', desc: 'Public maps' },
@@ -650,6 +657,7 @@ function Dashboard() {
             )}
           </div>
           <button
+            data-tour="new-project"
             onClick={() => { setNewProjectName(""); setIsModalOpen(true); }}
             className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-medium transition-colors shadow-sm shadow-indigo-200"
           >
@@ -886,6 +894,11 @@ function Dashboard() {
 
       <UpgradeModal isOpen={showUpgrade} onClose={() => setShowUpgrade(false)} reason={upgradeReason} onShowToast={showToast} />
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
+      {/* Onboarding tour — shows whenever the user has no projects yet. */}
+      {user && projectsLoaded && projects.length === 0 && !onboardingDone && (
+        <OnboardingTour userId={user.uid} onComplete={() => setOnboardingDone(true)} />
+      )}
     </div>
   );
 }

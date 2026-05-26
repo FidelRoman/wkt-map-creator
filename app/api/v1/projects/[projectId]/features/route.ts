@@ -5,29 +5,57 @@ import { stringify } from 'wellknown';
 
 export const runtime = 'nodejs';
 
-async function verifyApiKey(apiKey: string): Promise<{ uid: string; plan: string } | null> {
-    const db = getAdminDb();
-    const snapshot = await db
-        .collection('users')
-        .where('apiKeys', 'array-contains-any', [{ key: apiKey }])
-        .limit(1)
-        .get();
+const CORS = { 'Access-Control-Allow-Origin': '*' } as const;
+const monthlyLimit = PLAN_LIMITS['pro'].apiRateLimitPerMonth ?? 1000;
 
-    if (!snapshot.empty) {
-        const data = snapshot.docs[0].data();
-        return { uid: snapshot.docs[0].id, plan: data.plan ?? 'free' };
+/**
+ * Checks the monthly rate limit for a user and increments the counter.
+ * Returns a 429 NextResponse if the limit is reached, or null if the call is allowed.
+ */
+async function checkRateLimit(uid: string): Promise<{ error: NextResponse } | { remaining: number }> {
+    const db = getAdminDb();
+    const userDoc = await db.collection('users').doc(uid).get();
+    const apiCallsThisMonth = userDoc.data()?.usageCounters?.apiCallsThisMonth ?? 0;
+
+    if (apiCallsThisMonth >= monthlyLimit) {
+        return {
+            error: NextResponse.json(
+                { error: `Monthly API limit reached (${monthlyLimit} calls/month). Resets on your next billing date.` },
+                { status: 429, headers: CORS }
+            )
+        };
     }
 
-    // Fallback: search by scanning (Firestore doesn't support nested array-contains-any easily)
-    const allUsersSnapshot = await db.collection('users').where('plan', '==', 'pro').get();
-    for (const userDoc of allUsersSnapshot.docs) {
+    await db.collection('users').doc(uid).update({
+        'usageCounters.apiCallsThisMonth': apiCallsThisMonth + 1,
+    });
+
+    return { remaining: monthlyLimit - apiCallsThisMonth - 1 };
+}
+
+async function verifyApiKey(apiKey: string): Promise<{ uid: string; plan: string } | null> {
+    const db = getAdminDb();
+
+    // ── Fast path: O(1) index lookup (new keys written since Sprint 3) ─────────
+    const indexDoc = await db.collection('apiKeyIndex').doc(apiKey).get();
+    if (indexDoc.exists) {
+        const { uid } = indexDoc.data() as { uid: string };
+        const userDoc = await db.collection('users').doc(uid).get();
+        if (userDoc.exists) {
+            return { uid, plan: userDoc.data()?.plan ?? 'free' };
+        }
+    }
+
+    // ── Legacy fallback: scan Pro users (old keys without index entry) ─────────
+    // Runs only when index misses — gradually becomes a no-op as users rotate keys.
+    const proSnapshot = await db.collection('users').where('plan', '==', 'pro').get();
+    for (const userDoc of proSnapshot.docs) {
         const userData = userDoc.data();
         const apiKeys: any[] = userData.apiKeys ?? [];
         const found = apiKeys.find((k: any) => k.key === apiKey);
         if (found) {
-            // Update lastUsed
-            const updatedKeys = apiKeys.map((k: any) => k.key === apiKey ? { ...k, lastUsed: new Date() } : k);
-            await userDoc.ref.update({ apiKeys: updatedKeys });
+            // Back-fill the index so next call is O(1)
+            await db.collection('apiKeyIndex').doc(apiKey).set({ uid: userDoc.id, createdAt: found.createdAt ?? new Date() });
             return { uid: userDoc.id, plan: userData.plan ?? 'pro' };
         }
     }
@@ -81,20 +109,8 @@ export async function GET(
     }
 
     // Rate limiting
-    const userDoc = await db.collection('users').doc(user.uid).get();
-    const userData = userDoc.data()!;
-    const limits = PLAN_LIMITS['pro'];
-    const dailyLimit = limits.apiRateLimitPerDay ?? 1000;
-    const apiCallsToday = userData.usageCounters?.apiCallsThisMonth ?? 0;
-
-    if (apiCallsToday >= dailyLimit) {
-        return NextResponse.json({ error: `Daily API limit reached (${dailyLimit} calls). Upgrade to Business for higher limits.` }, { status: 429 });
-    }
-
-    // Increment counter
-    await db.collection('users').doc(user.uid).update({
-        'usageCounters.apiCallsThisMonth': apiCallsToday + 1
-    });
+    const rateLimit = await checkRateLimit(user.uid);
+    if ('error' in rateLimit) return rateLimit.error;
 
     // Query params
     const searchParams = request.nextUrl.searchParams;
@@ -167,7 +183,7 @@ export async function GET(
         headers: {
             'Content-Type': 'application/geo+json',
             'X-Total-Count': String(allFeatures.length),
-            'X-Rate-Limit-Remaining': String(dailyLimit - apiCallsToday - 1),
+            'X-Rate-Limit-Remaining': String(rateLimit.remaining),
             'Access-Control-Allow-Origin': '*',
         }
     });
@@ -181,36 +197,40 @@ export async function POST(
 
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
-        return NextResponse.json({ error: 'API key required' }, { status: 401, headers: { 'Access-Control-Allow-Origin': '*' } });
+        return NextResponse.json({ error: 'API key required' }, { status: 401, headers: CORS });
     }
     const apiKey = authHeader.split('Bearer ')[1].trim();
     const user = await verifyApiKey(apiKey);
-    if (!user) return NextResponse.json({ error: 'Invalid API key' }, { status: 403, headers: { 'Access-Control-Allow-Origin': '*' } });
+    if (!user) return NextResponse.json({ error: 'Invalid API key' }, { status: 403, headers: CORS });
     if (user.plan !== 'pro') {
-        return NextResponse.json({ error: 'API access requires Pro or Business plan' }, { status: 403, headers: { 'Access-Control-Allow-Origin': '*' } });
+        return NextResponse.json({ error: 'API access requires a Pro plan' }, { status: 403, headers: CORS });
     }
+
+    // Rate limiting
+    const rateLimit = await checkRateLimit(user.uid);
+    if ('error' in rateLimit) return rateLimit.error;
 
     const db = getAdminDb();
     const projectDoc = await db.collection('projects').doc(projectId).get();
-    if (!projectDoc.exists) return NextResponse.json({ error: 'Project not found' }, { status: 404, headers: { 'Access-Control-Allow-Origin': '*' } });
+    if (!projectDoc.exists) return NextResponse.json({ error: 'Project not found' }, { status: 404, headers: CORS });
     const projectData = projectDoc.data()!;
     if (projectData.ownerId !== user.uid && !projectData.collaborators?.includes(user.uid)) {
-        return NextResponse.json({ error: 'Access denied' }, { status: 403, headers: { 'Access-Control-Allow-Origin': '*' } });
+        return NextResponse.json({ error: 'Access denied' }, { status: 403, headers: CORS });
     }
 
     let body: any;
     try { body = await request.json(); } catch {
-        return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400, headers: { 'Access-Control-Allow-Origin': '*' } });
+        return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400, headers: CORS });
     }
 
     const { layerId, features } = body;
     if (!layerId || !Array.isArray(features)) {
-        return NextResponse.json({ error: 'Body must include layerId (string) and features (array)' }, { status: 400, headers: { 'Access-Control-Allow-Origin': '*' } });
+        return NextResponse.json({ error: 'Body must include layerId (string) and features (array)' }, { status: 400, headers: CORS });
     }
 
     const layers: any[] = projectData.layers ?? [];
     const layerIdx = layers.findIndex((l: any) => l.id === layerId);
-    if (layerIdx === -1) return NextResponse.json({ error: 'Layer not found' }, { status: 404, headers: { 'Access-Control-Allow-Origin': '*' } });
+    if (layerIdx === -1) return NextResponse.json({ error: 'Layer not found' }, { status: 404, headers: CORS });
 
     const layer = layers[layerIdx];
     const existingFeatures = (() => {
@@ -223,7 +243,7 @@ export async function POST(
     const limits = PLAN_LIMITS['pro'];
     const maxFeatures = limits.maxFeaturesPerLayer ?? 500;
     if (existingFeatures.length + features.length > maxFeatures) {
-        return NextResponse.json({ error: `Exceeds maxFeaturesPerLayer limit (${maxFeatures})` }, { status: 422, headers: { 'Access-Control-Allow-Origin': '*' } });
+        return NextResponse.json({ error: `Exceeds maxFeaturesPerLayer limit (${maxFeatures})` }, { status: 422, headers: CORS });
     }
 
     const merged = [...existingFeatures, ...features];
@@ -232,7 +252,7 @@ export async function POST(
 
     return NextResponse.json({ added: features.length, total: merged.length }, {
         status: 201,
-        headers: { 'Access-Control-Allow-Origin': '*' }
+        headers: CORS
     });
 }
 
@@ -244,42 +264,46 @@ export async function DELETE(
 
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
-        return NextResponse.json({ error: 'API key required' }, { status: 401, headers: { 'Access-Control-Allow-Origin': '*' } });
+        return NextResponse.json({ error: 'API key required' }, { status: 401, headers: CORS });
     }
     const apiKey = authHeader.split('Bearer ')[1].trim();
     const user = await verifyApiKey(apiKey);
-    if (!user) return NextResponse.json({ error: 'Invalid API key' }, { status: 403, headers: { 'Access-Control-Allow-Origin': '*' } });
+    if (!user) return NextResponse.json({ error: 'Invalid API key' }, { status: 403, headers: CORS });
     if (user.plan !== 'pro') {
-        return NextResponse.json({ error: 'API access requires Pro or Business plan' }, { status: 403, headers: { 'Access-Control-Allow-Origin': '*' } });
+        return NextResponse.json({ error: 'API access requires a Pro plan' }, { status: 403, headers: CORS });
     }
+
+    // Rate limiting
+    const rateLimit = await checkRateLimit(user.uid);
+    if ('error' in rateLimit) return rateLimit.error;
 
     const db = getAdminDb();
     const projectDoc = await db.collection('projects').doc(projectId).get();
-    if (!projectDoc.exists) return NextResponse.json({ error: 'Project not found' }, { status: 404, headers: { 'Access-Control-Allow-Origin': '*' } });
+    if (!projectDoc.exists) return NextResponse.json({ error: 'Project not found' }, { status: 404, headers: CORS });
     const projectData = projectDoc.data()!;
     if (projectData.ownerId !== user.uid) {
-        return NextResponse.json({ error: 'Only the project owner can delete features' }, { status: 403, headers: { 'Access-Control-Allow-Origin': '*' } });
+        return NextResponse.json({ error: 'Only the project owner can delete features' }, { status: 403, headers: CORS });
     }
 
     let body: any;
     try { body = await request.json(); } catch {
-        return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400, headers: { 'Access-Control-Allow-Origin': '*' } });
+        return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400, headers: CORS });
     }
 
     const { layerId, featureIndex } = body;
     if (!layerId || typeof featureIndex !== 'number') {
-        return NextResponse.json({ error: 'Body must include layerId (string) and featureIndex (number)' }, { status: 400, headers: { 'Access-Control-Allow-Origin': '*' } });
+        return NextResponse.json({ error: 'Body must include layerId (string) and featureIndex (number)' }, { status: 400, headers: CORS });
     }
 
     const layers: any[] = projectData.layers ?? [];
     const layerIdx = layers.findIndex((l: any) => l.id === layerId);
-    if (layerIdx === -1) return NextResponse.json({ error: 'Layer not found' }, { status: 404, headers: { 'Access-Control-Allow-Origin': '*' } });
+    if (layerIdx === -1) return NextResponse.json({ error: 'Layer not found' }, { status: 404, headers: CORS });
 
     const layer = layers[layerIdx];
     const fc = typeof layer.features === 'string' ? JSON.parse(layer.features) : layer.features;
     const features: any[] = fc?.features ?? [];
     if (featureIndex < 0 || featureIndex >= features.length) {
-        return NextResponse.json({ error: `featureIndex ${featureIndex} out of range (0–${features.length - 1})` }, { status: 422, headers: { 'Access-Control-Allow-Origin': '*' } });
+        return NextResponse.json({ error: `featureIndex ${featureIndex} out of range (0–${features.length - 1})` }, { status: 422, headers: CORS });
     }
 
     features.splice(featureIndex, 1);
@@ -287,6 +311,6 @@ export async function DELETE(
     await db.collection('projects').doc(projectId).update({ layers });
 
     return NextResponse.json({ deleted: true, remaining: features.length }, {
-        headers: { 'Access-Control-Allow-Origin': '*' }
+        headers: CORS
     });
 }

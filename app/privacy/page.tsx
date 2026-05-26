@@ -29,7 +29,7 @@ export default function PrivacyPage() {
             <ul className="list-disc pl-5 mt-2 space-y-1">
               <li><strong>Account data:</strong> your name, email address, and profile photo provided by Google when you authenticate.</li>
               <li><strong>Usage data:</strong> projects, layers, and WKT geometries you create and save in the Service.</li>
-              <li><strong>Billing data:</strong> managed directly by Lemon Squeezy. We do not store credit card numbers.</li>
+              <li><strong>Billing data:</strong> managed directly by Paddle. We do not store credit card numbers.</li>
               <li><strong>Technical data:</strong> IP address, browser type, and access logs necessary to operate the Service.</li>
             </ul>
           </section>
@@ -51,7 +51,7 @@ export default function PrivacyPage() {
             <p>We share data with the following providers necessary to operate the Service:</p>
             <ul className="list-disc pl-5 mt-2 space-y-1">
               <li><strong>Google Firebase</strong> — authentication and database (hosted in the US)</li>
-              <li><strong>Lemon Squeezy</strong> — payment processing and subscription management</li>
+              <li><strong>Paddle</strong> — payment processing and subscription management</li>
               <li><strong>Mapbox</strong> — interactive map rendering</li>
             </ul>
             <p className="mt-2">Each provider is subject to their own privacy policies and security commitments.</p>

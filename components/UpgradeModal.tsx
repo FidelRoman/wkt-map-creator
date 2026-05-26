@@ -5,6 +5,7 @@ import { XMarkIcon, CheckIcon, SparklesIcon } from '@heroicons/react/24/outline'
 import { PLANS, PADDLE_PRICES, type PlanId, type LimitKey, type FeatureKey, LIMIT_LABELS, FEATURE_LABELS } from '@/lib/plans';
 import { useAuth } from './AuthWrapper';
 import type { ToastType } from './Toast';
+import { analytics } from '@/lib/analytics';
 
 declare global {
     interface Window {
@@ -60,12 +61,15 @@ export default function UpgradeModal({ isOpen, onClose, onShowToast, reason }: U
 
     useEffect(() => {
         if (!isOpen) return;
+        const trigger = reason?.type === 'limit' ? reason.limitKey : reason?.type === 'feature' ? reason.featureKey : 'manual';
+        analytics.upgradeModalOpened(trigger as string);
         const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
         document.addEventListener('keydown', onKey);
         return () => document.removeEventListener('keydown', onKey);
     }, [isOpen, onClose]);
 
     if (!isOpen || !mounted) return null;
+
 
     const proPlan = PLANS.find(p => p.id === 'pro')!;
 
@@ -80,7 +84,12 @@ export default function UpgradeModal({ isOpen, onClose, onShowToast, reason }: U
             }
             window.Paddle!.Initialize({
                 token: clientToken,
-                eventCallback: (e: any) => console.log('[Paddle event]', e.name, e),
+                eventCallback: (e: any) => {
+                    console.log('[Paddle event]', e.name, e);
+                    if (e.name === 'checkout.completed') {
+                        analytics.upgradeCompleted('pro', interval);
+                    }
+                },
             });
 
             const priceId = interval === 'month' ? PADDLE_PRICES.pro_monthly : PADDLE_PRICES.pro_yearly;
@@ -194,13 +203,13 @@ export default function UpgradeModal({ isOpen, onClose, onShowToast, reason }: U
                                     </svg>
                                     Loading...
                                 </>
-                            ) : `Get Pro`}
+                            ) : 'Upgrade to Pro'}
                         </button>
                     </div>
                 </div>
 
                 <p className="text-center text-xs text-gray-400 pb-4">
-                    Secure payment via Paddle · Cancel anytime · No hidden fees
+                    Secure payment via Paddle · No hidden fees
                 </p>
             </div>
         </div>,

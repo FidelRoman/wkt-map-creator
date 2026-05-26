@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { signOut, deleteUser } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
-import { updateUserProfile } from '@/lib/firebase';
+import { updateUserProfile, addApiKeyToIndex, removeApiKeyFromIndex } from '@/lib/firebase';
 import AuthWrapper, { useAuth } from '@/components/AuthWrapper';
 import UpgradeModal from '@/components/UpgradeModal';
 import Modal from '@/components/Modal';
@@ -178,7 +178,10 @@ function SettingsContent() {
             const newKey = `wk_${rawKey}`;
             
             const apiKeys = [...(userProfile.apiKeys || []), { key: newKey, name: newKeyName.trim(), createdAt: new Date(), lastUsed: null }];
-            await updateUserProfile(user.uid, { apiKeys });
+            await Promise.all([
+                updateUserProfile(user.uid, { apiKeys }),
+                addApiKeyToIndex(newKey, user.uid),  // O(1) index for fast server-side lookup
+            ]);
             await refreshProfile();
             setNewKeyName('');
             showToast('API key generated successfully.', 'success');
@@ -193,7 +196,10 @@ function SettingsContent() {
         if (!user || !userProfile) return;
         try {
             const apiKeys = (userProfile.apiKeys || []).filter(k => k.key !== keyToDelete);
-            await updateUserProfile(user.uid, { apiKeys });
+            await Promise.all([
+                updateUserProfile(user.uid, { apiKeys }),
+                removeApiKeyFromIndex(keyToDelete),
+            ]);
             await refreshProfile();
             showToast('API key deleted.', 'success');
         } catch (error) {
@@ -321,7 +327,7 @@ function SettingsContent() {
                             <UsageBar
                                 label="API calls this month"
                                 value={apiCalls}
-                                max={limits.apiRateLimitPerDay}
+                                max={limits.apiRateLimitPerMonth}
                             />
                         )}
                         {!isPaid && (

@@ -28,7 +28,7 @@ WKT Map Creator cierra esa brecha. Es la herramienta que un equipo de ingenierí
 | Backend / Auth | Firebase (Firestore + Firebase Auth) |
 | API de servidor | Firebase Admin SDK (Next.js API Routes) |
 | Análisis espacial | Turf.js |
-| Pagos | Lemon Squeezy |
+| Pagos | Paddle |
 | Despliegue target | Vercel |
 
 ---
@@ -49,7 +49,7 @@ WKT Map Creator cierra esa brecha. Es la herramienta que un equipo de ingenierí
 
 ### Colaboración y compartir
 - Link público de solo lectura por proyecto
-- Colaboradores con acceso al editor (hasta 5 en Pro, ilimitado en Business)
+- Colaboradores con acceso al editor (hasta 5 en Pro)
 - Embed iframe para incrustar el mapa en cualquier sitio web
 - Viewer embeddable sin autenticación
 
@@ -57,7 +57,7 @@ WKT Map Creator cierra esa brecha. Es la herramienta que un equipo de ingenierí
 - Endpoint `GET /api/v1/projects/{projectId}/features`
 - Autenticación por Bearer token (API keys gestionables desde Settings)
 - Filtro por bounding box (`?bbox=minLon,minLat,maxLon,maxLat`)
-- Rate limiting por plan (1,000/día Pro · 10,000/día Business)
+- Rate limiting: 1,000 calls/día en Pro
 - Respuesta en GeoJSON estándar
 
 ### Sandbox sin login
@@ -71,26 +71,24 @@ WKT Map Creator cierra esa brecha. Es la herramienta que un equipo de ingenierí
 | Plan | Precio | Público objetivo |
 |---|---|---|
 | **Free** | $0 | Devs que prueban, proyectos personales |
-| **Pro** | $12/mes · $99/año | GIS engineers, consultores, freelancers |
-| **Business** | $39/mes · $299/año | Equipos, empresas con flujos espaciales críticos |
+| **Pro** | $10/mes · $99/año | GIS engineers, consultores, freelancers |
 
 ### Límites por plan
 
-| Feature | Free | Pro | Business |
-|---|---|---|---|
-| Proyectos | 3 | Ilimitados | Ilimitados |
-| Capas / proyecto | 2 | 20 | Ilimitadas |
-| Features / capa | 10 | 5,000 | Ilimitadas |
-| Colaboradores | — | 5 | Ilimitados |
-| API REST | — | ✓ 1K calls/día | ✓ 10K calls/día |
-| Export KML | — | ✓ | ✓ |
-| Historial de versiones | — | 20 snapshots | Ilimitados |
-| Embed iframe | — | ✓ con watermark | ✓ white-label |
-| Webhooks | — | — | ✓ |
-| Team Workspaces | — | — | ✓ |
+| Feature | Free | Pro |
+|---|---|---|
+| Proyectos | 3 | Ilimitados |
+| Capas / proyecto | 2 | 20 |
+| Features / capa | 10 | 5,000 |
+| Colaboradores | — | 5 |
+| API REST | — | ✓ 1K calls/mes |
+| Export KML | — | ✓ |
+| Historial de versiones | — | ✓ 20 snapshots |
+| Embed iframe | — | ✓ |
+| Análisis espacial (Buffer, Unión) | — | ✓ |
 
 ### Infraestructura de pagos
-- Lemon Squeezy: checkout, gestión de suscripciones, portal de cliente
+- Paddle: checkout overlay, gestión de suscripciones, portal de cliente
 - Webhook procesado en servidor que actualiza el plan en Firestore al instante
 - Upsell contextual: el UpgradeModal se dispara exactamente en el momento en que el usuario toca un límite
 
@@ -114,9 +112,9 @@ WKT Map Creator cierra esa brecha. Es la herramienta que un equipo de ingenierí
 
 **El producto está listo para vender.** Todas las variables de entorno críticas están configuradas:
 - Firebase (Auth + Firestore + Admin SDK)
-- Lemon Squeezy (API key, store ID, variant IDs Pro y Business, webhook secret)
+- Paddle (API key, client token, price IDs Pro mensual/anual, webhook secret)
 
-El flujo completo funciona: usuario se registra → usa en Free → toca un límite → ve el UpgradeModal → paga en Lemon Squeezy → webhook actualiza el plan → accede a features Pro de inmediato.
+El flujo completo funciona: usuario se registra → usa en Free → toca un límite → ve el UpgradeModal → paga en Paddle → webhook actualiza el plan → accede a features Pro de inmediato.
 
 ---
 
@@ -133,11 +131,11 @@ El flujo completo funciona: usuario se registra → usa en Free → toca un lím
 - **Sidebar responsiva / mobile**
 - **Real-time collaboration** — cursores y cambios en vivo con Firestore `onSnapshot`
 
-### Fase 5 — Enterprise
-- **Team Workspaces** — namespaces compartidos con roles (admin, editor, viewer)
+### Fase 5 — Expansión Pro
 - **Webhooks** — notificaciones POST a sistemas externos cuando cambia un proyecto
+- **Team Workspaces** — namespaces compartidos con roles (admin, editor, viewer)
+- **White-label embed** — embed sin watermark para clientes enterprise
 - **SSO / SAML** — para clientes enterprise
-- **SLA y soporte prioritario**
 
 ---
 
