@@ -184,7 +184,7 @@ export default function AttributeTable({
                         <PlusIcon className="w-3.5 h-3.5" /> Columna
                     </button>
                 )}
-                <button onClick={exportCsv} className="text-xs flex items-center gap-1 text-slate-500 hover:text-slate-800 px-2 py-1 rounded border border-slate-200 hover:bg-slate-50" title="Exportar CSV">
+                <button onClick={exportCsv} className="text-xs flex items-center gap-1 text-slate-500 hover:text-slate-800 px-2 py-1 rounded border border-slate-200 hover:bg-slate-50" title="Export CSV">
                     <ArrowDownTrayIcon className="w-3.5 h-3.5" /> CSV
                 </button>
                 <button onClick={onClose} className="text-slate-400 hover:text-slate-700 ml-1">

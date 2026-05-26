@@ -16,7 +16,7 @@ const SANDBOX_LIMITS = { maxFeatures: 50 };
 
 const Map = dynamic(() => import('@/components/Map'), {
     ssr: false,
-    loading: () => <div className="h-full w-full flex items-center justify-center bg-gray-100">Cargando Mapa...</div>
+    loading: () => <div className="h-full w-full flex items-center justify-center bg-gray-100">Loading Map...</div>
 });
 
 function makeSandboxLayer() {
@@ -72,7 +72,7 @@ function SandboxEditor() {
             const { id } = await createProject(
                 'Mi Primer Mapa',
                 user.uid,
-                user.displayName ?? 'Usuario',
+                user.displayName ?? 'Anonymous',
                 user.email ?? ''
             );
 
@@ -85,7 +85,7 @@ function SandboxEditor() {
         } catch (err) {
             console.error(err);
             setSaving(false);
-            setToast('Error al guardar. Intenta de nuevo.');
+            setToast('Error saving. Please try again.');
         }
     }, []);
 
@@ -278,8 +278,8 @@ function SandboxEditor() {
     const handleCopyWkt = (feature: any) => {
         try {
             const wkt = stringify(feature.geometry);
-            navigator.clipboard.writeText(wkt).then(() => setToast('WKT copiado al portapapeles'));
-        } catch { setToast('Error al copiar WKT'); }
+            navigator.clipboard.writeText(wkt).then(() => setToast('WKT copied to clipboard'));
+        } catch { setToast('Error copying WKT'); }
     };
 
     const handleSelectionChange = (index: number, multi: boolean) => {

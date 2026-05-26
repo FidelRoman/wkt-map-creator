@@ -584,7 +584,7 @@ function ProjectApp() {
         if (!user || !currentProject?.id) return;
         setIsForkingProject(true);
         try {
-            const newId = await forkProject(currentProject.id, user.uid, user.displayName ?? 'Usuario', user.email ?? '');
+            const newId = await forkProject(currentProject.id, user.uid, user.displayName ?? 'Anonymous', user.email ?? '');
             analytics.projectForked();
             showToast('Project forked to your account. Opening…', 'success');
             setTimeout(() => { window.location.href = `/${newId}`; }, 1200);

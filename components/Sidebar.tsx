@@ -239,7 +239,7 @@ export default function Sidebar({
 
     const openNewProjectModal = () => {
         if (!user) return;
-        setInputValue("Nuevo Proyecto");
+        setInputValue("New Project");
         setModalAction('newProject');
     };
 
@@ -258,11 +258,11 @@ export default function Sidebar({
 
         if (modalAction === 'newProject' && user) {
             try {
-                const { id } = await createProject(inputValue, user.uid, user.displayName || 'Usuario', user.email || '');
+                const { id } = await createProject(inputValue, user.uid, user.displayName || 'Anonymous', user.email || '');
                 window.location.href = `/${id}`;
             } catch (e) {
                 console.error(e);
-                onShowToast?.('Error al crear proyecto. Intenta de nuevo.', 'error');
+                onShowToast?.('Error creating project. Please try again.', 'error');
             }
         } else if (modalAction === 'newLayer') {
             const newLayer: Layer = {
@@ -437,7 +437,7 @@ export default function Sidebar({
                                         <button
                                             onClick={() => setShareModalOpen(true)}
                                             className="bg-blue-600 hover:bg-blue-700 text-white p-1.5 rounded-lg transition-colors shadow-sm"
-                                            title="Compartir Proyecto"
+                                            title="Share Project"
                                         >
                                             <ShareIcon className="w-4 h-4" />
                                         </button>
@@ -447,14 +447,14 @@ export default function Sidebar({
                             <div className="flex items-center justify-between mb-1">
                                 <div className="flex-1 min-w-0">
                                     <div className="font-bold text-slate-800 text-lg truncate" title={currentProject?.name}>
-                                        {currentProject ? currentProject.name : 'Cargando...'}
+                                        {currentProject ? currentProject.name : 'Loading...'}
                                     </div>
                                     {isReadOnly && (
                                         <div className="mt-1 flex items-center gap-1.5">
                                             <span className="text-[10px] bg-amber-50 text-amber-600 border border-amber-200 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium">
-                                                Vista
+                                                View
                                             </span>
-                                            <span className="text-[10px] text-slate-400" title="Puedes explorar y dibujar localmente, pero los cambios no se guardan">
+                                            <span className="text-[10px] text-slate-400" title="You can explore and draw locally, but changes are not saved">
                                                 Local changes only
                                             </span>
                                         </div>
@@ -580,14 +580,14 @@ export default function Sidebar({
                                     <span
                                         onClick={(e) => { e.stopPropagation(); setStyleLayerId(l => l === layer.id ? null : layer.id); }}
                                         style={{ cursor: 'pointer', color: styleLayerId === layer.id ? '#6366f1' : '#94a3b8' }}
-                                        title="Estilo de capa"
+                                        title="Layer Style"
                                     >
                                         <PaintBrushIcon style={{ width: 14, height: 14 }} />
                                     </span>
-                                    <span onClick={(e) => openSqlExport(layer.id, e)} style={{ cursor: 'pointer', color: '#94a3b8' }} title="Exportar SQL (PostGIS)">
+                                    <span onClick={(e) => openSqlExport(layer.id, e)} style={{ cursor: 'pointer', color: '#94a3b8' }} title="Export SQL (PostGIS)">
                                         <CircleStackIcon style={{ width: 14, height: 14 }} />
                                     </span>
-                                    <span onClick={(e) => { e.stopPropagation(); onExportLayer(layer.id); }} style={{ cursor: 'pointer', color: '#94a3b8' }} title="Exportar Capa">
+                                    <span onClick={(e) => { e.stopPropagation(); onExportLayer(layer.id); }} style={{ cursor: 'pointer', color: '#94a3b8' }} title="Export Layer">
                                         <ArrowUpTrayIcon style={{ width: 14, height: 14 }} />
                                     </span>
                                     <span onClick={(e) => { e.stopPropagation(); toggleLayerVisibility(layer.id); }} className="layer-visibility cursor-pointer text-slate-400 hover:text-blue-500">
@@ -899,20 +899,20 @@ export default function Sidebar({
             <Modal
                 isOpen={sqlModalOpen}
                 onClose={() => setSqlModalOpen(false)}
-                title="Exportar SQL — PostGIS"
+                title="Export SQL — PostGIS"
                 footer={
                     <>
-                        <button onClick={() => setSqlModalOpen(false)} className="btn-outline">Cerrar</button>
+                        <button onClick={() => setSqlModalOpen(false)} className="btn-outline">Close</button>
                         <button onClick={downloadSql} className="btn-primary flex items-center gap-1.5">
                             <ArrowUpTrayIcon className="w-4 h-4" />
-                            Descargar .sql
+                            Download .sql
                         </button>
                     </>
                 }
             >
                 <div className="space-y-3">
                     <div>
-                        <label className="text-sm font-medium text-slate-700 block mb-1">Nombre de tabla</label>
+                        <label className="text-sm font-medium text-slate-700 block mb-1">Table name</label>
                         <input
                             type="text"
                             value={sqlTableName}
@@ -922,7 +922,7 @@ export default function Sidebar({
                         />
                     </div>
                     <div className="relative">
-                        <label className="text-sm font-medium text-slate-700 block mb-1">SQL generado</label>
+                        <label className="text-sm font-medium text-slate-700 block mb-1">Generated SQL</label>
                         <pre className="bg-slate-900 text-green-400 text-xs p-4 rounded-xl overflow-auto max-h-72 font-mono whitespace-pre-wrap break-all">{sqlOutput}</pre>
                         <button
                             onClick={() => {

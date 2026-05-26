@@ -516,7 +516,7 @@ function Dashboard() {
       const { id } = await createProject(
         newProjectName,
         user.uid,
-        user.displayName || "Usuario",
+        user.displayName || 'Anonymous',
         user.email || ""
       );
       analytics.projectCreated(newProjectName);

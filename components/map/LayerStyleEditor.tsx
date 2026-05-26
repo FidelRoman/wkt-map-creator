@@ -84,7 +84,7 @@ export default function LayerStyleEditor({ layer, onUpdate, onClose }: Props) {
         <div className="fixed right-4 top-4 z-[600] bg-white rounded-2xl shadow-xl border border-slate-200 w-80 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
                 <div>
-                    <p className="text-sm font-semibold text-slate-800">Estilo de capa</p>
+                    <p className="text-sm font-semibold text-slate-800">Layer Style</p>
                     <p className="text-xs text-slate-400 truncate max-w-[180px]">{layer.name}</p>
                 </div>
                 <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100">

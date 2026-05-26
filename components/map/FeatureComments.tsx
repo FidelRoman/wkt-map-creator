@@ -57,7 +57,7 @@ export default function FeatureComments({ projectId, layerId, featureIndex, feat
                 featureIndex,
                 text: text.trim(),
                 authorId: user.uid,
-                authorName: user.displayName ?? 'Usuario',
+                authorName: user.displayName ?? 'Anonymous',
                 authorPhoto: user.photoURL,
                 resolved: false,
             });

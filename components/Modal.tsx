@@ -42,7 +42,7 @@ export default function Modal({ isOpen, onClose, title, children, footer }: Moda
                     <h3 id="modal-title" className="text-lg font-bold text-slate-800">{title}</h3>
                     <button
                         onClick={onClose}
-                        aria-label="Cerrar"
+                        aria-label="Close"
                         className="p-1 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
                     >
                         <XMarkIcon className="w-5 h-5" />
