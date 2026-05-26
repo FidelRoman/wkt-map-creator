@@ -66,7 +66,7 @@ export default function AttributeTable({
                     perimeter = turf.length(f, { units: 'meters' });
                 }
             } catch { /* ignore */ }
-            return { index: i, name: f.properties?.name ?? `Objeto ${i + 1}`, color: f.properties?.color ?? '#888', geomType, area, perimeter, feature: f };
+            return { index: i, name: f.properties?.name ?? `Feature ${i + 1}`, color: f.properties?.color ?? '#888', geomType, area, perimeter, feature: f };
         });
     }, [features]);
 
@@ -201,7 +201,7 @@ export default function AttributeTable({
                             {['name', 'geomType', 'area', 'perimeter', ...customCols].map(col => (
                                 <th key={col} className="px-3 py-1.5 border-b border-slate-200 text-left text-slate-600 font-semibold cursor-pointer hover:bg-slate-100 whitespace-nowrap" onClick={() => toggleSort(col)}>
                                     <div className="flex items-center gap-1">
-                                        {col === 'name' ? 'Nombre' : col === 'geomType' ? 'Tipo' : col === 'area' ? 'Área' : col === 'perimeter' ? 'Perímetro' : col}
+                                        {col === 'name' ? 'Name' : col === 'geomType' ? 'Type' : col === 'area' ? 'Area' : col === 'perimeter' ? 'Perimeter' : col}
                                         <SortIcon col={col} />
                                     </div>
                                 </th>

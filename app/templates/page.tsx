@@ -10,19 +10,19 @@ import AuthWrapper from '@/components/AuthWrapper';
 import { checkLimit } from '@/lib/plans';
 
 const TAG_COLORS: Record<string, string> = {
-    'puntos': 'bg-blue-50 text-blue-600',
-    'polígonos': 'bg-emerald-50 text-emerald-600',
-    'líneas': 'bg-amber-50 text-amber-600',
-    'mundial': 'bg-indigo-50 text-indigo-600',
-    'latinoamérica': 'bg-green-50 text-green-600',
+    'points': 'bg-blue-50 text-blue-600',
+    'polygons': 'bg-emerald-50 text-emerald-600',
+    'lines': 'bg-amber-50 text-amber-600',
+    'world': 'bg-indigo-50 text-indigo-600',
+    'latin-america': 'bg-green-50 text-green-600',
     'usa': 'bg-red-50 text-red-600',
-    'ciudades': 'bg-purple-50 text-purple-600',
-    'rutas': 'bg-orange-50 text-orange-600',
-    'zonas': 'bg-pink-50 text-pink-600',
-    'países': 'bg-teal-50 text-teal-600',
-    'estados': 'bg-sky-50 text-sky-600',
-    'transporte': 'bg-yellow-50 text-yellow-600',
-    'entrega': 'bg-rose-50 text-rose-600',
+    'cities': 'bg-purple-50 text-purple-600',
+    'routes': 'bg-orange-50 text-orange-600',
+    'zones': 'bg-pink-50 text-pink-600',
+    'countries': 'bg-teal-50 text-teal-600',
+    'states': 'bg-sky-50 text-sky-600',
+    'transport': 'bg-yellow-50 text-yellow-600',
+    'delivery': 'bg-rose-50 text-rose-600',
 };
 
 function TemplateCard({ template, onUse, isUsing }: { template: Template; onUse: (t: Template) => void; isUsing: boolean }) {
@@ -31,7 +31,7 @@ function TemplateCard({ template, onUse, isUsing }: { template: Template; onUse:
             {/* Visual preview */}
             <div className="h-28 flex items-center justify-center relative" style={{ background: `linear-gradient(135deg, ${template.color}18, ${template.color}35)` }}>
                 <div className="text-5xl opacity-30" style={{ color: template.color }}>
-                    {template.tags.includes('puntos') ? '·' : template.tags.includes('líneas') ? '~' : '□'}
+                    {template.tags.includes('points') ? '·' : template.tags.includes('lines') ? '~' : '□'}
                 </div>
                 <div className="absolute top-3 right-3 text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full border" style={{ color: template.color, borderColor: `${template.color}40`, background: `${template.color}12` }}>
                     {template.featureCount} features

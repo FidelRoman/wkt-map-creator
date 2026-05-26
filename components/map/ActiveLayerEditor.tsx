@@ -386,7 +386,7 @@ export default function ActiveLayerEditor({
         if (!menu || menu.index === -1) { setMenu(null); return; }
         const activeLayer = layers.find(l => l.id === activeLayerId);
         const feature = activeLayer?.features?.features?.[menu.index];
-        const name = feature?.properties?.name ?? `Objeto ${menu.index + 1}`;
+        const name = feature?.properties?.name ?? `Feature ${menu.index + 1}`;
         // Select the feature so we can track when the user moves away from it
         if (onToggleSelection) onToggleSelection(menu.index, false);
         setCommentsFeature({ index: menu.index, name });
@@ -490,7 +490,7 @@ export default function ActiveLayerEditor({
                     {editingLayer === menu.layer ? (
                         <div onClick={handleStopEdit} className="menu-item" style={{ color: '#f59e0b', display: 'flex', gap: '10px', padding: '10px', cursor: 'pointer', alignItems: 'center' }}>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>
-                            <span>Terminar edición</span>
+                            <span>Stop editing</span>
                         </div>
                     ) : (
                         <div onClick={handleEdit} className="menu-item" style={{ display: 'flex', gap: '10px', padding: '10px', cursor: 'pointer', alignItems: 'center' }}>

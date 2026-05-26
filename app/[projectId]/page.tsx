@@ -14,6 +14,7 @@ import Modal from '@/components/Modal';
 import Toast, { type ToastType } from '@/components/Toast';
 import UpgradeModal from '@/components/UpgradeModal';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import CsvImportModal, { type CsvImportConfig } from '@/components/CsvImportModal';
 import { stringify } from 'wellknown';
 import { checkLimit, hasFeature } from '@/lib/plans';
 // @ts-ignore
@@ -25,7 +26,7 @@ const Map = dynamic(() => import('@/components/Map'), {
     loading: () => (
         <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50">
             <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-4"></div>
-            <p className="text-slate-500 font-medium text-sm">Cargando mapa interactivo...</p>
+            <p className="text-slate-500 font-medium text-sm">Loading interactive map…</p>
         </div>
     )
 });
@@ -143,6 +144,14 @@ function ProjectApp() {
     const [isSaving, setIsSaving] = useState(false);
     const [isImporting, setIsImporting] = useState(false);
 
+    // CSV import modal state
+    const [csvImportPending, setCsvImportPending] = useState<{
+        file: File;
+        headers: string[];
+        previewRows: string[][];
+        importType: 'wkt' | 'latlng';
+    } | null>(null);
+
     // Initial Load Projects for Sidebar context
     useEffect(() => {
         if (user) {
@@ -250,75 +259,16 @@ function ProjectApp() {
     const handleImportCsv = async (file: File) => {
         const text = await file.text();
         const lines = text.split(/\r?\n/);
-
-        let headerIndex = -1;
-        let nameColIndex = -1;
-        let wktColIndex = -1; // Optional, if we want strict column finding, but line searching is robust for simple files.
-
-        // Try to find header
-        if (lines.length > 0) {
-            const potentialHeader = lines[0].toLowerCase();
-            if (potentialHeader.includes('name') || potentialHeader.includes('nombre') || potentialHeader.includes('label') || potentialHeader.includes('wkt')) {
-                headerIndex = 0;
-                // Use robust parser for header too
-                const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().replace(/"/g, ''));
-                nameColIndex = headers.findIndex(h => ['name', 'nombre', 'label', 'id'].includes(h));
-            }
+        const headers = lines.length > 0
+            ? parseCSVLine(lines[0]).map(h => h.replace(/"/g, '').trim()).filter(h => h)
+            : [];
+        if (headers.length === 0) {
+            showToast('Could not parse CSV headers. Make sure the file has a header row.', 'warning');
+            return;
         }
-
-        let addedCount = 0;
-        const newFeatures = [];
-
-        for (let i = 0; i < lines.length; i++) {
-            if (i === headerIndex) continue; // Skip header
-            const line = lines[i];
-            if (!line.trim()) continue;
-
-            const wktMatch = line.match(/(MULTIPOLYGON|POLYGON|POINT|LINESTRING|MULTILINESTRING|MULTIPOINT)\s*\([\s\d\.,\(\)\-\+]+\)/i);
-
-            if (wktMatch) {
-                const wkt = wktMatch[0];
-                const geojson = parseWKT(wkt);
-
-                // Try to extract name
-                let name = `Objeto ${addedCount + 1}`;
-                if (nameColIndex !== -1) {
-                    const cols = parseCSVLine(line);
-                    if (cols[nameColIndex]) {
-                        name = cols[nameColIndex].trim().replace(/^"|"$/g, '');
-                    }
-                } else {
-                    // Fallback: if no header, try to find a non-WKT string part or just default
-                }
-
-                if (geojson) {
-                    newFeatures.push({
-                        type: 'Feature',
-                        geometry: geojson,
-                        properties: {
-                            name: name,
-                            color: generateColor() // Ensure we have a color
-                        }
-                    });
-                    addedCount++;
-                }
-            }
-        }
-
-        if (addedCount > 0) {
-            const newLayerId = 'layer_' + Date.now();
-            const newLayer: Layer = {
-                id: newLayerId,
-                name: file.name.replace('.csv', '').replace('.txt', '') || 'Imported Layer',
-                visible: true,
-                features: { type: 'FeatureCollection', features: newFeatures }
-            };
-            setLayersUndoable(prev => [...prev, newLayer]);
-            setActiveLayerId(newLayerId);
-            showToast(`Imported ${addedCount} features into new layer "${newLayer.name}".`, 'success');
-        } else {
-            showToast('No valid WKT geometries found in the file. Make sure rows contain a WKT column.', 'warning');
-        }
+        const previewRows = lines.slice(1).filter(l => l.trim()).slice(0, 4)
+            .map(l => parseCSVLine(l).map(v => v.replace(/^"|"$/g, '').trim()));
+        setCsvImportPending({ file, headers, previewRows, importType: 'wkt' });
     };
 
     const handleImportGeoJSON = async (file: File) => {
@@ -334,7 +284,7 @@ function ProjectApp() {
             } else if (parsed.type && parsed.coordinates) {
                 features = [{ type: 'Feature', geometry: parsed, properties: {} }];
             } else {
-                showToast('Formato GeoJSON no reconocido.', 'error');
+                showToast('Unrecognized GeoJSON format.', 'error');
                 return;
             }
 
@@ -344,7 +294,7 @@ function ProjectApp() {
                     ...f,
                     properties: {
                         ...f.properties,
-                        name: f.properties?.name ?? f.properties?.NAME ?? f.properties?.nombre ?? `Objeto ${i + 1}`,
+                        name: f.properties?.name ?? f.properties?.NAME ?? f.properties?.nombre ?? `Feature ${i + 1}`,
                         color: f.properties?.color ?? generateColor(),
                     },
                 }));
@@ -398,41 +348,115 @@ function ProjectApp() {
     const handleImportLatLng = async (file: File) => {
         const text = await file.text();
         const lines = text.split(/\r?\n/).filter(l => l.trim());
-        if (lines.length < 2) { showToast('El archivo debe tener al menos una fila de datos y un encabezado.', 'warning'); return; }
-
-        const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim().replace(/"/g, ''));
-        const latIdx = headers.findIndex(h => ['lat', 'latitude', 'latitud', 'y'].includes(h));
-        const lngIdx = headers.findIndex(h => ['lon', 'lng', 'longitude', 'longitud', 'x'].includes(h));
-        const nameIdx = headers.findIndex(h => ['name', 'nombre', 'label', 'titulo', 'title'].includes(h));
-
-        if (latIdx === -1 || lngIdx === -1) {
-            showToast('lat/lng columns not found. Use headers: lat, lng (or latitude/longitude).', 'warning');
+        if (lines.length < 2) {
+            showToast('File must have at least a header row and one data row.', 'warning');
             return;
         }
+        const headers = parseCSVLine(lines[0]).map(h => h.replace(/"/g, '').trim()).filter(h => h);
+        const previewRows = lines.slice(1, 5).map(l => parseCSVLine(l).map(v => v.replace(/^"|"$/g, '').trim()));
+        setCsvImportPending({ file, headers, previewRows, importType: 'latlng' });
+    };
 
-        const features: any[] = [];
-        for (let i = 1; i < lines.length; i++) {
-            const cols = parseCSVLine(lines[i]);
-            const lat = parseFloat(cols[latIdx]);
-            const lng = parseFloat(cols[lngIdx]);
-            if (isNaN(lat) || isNaN(lng)) continue;
-            const name = nameIdx !== -1 && cols[nameIdx] ? cols[nameIdx].trim().replace(/^"|"$/g, '') : `Punto ${features.length + 1}`;
-            const extra: Record<string, string> = {};
-            headers.forEach((h, idx) => {
-                if (idx !== latIdx && idx !== lngIdx && !['name', 'nombre', 'color'].includes(h) && cols[idx]) {
-                    extra[h] = cols[idx].trim().replace(/^"|"$/g, '');
+    const handleConfirmCsvImport = async (config: CsvImportConfig) => {
+        if (!csvImportPending) return;
+        const { file, headers } = csvImportPending;
+        setCsvImportPending(null);
+        setIsImporting(true);
+        try {
+            if (config.importType === 'wkt') {
+                const geoIdx = config.geoCol ? headers.indexOf(config.geoCol) : -1;
+                const nameIdx = config.nameCol ? headers.indexOf(config.nameCol) : -1;
+                const text = await file.text();
+                const lines = text.split(/\r?\n/);
+                let addedCount = 0;
+                const newFeatures: any[] = [];
+
+                for (let i = 1; i < lines.length; i++) {
+                    const line = lines[i];
+                    if (!line.trim()) continue;
+                    const cols = parseCSVLine(line);
+                    // Try the selected geo column first, fall back to regex scan of the full line
+                    const rawWkt = geoIdx !== -1 ? (cols[geoIdx] ?? '').trim().replace(/^"|"$/g, '') : '';
+                    const wktMatch = rawWkt
+                        ? rawWkt.match(/(MULTIPOLYGON|POLYGON|POINT|LINESTRING|MULTILINESTRING|MULTIPOINT)\s*\([\s\d\.,\(\)\-\+]+\)/i)?.[0]
+                        : line.match(/(MULTIPOLYGON|POLYGON|POINT|LINESTRING|MULTILINESTRING|MULTIPOINT)\s*\([\s\d\.,\(\)\-\+]+\)/i)?.[0];
+
+                    if (wktMatch) {
+                        const geojson = parseWKT(wktMatch);
+                        if (geojson) {
+                            const name = nameIdx !== -1 && cols[nameIdx]
+                                ? cols[nameIdx].trim().replace(/^"|"$/g, '')
+                                : `Feature ${addedCount + 1}`;
+                            newFeatures.push({
+                                type: 'Feature',
+                                geometry: geojson,
+                                properties: { name, color: generateColor() }
+                            });
+                            addedCount++;
+                        }
+                    }
                 }
-            });
-            features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [lng, lat] }, properties: { name, color: generateColor(), ...extra } });
+
+                if (addedCount > 0) {
+                    const newLayerId = 'layer_' + Date.now();
+                    const newLayer: Layer = {
+                        id: newLayerId,
+                        name: file.name.replace(/\.(csv|txt)$/i, '') || 'Imported Layer',
+                        visible: true,
+                        features: { type: 'FeatureCollection', features: newFeatures }
+                    };
+                    setLayersUndoable(prev => [...prev, newLayer]);
+                    setActiveLayerId(newLayerId);
+                    showToast(`Imported ${addedCount} features into new layer "${newLayer.name}".`, 'success');
+                } else {
+                    showToast('No valid WKT geometries found in the selected column.', 'warning');
+                }
+            } else {
+                // lat/lng mode
+                const text = await file.text();
+                const lines = text.split(/\r?\n/).filter(l => l.trim());
+                if (lines.length < 2) { showToast('No data rows found.', 'warning'); return; }
+
+                const latIdx = config.latCol ? headers.indexOf(config.latCol) : -1;
+                const lngIdx = config.lngCol ? headers.indexOf(config.lngCol) : -1;
+                const nameIdx = config.nameCol ? headers.indexOf(config.nameCol) : -1;
+
+                const features: any[] = [];
+                for (let i = 1; i < lines.length; i++) {
+                    const cols = parseCSVLine(lines[i]);
+                    const lat = latIdx !== -1 ? parseFloat(cols[latIdx]) : NaN;
+                    const lng = lngIdx !== -1 ? parseFloat(cols[lngIdx]) : NaN;
+                    if (isNaN(lat) || isNaN(lng)) continue;
+                    const name = nameIdx !== -1 && cols[nameIdx]
+                        ? cols[nameIdx].trim().replace(/^"|"$/g, '')
+                        : `Point ${features.length + 1}`;
+                    const extra: Record<string, string> = {};
+                    headers.forEach((h, idx) => {
+                        if (idx !== latIdx && idx !== lngIdx && cols[idx]) {
+                            extra[h] = cols[idx].trim().replace(/^"|"$/g, '');
+                        }
+                    });
+                    features.push({
+                        type: 'Feature',
+                        geometry: { type: 'Point', coordinates: [lng, lat] },
+                        properties: { name, color: generateColor(), ...extra }
+                    });
+                }
+
+                if (features.length === 0) { showToast('No valid coordinates found.', 'warning'); return; }
+
+                const newLayerId = 'layer_' + Date.now();
+                const layerName = file.name.replace(/\.(csv|txt)$/i, '') || 'Points';
+                setLayersUndoable(prev => [...prev, {
+                    id: newLayerId, name: layerName, visible: true,
+                    features: { type: 'FeatureCollection', features }
+                }]);
+                setActiveLayerId(newLayerId);
+                showToast(`Imported ${features.length} points from "${layerName}".`, 'success');
+            }
+        } finally {
+            setIsImporting(false);
         }
-
-        if (features.length === 0) { showToast('No valid coordinates found in the file.', 'warning'); return; }
-
-        const newLayerId = 'layer_' + Date.now();
-        const layerName = file.name.replace(/\.(csv|txt)$/i, '') || 'Points';
-        setLayersUndoable(prev => [...prev, { id: newLayerId, name: layerName, visible: true, features: { type: 'FeatureCollection', features } }]);
-        setActiveLayerId(newLayerId);
-        showToast(`Imported ${features.length} points from "${layerName}".`, 'success');
     };
 
     const handleImportFileWithLoading = async (file: File) => {
@@ -502,7 +526,7 @@ function ProjectApp() {
         let csvContent = "id,name,color,WKT\n";
         layer.features.features.forEach((feature: any, index: number) => {
             const props = feature.properties || {};
-            const name = (props.name || `Objeto ${index + 1}`).replace(/"/g, '""');
+            const name = (props.name || `Feature ${index + 1}`).replace(/"/g, '""');
             const color = (props.color || '#000000').replace(/"/g, '""');
             let wkt = "";
             try { wkt = stringify(feature.geometry); } catch (e) { console.error(e); }
@@ -693,6 +717,18 @@ function ProjectApp() {
                 reason={upgradeModalReason}
                 onShowToast={showToast}
             />
+
+            {csvImportPending && (
+                <CsvImportModal
+                    isOpen={true}
+                    onClose={() => setCsvImportPending(null)}
+                    onConfirm={handleConfirmCsvImport}
+                    fileName={csvImportPending.file.name}
+                    headers={csvImportPending.headers}
+                    previewRows={csvImportPending.previewRows}
+                    importType={csvImportPending.importType}
+                />
+            )}
 
             {currentProject && user && (
                 <VersionHistoryPanel

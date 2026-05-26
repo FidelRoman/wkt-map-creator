@@ -18,10 +18,10 @@ function convertWktToGeojson(input: string): { result?: string; error?: string }
     try {
         const { parse } = require('wellknown');
         const geom = parse(input.trim());
-        if (!geom) return { error: 'WKT inválido o no soportado' };
+        if (!geom) return { error: 'Invalid or unsupported WKT' };
         return { result: JSON.stringify(geom, null, 2) };
     } catch (e: any) {
-        return { error: e.message ?? 'Error de conversión' };
+        return { error: e.message ?? 'Conversion error' };
     }
 }
 
@@ -31,10 +31,10 @@ function convertGeojsonToWkt(input: string): { result?: string; error?: string }
         const parsed = JSON.parse(input.trim());
         const geom = parsed.type === 'Feature' ? parsed.geometry : parsed;
         const wkt = stringify(geom);
-        if (!wkt) return { error: 'No se pudo convertir a WKT' };
+        if (!wkt) return { error: 'Could not convert to WKT' };
         return { result: wkt };
     } catch (e: any) {
-        return { error: e.message ?? 'JSON inválido' };
+        return { error: e.message ?? 'Invalid JSON' };
     }
 }
 
@@ -46,7 +46,7 @@ function convertWktToWkb(input: string): { result?: string; error?: string } {
         const buf = geom.toWkb();
         return { result: buf.toString('hex').toUpperCase() };
     } catch (e: any) {
-        return { error: e.message ?? 'WKT inválido' };
+        return { error: e.message ?? 'Invalid WKT' };
     }
 }
 
@@ -58,7 +58,7 @@ function convertWkbToWkt(input: string): { result?: string; error?: string } {
         const wkt = geom.toWkt();
         return { result: wkt };
     } catch (e: any) {
-        return { error: e.message ?? 'WKB hex inválido' };
+        return { error: e.message ?? 'Invalid WKB hex' };
     }
 }
 
@@ -75,11 +75,11 @@ function convertBatch(input: string): { result?: string; error?: string } {
             }
         }).filter(Boolean);
 
-        if (features.length === 0) return { error: 'No se encontraron WKTs válidos' };
+        if (features.length === 0) return { error: 'No valid WKTs found' };
 
         return { result: JSON.stringify({ type: 'FeatureCollection', features }, null, 2) };
     } catch (e: any) {
-        return { error: e.message ?? 'Error de conversión' };
+        return { error: e.message ?? 'Conversion error' };
     }
 }
 
@@ -134,9 +134,9 @@ export default function ConvertPage() {
                     </Link>
                     <div className="flex items-center gap-2">
                         <ArrowsRightLeftIcon className="w-5 h-5 text-indigo-600" />
-                        <h1 className="text-base font-semibold text-slate-800">Conversor de Geometrías</h1>
+                        <h1 className="text-base font-semibold text-slate-800">Geometry Converter</h1>
                     </div>
-                    <span className="ml-auto text-xs text-slate-400">100% cliente — sin enviar datos al servidor</span>
+                    <span className="ml-auto text-xs text-slate-400">100% client-side — no data sent to server</span>
                 </div>
             </div>
 
@@ -167,7 +167,7 @@ export default function ConvertPage() {
                     {/* Input */}
                     <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
                         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Entrada</span>
+                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Input</span>
                             {input && <CopyButton text={input} />}
                         </div>
                         <textarea
@@ -194,7 +194,7 @@ export default function ConvertPage() {
                             <textarea
                                 value={result ?? ''}
                                 readOnly
-                                placeholder={input ? 'Procesando...' : 'El resultado aparecerá aquí'}
+                                placeholder={input ? 'Processing…' : 'Result will appear here'}
                                 spellCheck={false}
                                 className="w-full h-72 px-4 py-3 text-sm font-mono text-slate-800 resize-none focus:outline-none bg-slate-50 placeholder:text-slate-300"
                             />
@@ -205,7 +205,7 @@ export default function ConvertPage() {
                 {/* Quick reference */}
                 <section className="mt-10 bg-white border border-slate-200 rounded-2xl overflow-hidden">
                     <div className="px-6 py-4 border-b border-slate-100">
-                        <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Ejemplos de WKT</h3>
+                        <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">WKT examples</h3>
                     </div>
                     <div className="px-6 py-5 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
                         {[
@@ -249,7 +249,7 @@ export default function ConvertPage() {
 
                 <div className="mt-8 text-center">
                     <p className="text-sm text-slate-500">
-                        ¿Quieres visualizar tus geometrías en un mapa?{' '}
+                        Want to visualize your geometries on a map?{' '}
                         <Link href="/" className="text-indigo-600 font-medium hover:underline">
                             Try WKT Studio →
                         </Link>

@@ -228,7 +228,7 @@ export default function Sidebar({
             await signInWithPopup(auth, googleProvider);
         } catch (err) {
             console.error(err);
-            onShowToast?.('Error al iniciar sesión. Intenta de nuevo.', 'error');
+            onShowToast?.('Sign-in failed. Please try again.', 'error');
         }
     };
 
@@ -282,7 +282,7 @@ export default function Sidebar({
     const startRenaming = (index: number, currentName: string, e: React.MouseEvent) => {
         e.stopPropagation();
         setRenamingFeatureIndex(index);
-        setRenamingName(currentName || `Objeto ${index + 1}`);
+        setRenamingName(currentName || `Feature ${index + 1}`);
     };
 
     const saveRename = (index: number) => {
@@ -329,7 +329,7 @@ export default function Sidebar({
         const newFeature = {
             type: "Feature",
             properties: {
-                name: `Objeto WKT ${Date.now().toString().slice(-4)}`,
+                name: `WKT Feature ${Date.now().toString().slice(-4)}`,
                 color: generateColor(),
             },
             geometry: geojson
@@ -455,7 +455,7 @@ export default function Sidebar({
                                                 Vista
                                             </span>
                                             <span className="text-[10px] text-slate-400" title="Puedes explorar y dibujar localmente, pero los cambios no se guardan">
-                                                Cambios locales únicamente
+                                                Local changes only
                                             </span>
                                         </div>
                                     )}
@@ -711,7 +711,7 @@ export default function Sidebar({
                                         />
                                     ) : (
                                         <span className={`flex-1 font-medium truncate ${isSelected ? 'text-blue-700' : 'text-slate-700'}`} title={feature.properties?.name}>
-                                            {feature.properties?.name || `Objeto ${index + 1}`}
+                                            {feature.properties?.name || `Feature ${index + 1}`}
                                         </span>
                                     )}
 
@@ -766,7 +766,7 @@ export default function Sidebar({
                                 </>
                             )}
                         </button>
-                        <p className="text-[10px] text-slate-400 text-center mt-1.5">Gratis · Sin tarjeta de crédito</p>
+                        <p className="text-[10px] text-slate-400 text-center mt-1.5">Free · No credit card required</p>
                     </div>
                 ) : (
                     <div className="user-profile">
@@ -796,7 +796,7 @@ export default function Sidebar({
                                 {user?.email}
                             </span>
                         </div>
-                        <Link href="/settings" title="Configuración" className="btn-logout" style={{ color: '#64748b', textDecoration: 'none' }}>
+                        <Link href="/settings" title="Settings" className="btn-logout" style={{ color: '#64748b', textDecoration: 'none' }}>
                             <Cog6ToothIcon width={16} height={16} />
                         </Link>
                         <button onClick={handleLogout} title="Sign out" className="btn-logout">

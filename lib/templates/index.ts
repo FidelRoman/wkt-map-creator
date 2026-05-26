@@ -12,11 +12,11 @@ export interface Template {
 export const TEMPLATES: Template[] = [
     {
         id: 'world-capitals',
-        name: 'Capitales del Mundo',
-        description: '~200 ciudades capitales del mundo como puntos geográficos.',
-        tags: ['puntos', 'mundial', 'ciudades'],
+        name: 'World Capitals',
+        description: '~200 world capital cities as geographic points.',
+        tags: ['points', 'world', 'cities'],
         featureCount: 195,
-        layerName: 'Capitales',
+        layerName: 'Capitals',
         color: '#6366f1',
         getData: async () => {
             const { default: data } = await import('./world-capitals.json');
@@ -25,9 +25,9 @@ export const TEMPLATES: Template[] = [
     },
     {
         id: 'latam-countries',
-        name: 'Países de América Latina',
-        description: 'Polígonos de los 20 países de América Latina y el Caribe.',
-        tags: ['polígonos', 'latinoamérica', 'países'],
+        name: 'Latin America Countries',
+        description: 'Polygons of the 20 countries of Latin America and the Caribbean.',
+        tags: ['polygons', 'latin-america', 'countries'],
         featureCount: 20,
         layerName: 'LATAM',
         color: '#10b981',
@@ -38,9 +38,9 @@ export const TEMPLATES: Template[] = [
     },
     {
         id: 'us-states',
-        name: 'Estados de EE.UU.',
-        description: 'Polígonos simplificados de los 50 estados de los Estados Unidos.',
-        tags: ['polígonos', 'usa', 'estados'],
+        name: 'US States',
+        description: 'Simplified polygons of all 50 United States.',
+        tags: ['polygons', 'usa', 'states'],
         featureCount: 50,
         layerName: 'US States',
         color: '#3b82f6',
@@ -51,11 +51,11 @@ export const TEMPLATES: Template[] = [
     },
     {
         id: 'sample-routes',
-        name: 'Rutas de Ejemplo',
-        description: 'Líneas de ejemplo para rutas logísticas, carreteras o trazados.',
-        tags: ['líneas', 'rutas', 'transporte'],
+        name: 'Sample Routes',
+        description: 'Example lines for logistics routes, roads or transit paths.',
+        tags: ['lines', 'routes', 'transport'],
         featureCount: 5,
-        layerName: 'Rutas',
+        layerName: 'Routes',
         color: '#f59e0b',
         getData: async () => {
             const { default: data } = await import('./sample-routes.json');
@@ -64,11 +64,11 @@ export const TEMPLATES: Template[] = [
     },
     {
         id: 'sample-zones',
-        name: 'Zonas de Cobertura',
-        description: 'Polígonos de ejemplo para zonas de entrega, cobertura o áreas de servicio.',
-        tags: ['polígonos', 'zonas', 'entrega'],
+        name: 'Coverage Zones',
+        description: 'Example polygons for delivery zones, coverage areas or service regions.',
+        tags: ['polygons', 'zones', 'delivery'],
         featureCount: 6,
-        layerName: 'Zonas',
+        layerName: 'Zones',
         color: '#ec4899',
         getData: async () => {
             const { default: data } = await import('./sample-zones.json');

@@ -109,7 +109,7 @@ function SandboxEditor() {
             await signInWithPopup(auth, googleProvider);
         } catch (err: any) {
             if (err?.code !== 'auth/popup-closed-by-user' && err?.code !== 'auth/cancelled-popup-request') {
-                setToast('Error al iniciar sesión. Intenta de nuevo.');
+                setToast('Sign-in failed. Please try again.');
             }
             setSaving(false);
         }
@@ -119,7 +119,7 @@ function SandboxEditor() {
         const text = await file.text();
         const lines = text.split(/\r?\n/);
         if (lines.length < 2) {
-            setToast('El archivo CSV está vacío o no tiene datos.');
+            setToast('The CSV file is empty or has no data rows.');
             return;
         }
         const newFeatures: any[] = [];
@@ -131,10 +131,10 @@ function SandboxEditor() {
             if (!wktMatch) continue;
             const geojson = parseWKT(wktMatch[0]);
             if (!geojson) continue;
-            newFeatures.push({ type: 'Feature', geometry: geojson, properties: { name: cols[1] || `Objeto ${i}`, color: generateColor() } });
+            newFeatures.push({ type: 'Feature', geometry: geojson, properties: { name: cols[1] || `Feature ${i}`, color: generateColor() } });
         }
         if (newFeatures.length === 0) {
-            setToast('No se encontraron geometrías WKT en el CSV. Asegúrate de que haya columnas con POLYGON, POINT, etc.');
+            setToast('No WKT geometries found in the CSV. Make sure rows contain POLYGON, POINT, etc.');
             return;
         }
         const currentCount = layersRef.current[0]?.features?.features?.length ?? 0;
@@ -145,9 +145,9 @@ function SandboxEditor() {
             features: { type: 'FeatureCollection', features: [...(prev[0].features?.features ?? []), ...toAdd] }
         }]);
         if (toAdd.length < newFeatures.length) {
-            setToast(`Solo se agregaron ${toAdd.length} de ${newFeatures.length} objetos (límite demo: ${SANDBOX_LIMITS.maxFeatures}). Guarda para continuar.`);
+            setToast(`Only ${toAdd.length} of ${newFeatures.length} features added (demo limit: ${SANDBOX_LIMITS.maxFeatures}). Save to continue.`);
         } else {
-            setToast(`${toAdd.length} objetos importados correctamente.`);
+            setToast(`${toAdd.length} features imported successfully.`);
         }
     };
 
@@ -164,13 +164,13 @@ function SandboxEditor() {
                 if (parsed.type === 'FeatureCollection') features = parsed.features ?? [];
                 else if (parsed.type === 'Feature') features = [parsed];
                 else if (parsed.type && parsed.coordinates) features = [{ type: 'Feature', geometry: parsed, properties: {} }];
-                else { setToast('Formato GeoJSON no reconocido.'); return; }
+                else { setToast('Unrecognized GeoJSON format.'); return; }
 
                 const normalized = features.filter(f => f?.geometry).map((f, i) => ({
                     ...f,
-                    properties: { ...f.properties, name: f.properties?.name ?? `Objeto ${i + 1}`, color: generateColor() },
+                    properties: { ...f.properties, name: f.properties?.name ?? `Feature ${i + 1}`, color: generateColor() },
                 }));
-                if (normalized.length === 0) { setToast('No se encontraron geometrías en el GeoJSON.'); return; }
+                if (normalized.length === 0) { setToast('No geometries found in the GeoJSON file.'); return; }
 
                 const toAdd = normalized.slice(0, remaining);
                 setLayers(prev => [{
@@ -178,11 +178,11 @@ function SandboxEditor() {
                     features: { type: 'FeatureCollection', features: [...(prev[0].features?.features ?? []), ...toAdd] }
                 }]);
                 const msg = toAdd.length < normalized.length
-                    ? `Solo se agregaron ${toAdd.length} de ${normalized.length} objetos (límite demo). Guarda para continuar.`
-                    : `${toAdd.length} objetos importados desde GeoJSON.`;
+                    ? `Only ${toAdd.length} of ${normalized.length} features added (demo limit). Save to continue.`
+                    : `${toAdd.length} features imported from GeoJSON.`;
                 setToast(msg);
             } catch {
-                setToast('Error leyendo el GeoJSON. Verifica que sea JSON válido.');
+                setToast('Error reading GeoJSON. Make sure it is valid JSON.');
             }
 
         } else if (ext === 'shp') {
@@ -196,10 +196,10 @@ function SandboxEditor() {
                     if (result.value) features.push(result.value);
                     result = await source.read();
                 }
-                if (features.length === 0) { setToast('No se encontraron geometrías en el Shapefile.'); return; }
+                if (features.length === 0) { setToast('No geometries found in the Shapefile.'); return; }
                 const normalized = features.map((f, i) => ({
                     ...f,
-                    properties: { ...f.properties, name: f.properties?.name ?? `Objeto ${i + 1}`, color: generateColor() },
+                    properties: { ...f.properties, name: f.properties?.name ?? `Feature ${i + 1}`, color: generateColor() },
                 }));
                 const toAdd = normalized.slice(0, remaining);
                 setLayers(prev => [{
@@ -207,10 +207,10 @@ function SandboxEditor() {
                     features: { type: 'FeatureCollection', features: [...(prev[0].features?.features ?? []), ...toAdd] }
                 }]);
                 setToast(toAdd.length < normalized.length
-                    ? `Solo se agregaron ${toAdd.length} de ${normalized.length} objetos (límite demo). Guarda para continuar.`
-                    : `${toAdd.length} objetos importados desde Shapefile.`);
+                    ? `Only ${toAdd.length} of ${normalized.length} features added (demo limit). Save to continue.`
+                    : `${toAdd.length} features imported from Shapefile.`);
             } catch {
-                setToast('Error leyendo el Shapefile. Asegúrate de seleccionar un .shp válido.');
+                setToast('Error reading Shapefile. Make sure you selected a valid .shp file.');
             }
 
         } else if (ext === 'csv' || ext === 'txt') {
@@ -219,35 +219,35 @@ function SandboxEditor() {
             const hasLatLng = /\blat(itude|itud)?\b/.test(firstLine) && /\b(lon(gitude|gitud)?|lng)\b/.test(firstLine);
             if (hasLatLng) {
                 const lines = text.split(/\r?\n/).filter(l => l.trim());
-                if (lines.length < 2) { setToast('El archivo CSV está vacío o no tiene datos.'); return; }
+                if (lines.length < 2) { setToast('The CSV file is empty or has no data rows.'); return; }
                 const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim().replace(/"/g, ''));
                 const latIdx = headers.findIndex(h => ['lat', 'latitude', 'latitud', 'y'].includes(h));
                 const lngIdx = headers.findIndex(h => ['lon', 'lng', 'longitude', 'longitud', 'x'].includes(h));
                 const nameIdx = headers.findIndex(h => ['name', 'nombre', 'label'].includes(h));
-                if (latIdx === -1 || lngIdx === -1) { setToast('No se encontraron columnas lat/lng. Usa encabezados: lat, lng.'); return; }
+                if (latIdx === -1 || lngIdx === -1) { setToast('lat/lng columns not found. Use headers: lat, lng (or latitude/longitude).'); return; }
                 const features: any[] = [];
                 for (let i = 1; i < lines.length; i++) {
                     const cols = parseCSVLine(lines[i]);
                     const lat = parseFloat(cols[latIdx]);
                     const lng = parseFloat(cols[lngIdx]);
                     if (isNaN(lat) || isNaN(lng)) continue;
-                    const name = nameIdx !== -1 && cols[nameIdx] ? cols[nameIdx].trim().replace(/^"|"$/g, '') : `Punto ${features.length + 1}`;
+                    const name = nameIdx !== -1 && cols[nameIdx] ? cols[nameIdx].trim().replace(/^"|"$/g, '') : `Point ${features.length + 1}`;
                     features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [lng, lat] }, properties: { name, color: generateColor() } });
                 }
-                if (features.length === 0) { setToast('No se encontraron coordenadas válidas en el archivo.'); return; }
+                if (features.length === 0) { setToast('No valid coordinates found in the file.'); return; }
                 const toAdd = features.slice(0, remaining);
                 setLayers(prev => [{
                     ...prev[0],
                     features: { type: 'FeatureCollection', features: [...(prev[0].features?.features ?? []), ...toAdd] }
                 }]);
                 setToast(toAdd.length < features.length
-                    ? `Solo se agregaron ${toAdd.length} de ${features.length} puntos (límite demo). Guarda para continuar.`
-                    : `${toAdd.length} puntos importados.`);
+                    ? `Only ${toAdd.length} of ${features.length} points added (demo limit). Save to continue.`
+                    : `${toAdd.length} points imported.`);
             } else {
                 await handleImportCsv(file);
             }
         } else {
-            setToast('Formato no soportado. Usa .csv, .geojson o .shp');
+            setToast('Unsupported format. Use .csv, .geojson or .shp');
         }
     };
 
@@ -257,7 +257,7 @@ function SandboxEditor() {
         let csvContent = "id,name,color,WKT\n";
         layer.features.features.forEach((feature: any, index: number) => {
             const props = feature.properties || {};
-            const name = (props.name || `Objeto ${index + 1}`).replace(/"/g, '""');
+            const name = (props.name || `Feature ${index + 1}`).replace(/"/g, '""');
             const color = (props.color || '#000000').replace(/"/g, '""');
             let wkt = "";
             try { wkt = stringify(feature.geometry); } catch { /* ignore */ }
@@ -300,10 +300,10 @@ function SandboxEditor() {
             {limitReached && (
                 <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center justify-between text-sm flex-shrink-0 z-20">
                     <span className="text-amber-800">
-                        Límite de {SANDBOX_LIMITS.maxFeatures} objetos en modo demo. Guarda para continuar sin límites.
+                        Demo limit: {SANDBOX_LIMITS.maxFeatures} features. Save your project to continue without limits.
                     </span>
                     <button onClick={handleSave} className="ml-4 text-indigo-600 font-semibold hover:underline flex-shrink-0">
-                        Guardar gratis →
+                        Save for free →
                     </button>
                 </div>
             )}

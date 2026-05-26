@@ -107,8 +107,8 @@ export default function LayerStyleEditor({ layer, onUpdate, onClose }: Props) {
                 </div>
 
                 <div className="border-t border-slate-100 pt-4 space-y-3">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Puntos</p>
-                    <SliderRow label="Radio" value={pointRadius} min={2} max={20} step={1} onChange={field('pointRadius', setPointRadius)} format={v => `${v}px`} />
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Points</p>
+                    <SliderRow label="Radius" value={pointRadius} min={2} max={20} step={1} onChange={field('pointRadius', setPointRadius)} format={v => `${v}px`} />
                 </div>
             </div>
         </div>

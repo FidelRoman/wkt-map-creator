@@ -33,7 +33,7 @@ export default function Toast({ message, type = 'info', onClose, duration = 3500
             <button
                 onClick={onClose}
                 className="ml-1 p-0.5 rounded hover:bg-white/20 transition-colors flex-shrink-0"
-                aria-label="Cerrar notificación"
+                aria-label="Dismiss notification"
             >
                 <XMarkIcon className="w-4 h-4" />
             </button>

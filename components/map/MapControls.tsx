@@ -8,31 +8,31 @@ interface MapControlsProps {
 
 export const MAP_LAYERS: Record<string, { name: string, url: string, attribution: string, preview?: string }> = {
     'osm': {
-        name: 'Estándar',
+        name: 'Standard',
         url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
         attribution: '&copy; OpenStreetMap contributors',
         preview: 'https://a.tile.openstreetmap.org/12/2048/1360.png'
     },
     'satellite': {
-        name: 'Satélite',
+        name: 'Satellite',
         url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
         attribution: 'Tiles &copy; Esri',
         preview: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/12/1360/2048'
     },
     'terrain': {
-        name: 'Terreno',
+        name: 'Terrain',
         url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
         attribution: 'Map data: &copy; OpenStreetMap contributors, SRTM | Map style: &copy; OpenTopoMap (CC-BY-SA)',
         preview: 'https://a.tile.opentopomap.org/12/2048/1360.png'
     },
     'dark': {
-        name: 'Oscuro',
+        name: 'Dark',
         url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
         attribution: '&copy; OpenStreetMap &copy; CARTO',
         preview: 'https://a.basemaps.cartocdn.com/dark_all/12/2048/1360.png'
     },
     'light': {
-        name: 'Claro',
+        name: 'Light',
         url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
         attribution: '&copy; OpenStreetMap &copy; CARTO',
         preview: 'https://a.basemaps.cartocdn.com/light_all/12/2048/1360.png'
@@ -62,13 +62,13 @@ export const MAP_LAYERS: Record<string, { name: string, url: string, attribution
         preview: `https://api.mapbox.com/styles/v1/mapbox/dark-v10/tiles/12/2048/1360?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}`
     },
     'mapbox_satellite': {
-        name: 'Mapbox Satélite',
+        name: 'Mapbox Satellite',
         url: `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/{z}/{x}/{y}?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}`,
         attribution: '© Mapbox',
         preview: `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/12/2048/1360?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}`
     },
     'mapbox_satellite_streets': {
-        name: 'Mapbox Sat. Calles',
+        name: 'Mapbox Sat. Streets',
         url: `https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v11/tiles/{z}/{x}/{y}?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}`,
         attribution: '© Mapbox',
         preview: `https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v11/tiles/12/2048/1360?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}`
@@ -146,7 +146,7 @@ export default function MapControls({ activeTileLayer, setActiveTileLayer }: Map
                         onChange={(e) => setSearchQuery(e.target.value)}
                         onFocus={() => setShowSuggestions(true)}
                         onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} // Delay to allow click
-                        placeholder="Buscar dirección..."
+                        placeholder="Search address…"
                         style={{ border: 'none', padding: '8px 12px', borderRadius: '4px', outline: 'none', flex: 1 }}
                     />
                     <div style={{ padding: '8px', color: '#666' }}>
@@ -323,19 +323,19 @@ export default function MapControls({ activeTileLayer, setActiveTileLayer }: Map
                         >
                             ✕
                         </button>
-                        <h3 style={{ marginTop: '10px', color: '#1f2937', fontSize: '20px' }}>¡Apoya este proyecto!</h3>
+                        <h3 style={{ marginTop: '10px', color: '#1f2937', fontSize: '20px' }}>Support this project!</h3>
                         <p style={{ color: '#4b5563', lineHeight: '1.5', marginTop: '10px' }}>
-                            Si te gustó este proyecto, puedes colaborar yapeando al siguiente QR:
+                            If you enjoy WKT Studio, you can support it by scanning the QR code below:
                         </p>
-                        <div style={{ 
-                            width: '200px', height: '200px', 
-                            margin: '25px auto', 
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                        <div style={{
+                            width: '200px', height: '200px',
+                            margin: '25px auto',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
                             borderRadius: '12px', overflow: 'hidden', border: '1px solid #e5e7eb'
                         }}>
-                            <img src="/qr.jpeg" alt="Código QR Yape" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                            <img src="/qr.jpeg" alt="Donation QR code" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                         </div>
-                        <p style={{ fontWeight: '600', color: '#111827', margin: '0', fontSize: '18px' }}>Nombre: Luis Roman</p>
+                        <p style={{ fontWeight: '600', color: '#111827', margin: '0', fontSize: '18px' }}>Name: Luis Roman</p>
                     </div>
                 </div>
             )}

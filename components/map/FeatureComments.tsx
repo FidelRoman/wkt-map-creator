@@ -95,7 +95,7 @@ export default function FeatureComments({ projectId, layerId, featureIndex, feat
                 {comments.length === 0 && (
                     <div className="text-center py-5">
                         <ChatBubbleLeftIcon className="w-6 h-6 text-slate-200 mx-auto mb-1.5" />
-                        <p className="text-xs text-slate-400">Sin comentarios aún.</p>
+                        <p className="text-xs text-slate-400">No comments yet.</p>
                     </div>
                 )}
 
