@@ -1,8 +1,8 @@
 "use client";
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import MapControls, { MAP_LAYERS } from './map/MapControls';
 
-import { MapContainer, TileLayer, GeoJSON } from 'react-leaflet';
+import { MapContainer, TileLayer, GeoJSON, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
@@ -36,6 +36,54 @@ interface MapProps {
     isReadOnly?: boolean;
 }
 
+function MapAutoFit({ layers, projectId }: { layers: Layer[]; projectId?: string }) {
+    const map = useMap();
+    const fittedRef = useRef(false);
+
+    useEffect(() => {
+        if (fittedRef.current) return;
+
+        // 1. Restore last saved position for this project
+        if (projectId) {
+            const saved = localStorage.getItem(`wkt-map-pos-${projectId}`);
+            if (saved) {
+                try {
+                    const { center, zoom } = JSON.parse(saved);
+                    map.setView(center, zoom, { animate: false });
+                    fittedRef.current = true;
+                    return;
+                } catch {}
+            }
+        }
+
+        // 2. No saved position — fit to all features
+        const allFeatures = layers.flatMap(l => l.features?.features ?? []).filter(f => f?.geometry);
+        if (allFeatures.length > 0) {
+            try {
+                const bounds = L.geoJSON({ type: 'FeatureCollection', features: allFeatures } as any).getBounds();
+                if (bounds.isValid()) {
+                    map.fitBounds(bounds, { padding: [60, 60], animate: false, maxZoom: 16 });
+                    fittedRef.current = true;
+                }
+            } catch {}
+        }
+    }, [layers]);
+
+    // Save position whenever the user pans or zooms
+    useMapEvents({
+        moveend() {
+            if (!projectId) return;
+            const c = map.getCenter();
+            localStorage.setItem(`wkt-map-pos-${projectId}`, JSON.stringify({
+                center: [c.lat, c.lng],
+                zoom: map.getZoom(),
+            }));
+        },
+    });
+
+    return null;
+}
+
 export default function MapComponent(props: MapProps) {
     const { projectId, isReadOnly, ...rest } = props;
     const [activeTileLayer, setActiveTileLayer] = useState("light");
@@ -44,7 +92,8 @@ export default function MapComponent(props: MapProps) {
     const currentLayer = MAP_LAYERS[activeTileLayer] || MAP_LAYERS['osm'];
 
     return (
-        <MapContainer center={[-12.0464, -77.0428]} zoom={12} style={{ height: "100%", width: "100%" }}>
+        <MapContainer center={[20, 0]} zoom={2} style={{ height: "100%", width: "100%" }}>
+            <MapAutoFit layers={props.layers} projectId={projectId} />
             <MapControls activeTileLayer={activeTileLayer} setActiveTileLayer={setActiveTileLayer} />
             <TileLayer
                 attribution={currentLayer.attribution}

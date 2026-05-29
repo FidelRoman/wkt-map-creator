@@ -239,18 +239,19 @@ export async function getUserProjects(userId: string): Promise<Project[]> {
         const q = query(
             collection(db, PROJECTS_COLLECTION),
             where('ownerId', '==', userId),
-            orderBy('updatedAt', 'desc')
         );
         const snapshot = await getDocs(q);
 
-        return snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                ...data,
-                layers: data.layers ? parseLayers(data.layers) : []
-            } as Project;
-        });
+        return snapshot.docs
+            .map(doc => {
+                const data = doc.data();
+                return {
+                    id: doc.id,
+                    ...data,
+                    layers: data.layers ? parseLayers(data.layers) : []
+                } as Project;
+            })
+            .sort((a, b) => (a.createdAt?.seconds ?? 0) - (b.createdAt?.seconds ?? 0));
     } catch (error) {
         console.error("Error fetching projects:", error);
         return [];
