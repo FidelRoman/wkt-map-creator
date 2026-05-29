@@ -14,15 +14,53 @@ import { PLANS, PLAN_LIMITS, checkLimit, type LimitKey, type FeatureKey, type Pl
 import {
   PlusIcon, UserCircleIcon, EllipsisVerticalIcon, TrashIcon,
   PencilIcon, ShareIcon, CheckIcon, SparklesIcon, XMarkIcon, Cog6ToothIcon,
+  SunIcon, MoonIcon,
 } from '@heroicons/react/24/outline';
 import Toast, { type ToastType } from '@/components/Toast';
 import { analytics } from '@/lib/analytics';
 import OnboardingTour from '@/components/OnboardingTour';
+import { useDarkMode } from '@/lib/useDarkMode';
 
 type UpgradeReason =
   | { type: 'limit'; limitKey: LimitKey; current: number; limit: number; requiredPlan: PlanId }
   | { type: 'feature'; featureKey: FeatureKey; requiredPlan: PlanId }
   | undefined;
+
+const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+
+function getProjectThumbnailUrl(project: Project): string | null {
+  if (!MAPBOX_TOKEN) return null;
+  const allFeatures = project.layers?.flatMap(l => l.features?.features ?? []) ?? [];
+  if (allFeatures.length === 0) return null;
+  let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+  const collect = (c: any): void => {
+    if (!Array.isArray(c)) return;
+    if (typeof c[0] === 'number') { const [lng, lat] = c; if (lng < minLng) minLng = lng; if (lng > maxLng) maxLng = lng; if (lat < minLat) minLat = lat; if (lat > maxLat) maxLat = lat; }
+    else c.forEach(collect);
+  };
+  allFeatures.forEach(f => collect(f.geometry?.coordinates ?? []));
+  if (!isFinite(minLng)) return null;
+  const pad = 0.001;
+  return `https://api.mapbox.com/styles/v1/mapbox/light-v10/static/[${minLng - pad},${minLat - pad},${maxLng + pad},${maxLat + pad}]/320x160@2x?padding=20&access_token=${MAPBOX_TOKEN}`;
+}
+
+function ProjectThumbnail({ project }: { project: Project }) {
+  const url = getProjectThumbnailUrl(project);
+  if (url) {
+    return (
+      <div className="h-32 bg-slate-100 dark:bg-slate-700 overflow-hidden">
+        <img src={url} alt={project.name} className="w-full h-full object-cover" loading="lazy" />
+      </div>
+    );
+  }
+  return (
+    <div className="h-20 bg-gradient-to-br from-indigo-50 to-slate-100 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center">
+      <svg className="w-8 h-8 text-indigo-200 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 01-.553-.894L15 4m0 13V4m0 0L9 7" />
+      </svg>
+    </div>
+  );
+}
 
 // ─── Google icon ─────────────────────────────────────────────────────────────
 
@@ -440,6 +478,7 @@ function LandingPage() {
 
 function Dashboard() {
   const { user, userProfile, refreshProfile } = useAuth();
+  const { dark, toggle: toggleDark } = useDarkMode();
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
   const [sharedProjects, setSharedProjects] = useState<Project[]>([]);
@@ -564,7 +603,7 @@ function Dashboard() {
   const maxProjects = PLAN_LIMITS[plan].maxProjects;
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       {userProfile?.subscriptionStatus === 'past_due' && (
         <div className="bg-red-50 border-b border-red-200 px-6 py-3 flex items-center justify-between">
           <span className="text-sm font-medium text-red-700">
@@ -585,21 +624,21 @@ function Dashboard() {
         </div>
       )}
 
-      <header className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center sticky top-0 z-10 w-full">
-        <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+      <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-6 py-4 flex justify-between items-center sticky top-0 z-10 w-full">
+        <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
           <svg className="w-6 h-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 01-.553-.894L15 4m0 13V4m0 0L9 7" />
           </svg>
           WKT Studio
         </h1>
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 bg-slate-100 rounded-full pl-1.5 pr-3 py-1.5">
+          <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 rounded-full pl-1.5 pr-3 py-1.5">
             {user?.photoURL ? (
               <img src={user.photoURL} className="w-7 h-7 rounded-full object-cover flex-shrink-0" alt={user.displayName ?? 'Foto de perfil'} />
             ) : (
               <UserCircleIcon className="w-7 h-7 text-slate-400 flex-shrink-0" />
             )}
-            <span className="text-sm font-semibold text-slate-800 truncate max-w-[160px]">{user?.displayName}</span>
+            <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate max-w-[160px]">{user?.displayName}</span>
             <button
               data-tour="plan-badge"
               onClick={() => { if (plan === 'free') setShowUpgrade(true); }}
@@ -611,6 +650,9 @@ function Dashboard() {
               {plan === 'pro' ? 'Pro' : 'Free'}
             </button>
           </div>
+          <button onClick={toggleDark} title={dark ? 'Switch to light mode' : 'Switch to dark mode'} className="p-2 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+            {dark ? <SunIcon className="w-5 h-5" /> : <MoonIcon className="w-5 h-5" />}
+          </button>
           <Link data-tour="settings-link" href="/settings" className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors" title="Settings">
             <Cog6ToothIcon className="w-5 h-5" />
           </Link>
@@ -626,16 +668,16 @@ function Dashboard() {
             { href: '/convert', label: '⇄ Converter', desc: 'WKT · GeoJSON · WKB' },
             { href: '/api-docs', label: '</> API Docs', desc: 'Integrate with your stack' },
           ].map(l => (
-            <Link key={l.href} href={l.href} className="flex flex-col px-4 py-2.5 bg-white border border-slate-200 rounded-xl hover:border-indigo-200 hover:bg-indigo-50 transition-colors group">
-              <span className="text-sm font-semibold text-slate-700 group-hover:text-indigo-700">{l.label}</span>
-              <span className="text-xs text-slate-400">{l.desc}</span>
+            <Link key={l.href} href={l.href} className="flex flex-col px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:border-indigo-200 hover:bg-indigo-50 dark:hover:bg-slate-700 transition-colors group">
+              <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 group-hover:text-indigo-700 dark:group-hover:text-indigo-400">{l.label}</span>
+              <span className="text-xs text-slate-400 dark:text-slate-500">{l.desc}</span>
             </Link>
           ))}
         </div>
 
         <div className="flex justify-between items-start mb-8">
           <div>
-            <h2 className="text-3xl font-bold text-slate-900">My Projects</h2>
+            <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100">My Projects</h2>
             {plan === 'free' && maxProjects !== null && (
               <div className="flex items-center gap-2 mt-2">
                 <div className="h-1.5 w-28 bg-slate-200 rounded-full overflow-hidden">
@@ -667,12 +709,12 @@ function Dashboard() {
         </div>
 
         {projects.length === 0 ? (
-          <div className="text-center py-20 bg-white rounded-3xl border border-slate-200 border-dashed">
-            <div className="inline-flex bg-slate-50 p-4 rounded-full mb-4">
+          <div className="text-center py-20 bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 border-dashed">
+            <div className="inline-flex bg-slate-50 dark:bg-slate-700 p-4 rounded-full mb-4">
               <PlusIcon className="w-8 h-8 text-slate-400" />
             </div>
-            <h3 className="text-lg font-medium text-slate-900">No projects yet</h3>
-            <p className="text-slate-500 mt-1 mb-6">Create your first project to start mapping</p>
+            <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100">No projects yet</h3>
+            <p className="text-slate-500 dark:text-slate-400 mt-1 mb-6">Create your first project to start mapping</p>
             <button
               onClick={() => { setNewProjectName(""); setIsModalOpen(true); }}
               className="text-indigo-600 font-medium hover:underline"
@@ -686,24 +728,22 @@ function Dashboard() {
               <div key={project.id} className="relative group">
                 <Link
                   href={`/${project.id}`}
-                  className="bg-white rounded-2xl border border-slate-200 p-5 hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer flex flex-col h-48"
+                  className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-500 hover:shadow-md transition-all cursor-pointer flex flex-col overflow-hidden"
                 >
-                  <div className="flex justify-between items-start mb-2 pr-8">
-                    <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
+                  <ProjectThumbnail project={project} />
+                  <div className="p-4 flex flex-col flex-1">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 pr-6 line-clamp-1">{project.name}</h3>
+                      <span className="text-xs font-medium text-slate-400 bg-slate-50 dark:bg-slate-700 px-2 py-0.5 rounded-md shrink-0">
+                        {project.updatedAt ? new Date(project.updatedAt.seconds * 1000).toLocaleDateString() : 'Recent'}
+                      </span>
                     </div>
-                    <span className="text-xs font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded-md">
-                      {project.updatedAt ? new Date(project.updatedAt.seconds * 1000).toLocaleDateString() : 'Recent'}
-                    </span>
-                  </div>
-                  <h3 className="text-lg font-bold text-slate-800 group-hover:text-indigo-600 mb-1 pr-6">{project.name}</h3>
-                  <p className="text-sm text-slate-500 line-clamp-2 flex-1">
-                    {project.layers?.length || 0} layers &bull; {project.layers?.reduce((acc, l) => acc + (l.features?.features?.length || 0), 0) || 0} features
-                  </p>
-                  <div className="mt-auto pt-4 border-t border-slate-100 flex items-center text-sm text-indigo-600 font-medium">
-                    Open Project &rarr;
+                    <p className="text-sm text-slate-500 dark:text-slate-400 flex-1">
+                      {project.layers?.length || 0} layers &bull; {project.layers?.reduce((acc, l) => acc + (l.features?.features?.length || 0), 0) || 0} features
+                    </p>
+                    <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 flex items-center text-sm text-indigo-600 dark:text-indigo-400 font-medium">
+                      Open Project &rarr;
+                    </div>
                   </div>
                 </Link>
 
@@ -720,7 +760,7 @@ function Dashboard() {
                   </button>
 
                   {menuOpenId === project.id && (
-                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden z-20">
+                    <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-100 dark:border-slate-700 overflow-hidden z-20">
                       <button
                         onClick={(e) => {
                           e.preventDefault(); e.stopPropagation();
@@ -729,7 +769,7 @@ function Dashboard() {
                           setRenameModalOpen(true);
                           setMenuOpenId(null);
                         }}
-                        className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 flex items-center gap-2"
+                        className="w-full text-left px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-indigo-50 dark:hover:bg-slate-700 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-2"
                       >
                         <PencilIcon className="w-4 h-4" />
                         Rename
@@ -741,12 +781,12 @@ function Dashboard() {
                           setShareModalOpen(true);
                           setMenuOpenId(null);
                         }}
-                        className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 flex items-center gap-2"
+                        className="w-full text-left px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-indigo-50 dark:hover:bg-slate-700 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-2"
                       >
                         <ShareIcon className="w-4 h-4" />
                         Share
                       </button>
-                      <div className="h-px bg-slate-100 my-1" />
+                      <div className="h-px bg-slate-100 dark:bg-slate-700 my-1" />
                       <button
                         onClick={(e) => {
                           e.preventDefault(); e.stopPropagation();
@@ -754,7 +794,7 @@ function Dashboard() {
                           setDeleteModalOpen(true);
                           setMenuOpenId(null);
                         }}
-                        className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                        className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
                       >
                         <TrashIcon className="w-4 h-4" />
                         Delete
@@ -769,30 +809,32 @@ function Dashboard() {
 
         {sharedProjects.length > 0 && (
           <div className="mt-12">
-            <h2 className="text-3xl font-bold text-slate-900 mb-6">Shared with Me</h2>
+            <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-6">Shared with Me</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {sharedProjects.map(project => (
                 <Link
                   href={`/${project.id}`}
                   key={project.id}
-                  className="group bg-white rounded-2xl border border-slate-200 p-5 hover:border-green-300 hover:shadow-md transition-all cursor-pointer flex flex-col h-48"
+                  className="group bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-green-300 dark:hover:border-green-600 hover:shadow-md transition-all cursor-pointer flex flex-col overflow-hidden"
                 >
-                  <div className="flex justify-between items-start mb-2">
-                    <div className="p-2 bg-green-50 rounded-lg text-green-600 group-hover:bg-green-600 group-hover:text-white transition-colors">
-                      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                      </svg>
-                    </div>
-                    <span className="text-xs font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded-md">
-                      {project.updatedAt ? new Date(project.updatedAt.seconds * 1000).toLocaleDateString() : 'Recent'}
-                    </span>
+                  <div className="h-20 bg-gradient-to-br from-green-50 to-slate-100 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center">
+                    <svg className="w-8 h-8 text-green-300 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
                   </div>
-                  <h3 className="text-lg font-bold text-slate-800 group-hover:text-green-600 mb-1">{project.name}</h3>
-                  <p className="text-sm text-slate-500 line-clamp-2 flex-1">
-                    By: {project.ownerName ? `${project.ownerName} (${project.ownerEmail})` : (project.ownerEmail || project.ownerId)}
-                  </p>
-                  <div className="mt-auto pt-4 border-t border-slate-100 flex items-center text-sm text-green-600 font-medium">
-                    Open Shared &rarr;
+                  <div className="p-4 flex flex-col flex-1">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 group-hover:text-green-600 dark:group-hover:text-green-400 line-clamp-1">{project.name}</h3>
+                      <span className="text-xs font-medium text-slate-400 bg-slate-50 dark:bg-slate-700 px-2 py-0.5 rounded-md shrink-0">
+                        {project.updatedAt ? new Date(project.updatedAt.seconds * 1000).toLocaleDateString() : 'Recent'}
+                      </span>
+                    </div>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2 flex-1">
+                      By: {project.ownerName ? `${project.ownerName} (${project.ownerEmail})` : (project.ownerEmail || project.ownerId)}
+                    </p>
+                    <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 flex items-center text-sm text-green-600 dark:text-green-400 font-medium">
+                      Open Shared &rarr;
+                    </div>
                   </div>
                 </Link>
               ))}

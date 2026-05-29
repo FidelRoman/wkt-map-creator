@@ -81,13 +81,13 @@ export default function LayerStyleEditor({ layer, onUpdate, onClose }: Props) {
     };
 
     return (
-        <div className="fixed right-4 top-4 z-[600] bg-white rounded-2xl shadow-xl border border-slate-200 w-80 overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+        <div className="fixed right-4 top-4 z-[600] bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 w-80 overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700">
                 <div>
-                    <p className="text-sm font-semibold text-slate-800">Layer Style</p>
+                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Layer Style</p>
                     <p className="text-xs text-slate-400 truncate max-w-[180px]">{layer.name}</p>
                 </div>
-                <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100">
+                <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700">
                     <XMarkIcon className="w-4 h-4" />
                 </button>
             </div>

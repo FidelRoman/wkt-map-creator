@@ -25,7 +25,10 @@ import {
     CircleStackIcon,
     PaintBrushIcon,
     ClockIcon,
+    SunIcon,
+    MoonIcon,
 } from "@heroicons/react/24/outline";
+import { useDarkMode } from "@/lib/useDarkMode";
 import ShareModal from "@/components/ShareModal";
 import { generateColor, parseWKT } from "@/lib/map-utils";
 import { generatePostgisSQL } from "@/lib/export-utils";
@@ -107,6 +110,7 @@ export default function Sidebar({
     isImporting = false,
 }: SidebarProps) {
     const { user, userProfile } = useAuth();
+    const { dark, toggle: toggleDark } = useDarkMode();
     const [projectListOpen, setProjectListOpen] = useState(false);
     const [shareModalOpen, setShareModalOpen] = useState(false);
     const [upgradeModal, setUpgradeModal] = useState<React.ComponentProps<typeof UpgradeModal>['reason']>(undefined);
@@ -406,13 +410,13 @@ export default function Sidebar({
         <>
             <div className="sidebar">
                 {/* Header: Proyectos */}
-                <div className="project-header" style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9' }}>
+                <div className="project-header" style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-color)' }}>
                     {sandboxMode ? (
                         <div className="flex items-center gap-2">
                             <svg className="w-5 h-5 text-indigo-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                             </svg>
-                            <span className="font-bold text-slate-800 text-base">WKT Studio</span>
+                            <span className="font-bold text-slate-800 dark:text-slate-100 text-base">WKT Studio</span>
                             <span className="text-[10px] bg-slate-100 text-slate-500 border border-slate-200 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium ml-auto">
                                 Demo
                             </span>
@@ -446,7 +450,7 @@ export default function Sidebar({
                             </div>
                             <div className="flex items-center justify-between mb-1">
                                 <div className="flex-1 min-w-0">
-                                    <div className="font-bold text-slate-800 text-lg truncate" title={currentProject?.name}>
+                                    <div className="font-bold text-slate-800 dark:text-slate-100 text-lg truncate" title={currentProject?.name}>
                                         {currentProject ? currentProject.name : 'Loading...'}
                                     </div>
                                     {isReadOnly && (
@@ -542,7 +546,7 @@ export default function Sidebar({
                             {showImportMenu && !isImporting && (
                                 <>
                                     <div className="fixed inset-0 z-30" onClick={() => setShowImportMenu(false)} />
-                                    <div className="absolute right-0 top-7 z-40 bg-white border border-slate-200 rounded-xl shadow-lg py-1 w-48">
+                                    <div className="absolute right-0 top-7 z-40 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg py-1 w-48">
                                         <p className="px-3 pt-1 pb-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Format</p>
                                         {[
                                             { label: 'CSV with WKT', ext: '.csv,.txt', desc: 'WKT', onClick: () => fileInputRef.current?.click() },
@@ -553,7 +557,7 @@ export default function Sidebar({
                                             <button
                                                 key={label}
                                                 onClick={() => { onClick(); setShowImportMenu(false); }}
-                                                className="w-full flex items-center justify-between px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                                                className="w-full flex items-center justify-between px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                                             >
                                                 <span>{label}</span>
                                                 <span className="text-[10px] text-slate-400 font-mono">{desc}</span>
@@ -680,7 +684,7 @@ export default function Sidebar({
                                         onToggleSelection(index, e.metaKey || e.ctrlKey);
                                         onFocusFeature(feature);
                                     }}
-                                    className={`flex items-center p-3 mb-2 rounded-xl border transition-all cursor-pointer ${isSelected ? 'bg-blue-50 border-blue-200 shadow-sm' : 'bg-white border-slate-100'}`}
+                                    className={`flex items-center p-3 mb-2 rounded-xl border transition-all cursor-pointer ${isSelected ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 shadow-sm' : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700'}`}
                                 >
                                     <div
                                         className="relative w-6 h-6 rounded-md mr-3 shadow-inner overflow-hidden shrink-0"
@@ -707,10 +711,10 @@ export default function Sidebar({
                                             onBlur={() => saveRename(index)}
                                             autoFocus
                                             onClick={(e) => e.stopPropagation()}
-                                            className="flex-1 px-2 py-1 mx-2 text-sm border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                            className="flex-1 px-2 py-1 mx-2 text-sm border border-blue-300 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
                                         />
                                     ) : (
-                                        <span className={`flex-1 font-medium truncate ${isSelected ? 'text-blue-700' : 'text-slate-700'}`} title={feature.properties?.name}>
+                                        <span className={`flex-1 font-medium truncate ${isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-slate-700 dark:text-slate-200'}`} title={feature.properties?.name}>
                                             {feature.properties?.name || `Feature ${index + 1}`}
                                         </span>
                                     )}
@@ -796,6 +800,9 @@ export default function Sidebar({
                                 {user?.email}
                             </span>
                         </div>
+                        <button onClick={toggleDark} title={dark ? "Switch to light mode" : "Switch to dark mode"} className="btn-logout" style={{ color: '#64748b' }}>
+                            {dark ? <SunIcon width={16} height={16} /> : <MoonIcon width={16} height={16} />}
+                        </button>
                         <Link href="/settings" title="Settings" className="btn-logout" style={{ color: '#64748b', textDecoration: 'none' }}>
                             <Cog6ToothIcon width={16} height={16} />
                         </Link>

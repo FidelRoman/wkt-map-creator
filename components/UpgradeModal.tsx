@@ -124,15 +124,15 @@ export default function UpgradeModal({ isOpen, onClose, onShowToast, reason }: U
             aria-modal="true"
             aria-labelledby="upgrade-modal-title"
         >
-            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full">
                 <div className="flex items-start justify-between p-6 pb-4">
                     <div>
                         <div className="flex items-center gap-2 mb-1">
                             <SparklesIcon className="w-5 h-5 text-indigo-500" />
-                            <span id="upgrade-modal-title" className="text-sm font-semibold text-indigo-600 uppercase tracking-wide">Upgrade to Pro</span>
+                            <span id="upgrade-modal-title" className="text-sm font-semibold text-indigo-600 dark:text-indigo-400 uppercase tracking-wide">Upgrade to Pro</span>
                         </div>
                         {limitText && (
-                            <p className="text-sm text-gray-500 mt-1 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                            <p className="text-sm text-gray-500 dark:text-slate-400 mt-1 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
                                 {limitText}
                             </p>
                         )}
@@ -140,23 +140,23 @@ export default function UpgradeModal({ isOpen, onClose, onShowToast, reason }: U
                     <button
                         onClick={onClose}
                         aria-label="Close"
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors ml-4 flex-shrink-0"
+                        className="p-1.5 rounded-lg text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors ml-4 flex-shrink-0"
                     >
                         <XMarkIcon className="w-5 h-5" />
                     </button>
                 </div>
 
                 <div className="flex justify-center mb-6 px-6">
-                    <div className="flex items-center gap-1 bg-gray-100 rounded-full p-1">
+                    <div className="flex items-center gap-1 bg-gray-100 dark:bg-slate-700 rounded-full p-1">
                         <button
                             onClick={() => setInterval('month')}
-                            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${interval === 'month' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${interval === 'month' ? 'bg-white dark:bg-slate-600 shadow text-gray-900 dark:text-slate-100' : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200'}`}
                         >
                             Monthly
                         </button>
                         <button
                             onClick={() => setInterval('year')}
-                            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all flex items-center gap-1.5 ${interval === 'year' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all flex items-center gap-1.5 ${interval === 'year' ? 'bg-white dark:bg-slate-600 shadow text-gray-900 dark:text-slate-100' : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200'}`}
                         >
                             Yearly
                             <span className="bg-green-100 text-green-700 text-xs px-1.5 py-0.5 rounded-full font-semibold">-{yearlySavings}%</span>
@@ -165,17 +165,17 @@ export default function UpgradeModal({ isOpen, onClose, onShowToast, reason }: U
                 </div>
 
                 <div className="px-6 pb-6">
-                    <div className="rounded-xl border-2 border-indigo-500 p-5 flex flex-col gap-4 shadow-lg shadow-indigo-100">
-                        <div className="text-xs font-bold text-indigo-600 uppercase tracking-wider">Most popular</div>
+                    <div className="rounded-xl border-2 border-indigo-500 p-5 flex flex-col gap-4 shadow-lg">
+                        <div className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Most popular</div>
                         <div>
-                            <h3 className="text-xl font-bold text-gray-900">{proPlan.name}</h3>
-                            <p className="text-sm text-gray-500">{proPlan.description}</p>
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-slate-100">{proPlan.name}</h3>
+                            <p className="text-sm text-gray-500 dark:text-slate-400">{proPlan.description}</p>
                         </div>
                         <div className="flex items-end gap-1">
-                            <span className="text-3xl font-extrabold text-gray-900">
+                            <span className="text-3xl font-extrabold text-gray-900 dark:text-slate-100">
                                 ${interval === 'month' ? proPlan.monthlyPrice : proPlan.yearlyPrice}
                             </span>
-                            <span className="text-gray-500 text-sm mb-1">/{interval === 'month' ? 'mo' : 'yr'}</span>
+                            <span className="text-gray-500 dark:text-slate-400 text-sm mb-1">/{interval === 'month' ? 'mo' : 'yr'}</span>
                         </div>
                         {interval === 'year' && (
                             <p className="text-xs text-green-600 font-medium -mt-2">
@@ -184,7 +184,7 @@ export default function UpgradeModal({ isOpen, onClose, onShowToast, reason }: U
                         )}
                         <ul className="space-y-2">
                             {proPlan.features.map((f, i) => (
-                                <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                                <li key={i} className="flex items-start gap-2 text-sm text-gray-700 dark:text-slate-300">
                                     <CheckIcon className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
                                     {f}
                                 </li>
@@ -208,7 +208,7 @@ export default function UpgradeModal({ isOpen, onClose, onShowToast, reason }: U
                     </div>
                 </div>
 
-                <p className="text-center text-xs text-gray-400 pb-4">
+                <p className="text-center text-xs text-gray-400 dark:text-slate-500 pb-4">
                     Secure payment via Paddle · No hidden fees
                 </p>
             </div>

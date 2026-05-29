@@ -78,6 +78,25 @@ export const MAP_LAYERS: Record<string, { name: string, url: string, attribution
 export default function MapControls({ activeTileLayer, setActiveTileLayer }: MapControlsProps) {
     const map = useMap();
     const [searchQuery, setSearchQuery] = useState("");
+    const activeTileLayerRef = useRef(activeTileLayer);
+    activeTileLayerRef.current = activeTileLayer;
+
+    // Watch the .dark class on <html> via MutationObserver so this reacts
+    // immediately when ANY component toggles dark mode (not just this instance).
+    useEffect(() => {
+        const neutral = ['osm', 'light', 'dark'];
+        const sync = () => {
+            const isDark = document.documentElement.classList.contains('dark');
+            if (neutral.includes(activeTileLayerRef.current)) {
+                setActiveTileLayer(isDark ? 'dark' : 'light');
+            }
+        };
+        sync(); // apply on mount
+        const observer = new MutationObserver(sync);
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+        return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
     const [suggestions, setSuggestions] = useState<any[]>([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [isSearching, setIsSearching] = useState(false);

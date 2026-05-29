@@ -109,12 +109,12 @@ export default function ShareModal({ isOpen, onClose, project, onUpdate, plan = 
             }
         >
             {/* Tabs */}
-            <div className="flex border-b border-slate-200 mb-5 -mt-1">
+            <div className="flex border-b border-slate-200 dark:border-slate-700 mb-5 -mt-1">
                 {tabs.map(t => (
                     <button
                         key={t.id}
                         onClick={() => setTab(t.id)}
-                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === t.id ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === t.id ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
                     >
                         {t.label}
                     </button>
@@ -123,15 +123,15 @@ export default function ShareModal({ isOpen, onClose, project, onUpdate, plan = 
 
             <div className="space-y-4">
                 {tab === 'link' && (
-                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                    <div className="p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
                         <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-3">
-                                <div className={`p-2 rounded-lg ${isPublic ? 'bg-green-100 text-green-600' : 'bg-slate-200 text-slate-500'}`}>
+                                <div className={`p-2 rounded-lg ${isPublic ? 'bg-green-100 dark:bg-green-900/30 text-green-600' : 'bg-slate-200 dark:bg-slate-700 text-slate-500'}`}>
                                     <LinkIcon className="w-5 h-5" />
                                 </div>
                                 <div>
-                                    <p className="font-medium text-slate-800">Public Access</p>
-                                    <p className="text-sm text-slate-500">Anyone with the link can view</p>
+                                    <p className="font-medium text-slate-800 dark:text-slate-100">Public Access</p>
+                                    <p className="text-sm text-slate-500 dark:text-slate-400">Anyone with the link can view</p>
                                 </div>
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer">
@@ -141,7 +141,7 @@ export default function ShareModal({ isOpen, onClose, project, onUpdate, plan = 
                         </div>
                         {isPublic && (
                             <div className="mt-3 flex items-center gap-2">
-                                <input type="text" readOnly value={publicLink} className="flex-1 bg-white border border-slate-300 text-slate-600 text-xs rounded p-2 overflow-hidden text-ellipsis" />
+                                <input type="text" readOnly value={publicLink} className="flex-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-xs rounded p-2 overflow-hidden text-ellipsis" />
                                 <button onClick={() => { navigator.clipboard.writeText(publicLink); onShowToast?.('Link copied', 'success'); }} className="text-indigo-600 hover:text-indigo-700 text-xs font-medium">Copy</button>
                             </div>
                         )}
@@ -164,12 +164,12 @@ export default function ShareModal({ isOpen, onClose, project, onUpdate, plan = 
                             <input
                                 type="email"
                                 placeholder="Add people by email"
-                                className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 value={newEmail}
                                 onChange={(e) => { setNewEmail(e.target.value); if (emailError) setEmailError(""); }}
                                 disabled={plan === 'free'}
                             />
-                            <select value={newRole} onChange={(e) => setNewRole(e.target.value as 'editor' | 'viewer')} className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none disabled:opacity-50" disabled={plan === 'free'}>
+                            <select value={newRole} onChange={(e) => setNewRole(e.target.value as 'editor' | 'viewer')} className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none disabled:opacity-50" disabled={plan === 'free'}>
                                 <option value="editor">Editor</option>
                                 <option value="viewer">Viewer</option>
                             </select>
@@ -187,13 +187,13 @@ export default function ShareModal({ isOpen, onClose, project, onUpdate, plan = 
                         <div className="space-y-2 max-h-[150px] overflow-y-auto">
                             {collaborators.length === 0 && <p className="text-sm text-slate-400 italic text-center py-2">No collaborators yet</p>}
                             {collaborators.map((email) => (
-                                <div key={email} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg group">
+                                <div key={email} className="flex items-center justify-between p-2 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg group">
                                     <div className="flex items-center gap-2">
-                                        <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-bold">{email.charAt(0).toUpperCase()}</div>
-                                        <span className="text-sm text-slate-700">{email}</span>
+                                        <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xs font-bold">{email.charAt(0).toUpperCase()}</div>
+                                        <span className="text-sm text-slate-700 dark:text-slate-200">{email}</span>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <select value={roles[email] || 'editor'} onChange={(e) => handleRoleChange(email, e.target.value as 'editor' | 'viewer')} className="text-xs border border-slate-200 rounded px-1 py-0.5 bg-white text-slate-600 focus:outline-none">
+                                        <select value={roles[email] || 'editor'} onChange={(e) => handleRoleChange(email, e.target.value as 'editor' | 'viewer')} className="text-xs border border-slate-200 dark:border-slate-600 rounded px-1 py-0.5 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 focus:outline-none">
                                             <option value="editor">Editor</option>
                                             <option value="viewer">Viewer</option>
                                         </select>
@@ -219,7 +219,7 @@ export default function ShareModal({ isOpen, onClose, project, onUpdate, plan = 
                         ) : (
                             <>
                                 {!isPublic && (
-                                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+                                    <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-sm text-amber-800 dark:text-amber-300">
                                         The project must be <strong>public</strong> to be embeddable. Enable the public link in the "Public link" tab.
                                     </div>
                                 )}
@@ -227,12 +227,12 @@ export default function ShareModal({ isOpen, onClose, project, onUpdate, plan = 
                                     <label className="text-sm font-medium text-slate-700 block mb-2">Embed code</label>
                                     <div className="relative">
                                         <pre className="bg-slate-900 text-green-400 text-xs p-4 rounded-xl overflow-x-auto">{embedCode}</pre>
-                                        <button onClick={handleCopyEmbed} className="absolute top-2 right-2 text-xs bg-white text-slate-700 px-2 py-1 rounded border border-slate-200 hover:bg-slate-50">
+                                        <button onClick={handleCopyEmbed} className="absolute top-2 right-2 text-xs bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 px-2 py-1 rounded border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600">
                                             {embedCopied ? '✓ Copied' : 'Copy'}
                                         </button>
                                     </div>
                                 </div>
-                                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-500">
+                                <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400">
                                     <strong>Preview URL:</strong>{' '}
                                     <a href={`/embed/${project.id}`} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">/embed/{project.id}</a>
                                 </div>
@@ -253,9 +253,9 @@ export default function ShareModal({ isOpen, onClose, project, onUpdate, plan = 
                         ) : (
                             <>
                                 <div>
-                                    <label className="text-sm font-medium text-slate-700 block mb-2">API Endpoint (GET)</label>
+                                    <label className="text-sm font-medium text-slate-700 dark:text-slate-200 block mb-2">API Endpoint (GET)</label>
                                     <div className="flex items-center gap-2">
-                                        <input type="text" readOnly value={`${origin}/api/v1/projects/${project.id}/features`} className="flex-1 bg-white border border-slate-300 text-slate-600 text-xs rounded p-2 overflow-hidden text-ellipsis font-mono" />
+                                        <input type="text" readOnly value={`${origin}/api/v1/projects/${project.id}/features`} className="flex-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-xs rounded p-2 overflow-hidden text-ellipsis font-mono" />
                                         <button onClick={() => { navigator.clipboard.writeText(`${origin}/api/v1/projects/${project.id}/features`); onShowToast?.('Endpoint copied', 'success'); }} className="text-indigo-600 hover:text-indigo-700 text-xs font-medium border border-indigo-200 rounded px-3 py-2">Copy</button>
                                     </div>
                                     <p className="text-xs text-slate-500 mt-3">

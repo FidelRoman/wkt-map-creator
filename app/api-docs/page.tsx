@@ -80,15 +80,6 @@ export default function ApiDocsPage() {
                     </div>
                 </section>
 
-                {/* Auth */}
-                <section>
-                    <h3 className="text-lg font-semibold text-slate-800 mb-3">Authentication</h3>
-                    <CodeBlock lang="bash">
-{`curl -H "Authorization: Bearer wkt_live_xxxxxxxx" \\
-     "${BASE}/api/v1/projects/{projectId}/features"`}
-                    </CodeBlock>
-                </section>
-
                 {/* Rate limits */}
                 <section>
                     <h3 className="text-lg font-semibold text-slate-800 mb-3">Rate Limits</h3>

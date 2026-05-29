@@ -1,7 +1,7 @@
 "use client";
 
 import Link from 'next/link';
-import { ArrowLeftIcon, CommandLineIcon, KeyIcon, CodeBracketSquareIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, CommandLineIcon, KeyIcon, CodeBracketSquareIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
 export default function ApiDocsPage() {
     return (
@@ -38,14 +38,39 @@ export default function ApiDocsPage() {
                         </div>
                         <h2 className="text-xl font-bold">1. Authentication</h2>
                     </div>
-                    <p className="text-slate-600 leading-relaxed mb-4">
-                        All API requests must be authenticated using a Bearer Token with your <strong>API Key</strong>.
-                        Generate your keys in your account&apos;s <Link href="/settings" className="text-indigo-600 hover:underline">Settings</Link> page.
+
+                    <h3 className="text-base font-semibold text-slate-700 mb-2">Step 1 — Get your API key</h3>
+                    <p className="text-slate-600 leading-relaxed mb-3">
+                        API keys are managed exclusively from your account&apos;s{' '}
+                        <Link href="/settings" className="text-indigo-600 hover:underline">Settings page</Link>.
+                        There is no programmatic endpoint to create or revoke keys — you must use the UI.
                     </p>
-                    <div className="bg-slate-900 rounded-xl p-4 overflow-x-auto">
+                    <ol className="list-decimal list-inside space-y-1 text-slate-600 text-sm mb-6 ml-1">
+                        <li>Log in and open <Link href="/settings" className="text-indigo-600 hover:underline">Settings → API Keys</Link>.</li>
+                        <li>Click <strong>Generate new key</strong>.</li>
+                        <li>Copy the key immediately — it is only shown once.</li>
+                        <li>Store it securely (environment variable, secrets manager, etc.).</li>
+                    </ol>
+
+                    <h3 className="text-base font-semibold text-slate-700 mb-2">Step 2 — Send the key in every request</h3>
+                    <p className="text-slate-600 leading-relaxed mb-3">
+                        Pass the key as a <code className="bg-slate-100 px-1 rounded">Bearer</code> token in the{' '}
+                        <code className="bg-slate-100 px-1 rounded">Authorization</code> header:
+                    </p>
+                    <div className="bg-slate-900 rounded-xl p-4 overflow-x-auto mb-6">
                         <pre className="text-sm font-mono text-slate-300">
 <span className="text-pink-400">Authorization</span>: Bearer wk_1234567890abcdef1234567890abcdef
                         </pre>
+                    </div>
+
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex gap-3">
+                        <ExclamationTriangleIcon className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                        <div className="text-sm text-red-700 space-y-1">
+                            <p className="font-semibold">Common errors</p>
+                            <p><code className="bg-red-100 px-1 rounded">401 Unauthorized</code> — missing or invalid API key.</p>
+                            <p><code className="bg-red-100 px-1 rounded">403 Forbidden</code> — key is valid but does not have access to this project.</p>
+                            <p><code className="bg-red-100 px-1 rounded">429 Too Many Requests</code> — monthly API call limit reached. Resets on your next billing date.</p>
+                        </div>
                     </div>
                 </section>
 

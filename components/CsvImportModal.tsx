@@ -125,12 +125,12 @@ export default function CsvImportModal({
                 {previewRows.length > 0 && (
                     <div>
                         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Preview</p>
-                        <div className="overflow-x-auto rounded-lg border border-slate-200">
+                        <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
                             <table className="text-xs w-full">
                                 <thead>
-                                    <tr className="bg-slate-50 border-b border-slate-200">
+                                    <tr className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
                                         {displayHeaders.map(h => (
-                                            <th key={h} className="px-2 py-1.5 text-left font-semibold text-slate-600 whitespace-nowrap max-w-[120px] truncate">
+                                            <th key={h} className="px-2 py-1.5 text-left font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap max-w-[120px] truncate">
                                                 {h}
                                             </th>
                                         ))}
@@ -141,12 +141,12 @@ export default function CsvImportModal({
                                 </thead>
                                 <tbody>
                                     {previewRows.slice(0, 3).map((row, ri) => (
-                                        <tr key={ri} className="border-b border-slate-100 last:border-0">
+                                        <tr key={ri} className="border-b border-slate-100 dark:border-slate-700 last:border-0">
                                             {displayHeaders.map((_, ci) => {
                                                 const val = row[ci] ?? '';
                                                 const truncated = val.length > 22 ? val.slice(0, 20) + '…' : val;
                                                 return (
-                                                    <td key={ci} className="px-2 py-1.5 text-slate-600 font-mono whitespace-nowrap" title={val}>
+                                                    <td key={ci} className="px-2 py-1.5 text-slate-600 dark:text-slate-300 font-mono whitespace-nowrap" title={val}>
                                                         {truncated}
                                                     </td>
                                                 );
@@ -166,13 +166,13 @@ export default function CsvImportModal({
                     {importType === 'wkt' && (
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="block text-xs font-medium text-slate-700 mb-1">
+                                <label className="block text-xs font-medium text-slate-700 dark:text-slate-200 mb-1">
                                     Geometry column <span className="text-red-500">*</span>
                                 </label>
                                 <select
                                     value={geoCol}
                                     onChange={e => setGeoCol(e.target.value)}
-                                    className="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                                    className="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-400"
                                 >
                                     {headers.map(h => (
                                         <option key={h} value={h}>{h}</option>
@@ -180,11 +180,11 @@ export default function CsvImportModal({
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-slate-700 mb-1">Name column</label>
+                                <label className="block text-xs font-medium text-slate-700 dark:text-slate-200 mb-1">Name column</label>
                                 <select
                                     value={nameCol}
                                     onChange={e => setNameCol(e.target.value)}
-                                    className="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                                    className="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-400"
                                 >
                                     <option value="">— None —</option>
                                     {headers.map(h => (
@@ -198,13 +198,13 @@ export default function CsvImportModal({
                     {importType === 'latlng' && (
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="block text-xs font-medium text-slate-700 mb-1">
+                                <label className="block text-xs font-medium text-slate-700 dark:text-slate-200 mb-1">
                                     Latitude column <span className="text-red-500">*</span>
                                 </label>
                                 <select
                                     value={latCol}
                                     onChange={e => setLatCol(e.target.value)}
-                                    className="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                                    className="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-400"
                                 >
                                     <option value="">— Select —</option>
                                     {headers.map(h => (
@@ -213,13 +213,13 @@ export default function CsvImportModal({
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-slate-700 mb-1">
+                                <label className="block text-xs font-medium text-slate-700 dark:text-slate-200 mb-1">
                                     Longitude column <span className="text-red-500">*</span>
                                 </label>
                                 <select
                                     value={lngCol}
                                     onChange={e => setLngCol(e.target.value)}
-                                    className="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                                    className="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-400"
                                 >
                                     <option value="">— Select —</option>
                                     {headers.map(h => (
@@ -228,11 +228,11 @@ export default function CsvImportModal({
                                 </select>
                             </div>
                             <div className="col-span-2">
-                                <label className="block text-xs font-medium text-slate-700 mb-1">Name column</label>
+                                <label className="block text-xs font-medium text-slate-700 dark:text-slate-200 mb-1">Name column</label>
                                 <select
                                     value={nameCol}
                                     onChange={e => setNameCol(e.target.value)}
-                                    className="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                                    className="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-400"
                                 >
                                     <option value="">— None —</option>
                                     {headers.map(h => (
