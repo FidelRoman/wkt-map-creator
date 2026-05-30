@@ -83,6 +83,7 @@ function SettingsContent() {
     const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
     const [maxLayersInProject, setMaxLayersInProject] = useState(0);
     const [maxFeaturesInLayer, setMaxFeaturesInLayer] = useState(0);
+    const [actualProjectCount, setActualProjectCount] = useState<number | null>(null);
 
     useEffect(() => {
         if (!loading && !user) router.replace('/');
@@ -104,6 +105,7 @@ function SettingsContent() {
                     if (count > maxFeatures) maxFeatures = count;
                 }
             }
+            setActualProjectCount(projects.length);
             setMaxLayersInProject(maxLayers);
             setMaxFeaturesInLayer(maxFeatures);
         });
@@ -220,7 +222,7 @@ function SettingsContent() {
     const plan = userProfile.plan;
     const isPaid = plan === 'pro';
     const limits = PLAN_LIMITS[plan];
-    const projectCount = userProfile.usageCounters?.projectCount ?? 0;
+    const projectCount = actualProjectCount ?? userProfile.usageCounters?.projectCount ?? 0;
     const apiCalls = userProfile.usageCounters?.apiCallsThisMonth ?? 0;
 
     const renewalDate = userProfile.currentPeriodEnd
@@ -328,19 +330,17 @@ function SettingsContent() {
                             value={maxFeaturesInLayer}
                             max={limits.maxFeaturesPerLayer}
                         />
-                        {isPaid && (
-                            <UsageBar
-                                label="API calls this month"
-                                value={apiCalls}
-                                max={limits.apiRateLimitPerMonth}
-                            />
-                        )}
+                        <UsageBar
+                            label="API calls this month"
+                            value={apiCalls}
+                            max={limits.apiRateLimitPerMonth}
+                        />
                         {!isPaid && (
                             <p className="text-xs text-slate-400 pt-1">
                                 <button onClick={() => setShowUpgrade(true)} className="text-indigo-600 font-medium hover:underline">
                                     Upgrade to Pro
                                 </button>{' '}
-                                for unlimited projects and higher limits.
+                                for unlimited projects, higher limits and 1,000 API calls/month.
                             </p>
                         )}
                     </div>
@@ -400,64 +400,67 @@ function SettingsContent() {
                 </section>
 
                 {/* ── API Keys ── */}
-                {isPaid && (
-                    <section className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-                        <SectionHeader icon={KeyIcon} title="API Keys" />
-                        <div className="px-6 py-5 space-y-5">
-                            <p className="text-sm text-slate-600 dark:text-slate-300">
-                                API keys let you access your project data programmatically via the REST API.
-                            </p>
-                            
-                            {userProfile.apiKeys && userProfile.apiKeys.length > 0 && (
-                                <div className="space-y-3">
-                                    {userProfile.apiKeys.map((k) => (
-                                        <div key={k.key} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-700 gap-3">
-                                            <div className="overflow-hidden">
-                                                <p className="font-semibold text-sm text-slate-800 dark:text-slate-100">{k.name}</p>
-                                                <p className="font-mono text-xs text-slate-500 dark:text-slate-400 truncate">{k.key}</p>
-                                                <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                                                    Creada: {new Date(k.createdAt?.seconds ? k.createdAt.seconds * 1000 : k.createdAt).toLocaleDateString()}
-                                                    {' · '}
-                                                    Último uso: {k.lastUsed ? new Date(k.lastUsed?.seconds ? k.lastUsed.seconds * 1000 : k.lastUsed).toLocaleDateString() : 'Nunca'}
-                                                </p>
-                                            </div>
-                                            <button
-                                                onClick={() => handleDeleteApiKey(k.key)}
-                                                className="shrink-0 text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-lg transition-colors"
-                                                title="Eliminar API Key"
-                                            >
-                                                <TrashIcon className="w-5 h-5" />
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
+                <section className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                    <SectionHeader icon={KeyIcon} title="API Keys" />
+                    <div className="px-6 py-5 space-y-5">
+                        <p className="text-sm text-slate-600 dark:text-slate-300">
+                            API keys let you access your project data programmatically via the REST API.{' '}
+                            {!isPaid && (
+                                <span className="text-amber-600 font-medium">Free accounts are limited to {limits.apiRateLimitPerMonth} calls/month.{' '}
+                                    <button onClick={() => setShowUpgrade(true)} className="text-indigo-600 hover:underline">Upgrade to Pro</button> for 1,000 calls/month.
+                                </span>
                             )}
+                        </p>
 
-                            {(!userProfile.apiKeys || userProfile.apiKeys.length < 5) ? (
-                                <div className="flex gap-2">
-                                    <input
-                                        type="text"
-                                        value={newKeyName}
-                                        onChange={(e) => setNewKeyName(e.target.value)}
-                                        placeholder="New API key name"
-                                        className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                        onKeyDown={(e) => e.key === 'Enter' && handleGenerateApiKey()}
-                                    />
-                                    <button
-                                        onClick={handleGenerateApiKey}
-                                        disabled={generatingKey || !newKeyName.trim()}
-                                        className="btn-primary text-sm px-4 py-2 disabled:opacity-50 flex items-center gap-1"
-                                    >
-                                        <PlusIcon className="w-4 h-4" />
-                                        <span>Generar</span>
-                                    </button>
-                                </div>
-                            ) : (
-                                <p className="text-xs text-amber-600">You've reached the 5 API key limit.</p>
-                            )}
-                        </div>
-                    </section>
-                )}
+                        {userProfile.apiKeys && userProfile.apiKeys.length > 0 && (
+                            <div className="space-y-3">
+                                {userProfile.apiKeys.map((k) => (
+                                    <div key={k.key} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-700 gap-3">
+                                        <div className="overflow-hidden">
+                                            <p className="font-semibold text-sm text-slate-800 dark:text-slate-100">{k.name}</p>
+                                            <p className="font-mono text-xs text-slate-500 dark:text-slate-400 truncate">{k.key}</p>
+                                            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                                                Creada: {new Date(k.createdAt?.seconds ? k.createdAt.seconds * 1000 : k.createdAt).toLocaleDateString()}
+                                                {' · '}
+                                                Último uso: {k.lastUsed ? new Date(k.lastUsed?.seconds ? k.lastUsed.seconds * 1000 : k.lastUsed).toLocaleDateString() : 'Nunca'}
+                                            </p>
+                                        </div>
+                                        <button
+                                            onClick={() => handleDeleteApiKey(k.key)}
+                                            className="shrink-0 text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-lg transition-colors"
+                                            title="Eliminar API Key"
+                                        >
+                                            <TrashIcon className="w-5 h-5" />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {(!userProfile.apiKeys || userProfile.apiKeys.length < 5) ? (
+                            <div className="flex gap-2">
+                                <input
+                                    type="text"
+                                    value={newKeyName}
+                                    onChange={(e) => setNewKeyName(e.target.value)}
+                                    placeholder="New API key name"
+                                    className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    onKeyDown={(e) => e.key === 'Enter' && handleGenerateApiKey()}
+                                />
+                                <button
+                                    onClick={handleGenerateApiKey}
+                                    disabled={generatingKey || !newKeyName.trim()}
+                                    className="btn-primary text-sm px-4 py-2 disabled:opacity-50 flex items-center gap-1"
+                                >
+                                    <PlusIcon className="w-4 h-4" />
+                                    <span>Generar</span>
+                                </button>
+                            </div>
+                        ) : (
+                            <p className="text-xs text-amber-600">You've reached the 5 API key limit.</p>
+                        )}
+                    </div>
+                </section>
 
                 {/* ── Seguridad ── */}
                 <section className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">

@@ -6,18 +6,13 @@ import { stringify } from 'wellknown';
 export const runtime = 'nodejs';
 
 const CORS = { 'Access-Control-Allow-Origin': '*' } as const;
-const monthlyLimit = PLAN_LIMITS['pro'].apiRateLimitPerMonth ?? 1000;
-
 // In-memory API key cache — avoids a Firestore read on every request
 // TTL: 5 minutes. Acceptable tradeoff: revoked keys work for up to 5 min.
 const apiKeyCache = new Map<string, { result: { uid: string; plan: string } | null; expiresAt: number }>();
 const API_KEY_CACHE_TTL_MS = 5 * 60 * 1000;
 
-/**
- * Checks the monthly rate limit for a user and increments the counter.
- * Returns a 429 NextResponse if the limit is reached, or null if the call is allowed.
- */
-async function checkRateLimit(uid: string): Promise<{ error: NextResponse } | { remaining: number }> {
+async function checkRateLimit(uid: string, plan: string): Promise<{ error: NextResponse } | { remaining: number }> {
+    const monthlyLimit = PLAN_LIMITS[plan as 'free' | 'pro']?.apiRateLimitPerMonth ?? PLAN_LIMITS['free'].apiRateLimitPerMonth ?? 10;
     const db = getAdminDb();
     const userDoc = await db.collection('users').doc(uid).get();
     const apiCallsThisMonth = userDoc.data()?.usageCounters?.apiCallsThisMonth ?? 0;
@@ -104,10 +99,6 @@ export async function GET(
         return NextResponse.json({ error: 'Invalid API key' }, { status: 403 });
     }
 
-    if (user.plan !== 'pro') {
-        return NextResponse.json({ error: 'API access requires Pro or Business plan', upgradeUrl: '/?upgrade=api' }, { status: 403 });
-    }
-
     const db = getAdminDb();
 
     // Verify project access
@@ -121,7 +112,7 @@ export async function GET(
     }
 
     // Rate limiting
-    const rateLimit = await checkRateLimit(user.uid);
+    const rateLimit = await checkRateLimit(user.uid, user.plan);
     if ('error' in rateLimit) return rateLimit.error;
 
     // Query params
@@ -215,12 +206,9 @@ export async function POST(
     const apiKey = authHeader.split('Bearer ')[1].trim();
     const user = await verifyApiKey(apiKey);
     if (!user) return NextResponse.json({ error: 'Invalid API key' }, { status: 403, headers: CORS });
-    if (user.plan !== 'pro') {
-        return NextResponse.json({ error: 'API access requires a Pro plan' }, { status: 403, headers: CORS });
-    }
 
     // Rate limiting
-    const rateLimit = await checkRateLimit(user.uid);
+    const rateLimit = await checkRateLimit(user.uid, user.plan);
     if ('error' in rateLimit) return rateLimit.error;
 
     const db = getAdminDb();
@@ -282,12 +270,9 @@ export async function DELETE(
     const apiKey = authHeader.split('Bearer ')[1].trim();
     const user = await verifyApiKey(apiKey);
     if (!user) return NextResponse.json({ error: 'Invalid API key' }, { status: 403, headers: CORS });
-    if (user.plan !== 'pro') {
-        return NextResponse.json({ error: 'API access requires a Pro plan' }, { status: 403, headers: CORS });
-    }
 
     // Rate limiting
-    const rateLimit = await checkRateLimit(user.uid);
+    const rateLimit = await checkRateLimit(user.uid, user.plan);
     if ('error' in rateLimit) return rateLimit.error;
 
     const db = getAdminDb();

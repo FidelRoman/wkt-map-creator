@@ -35,7 +35,7 @@ export const PLAN_LIMITS: Record<PlanId, PlanLimits> = {
     maxLayersPerProject: 2,
     maxFeaturesPerLayer: 10,
     maxCollaborators: 0,
-    hasApiAccess: false,
+    hasApiAccess: true,
     hasKmlExport: false,
     hasVersionHistory: false,
     hasSpatialAnalysis: false,
@@ -44,7 +44,7 @@ export const PLAN_LIMITS: Record<PlanId, PlanLimits> = {
     hasWebhooks: false,
     hasTeamWorkspaces: false,
     hasWhiteLabel: false,
-    apiRateLimitPerMonth: null,
+    apiRateLimitPerMonth: 10,
   },
   pro: {
     maxProjects: null,
@@ -80,6 +80,7 @@ export const PLANS: PlanInfo[] = [
       'Public read-only link',
       'Import / export CSV',
       'WKT paste & visualize',
+      'REST API (10 calls/month)',
     ],
   },
   {

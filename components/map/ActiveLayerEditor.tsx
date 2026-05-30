@@ -27,7 +27,10 @@ interface ActiveLayerEditorProps {
     onToggleSelection?: (index: number, multi: boolean) => void;
     onClearSelection?: () => void;
     plan?: PlanId;
-    onUpgradeRequired?: (reason: { type: 'limit'; limitKey: 'maxFeaturesPerLayer'; current: number; limit: number; requiredPlan: PlanId }) => void;
+    onUpgradeRequired?: (reason:
+        | { type: 'limit'; limitKey: 'maxFeaturesPerLayer'; current: number; limit: number; requiredPlan: PlanId }
+        | { type: 'feature'; featureKey: 'hasSpatialAnalysis'; requiredPlan: PlanId }
+    ) => void;
     projectId?: string;
     isReadOnly?: boolean;
 }
@@ -414,7 +417,7 @@ export default function ActiveLayerEditor({
     const handleBuffer = () => {
         if (!hasFeature(plan, 'hasSpatialAnalysis')) {
             if (onUpgradeRequired) {
-                onUpgradeRequired({ type: 'limit', limitKey: 'maxFeaturesPerLayer', current: 0, limit: 0, requiredPlan: 'pro' });
+                onUpgradeRequired({ type: 'feature', featureKey: 'hasSpatialAnalysis', requiredPlan: 'pro' });
             }
             setMenu(null);
             return;

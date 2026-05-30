@@ -55,11 +55,22 @@ export async function POST(
     const apiKey = authHeader.split('Bearer ')[1].trim();
     const user = await verifyApiKey(apiKey);
     if (!user) return NextResponse.json({ error: 'Invalid API key' }, { status: 403, headers: CORS });
-    if (user.plan !== 'pro') {
-        return NextResponse.json({ error: 'API access requires Pro plan' }, { status: 403, headers: CORS });
-    }
 
     const db = getAdminDb();
+
+    // Rate limiting
+    const monthlyLimit = PLAN_LIMITS[user.plan as 'free' | 'pro']?.apiRateLimitPerMonth ?? PLAN_LIMITS['free'].apiRateLimitPerMonth ?? 10;
+    const userDoc = await db.collection('users').doc(user.uid).get();
+    const apiCallsThisMonth = userDoc.data()?.usageCounters?.apiCallsThisMonth ?? 0;
+    if (apiCallsThisMonth >= monthlyLimit) {
+        return NextResponse.json(
+            { error: `Monthly API limit reached (${monthlyLimit} calls/month). Resets on your next billing date.` },
+            { status: 429, headers: CORS }
+        );
+    }
+    await db.collection('users').doc(user.uid).update({
+        'usageCounters.apiCallsThisMonth': apiCallsThisMonth + 1,
+    });
     const projectDoc = await db.collection('projects').doc(projectId).get();
     if (!projectDoc.exists) return NextResponse.json({ error: 'Project not found' }, { status: 404, headers: CORS });
     const projectData = projectDoc.data()!;

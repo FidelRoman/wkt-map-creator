@@ -53,7 +53,7 @@ function loadPaddleScript(): Promise<void> {
 
 export default function UpgradeModal({ isOpen, onClose, onShowToast, reason }: UpgradeModalProps) {
     const { user } = useAuth();
-    const [interval, setInterval] = useState<'month' | 'year'>('year');
+    const [interval, setInterval] = useState<'month' | 'year'>('month');
     const [loading, setLoading] = useState(false);
     const [mounted, setMounted] = useState(false);
 

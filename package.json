@@ -20,7 +20,7 @@
     "leaflet": "^1.9.4",
     "leaflet-draw": "^1.0.4",
     "leaflet-omnivore": "^0.3.4",
-    "next": "16.0.7",
+    "next": "^16.2.6",
     "posthog-js": "^1.376.0",
     "react": "19.2.0",
     "react-dom": "19.2.0",

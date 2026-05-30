@@ -43,7 +43,7 @@ const faqs = [
 ];
 
 export default function PricingPage() {
-    const [billingInterval, setBillingInterval] = useState<'month' | 'year'>('year');
+    const [billingInterval, setBillingInterval] = useState<'month' | 'year'>('month');
     const [signingIn, setSigningIn] = useState(false);
     const router = useRouter();
 
