@@ -75,5 +75,12 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.auth.uid == request.resource.data.ownerId;
       allow delete: if isSignedIn() && request.auth.uid == resource.data.ownerId;
     }
+
+    // --- API Keys Index ---
+    match /apiKeyIndex/{key} {
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.uid;
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.uid;
+      allow read: if false;
+    }
   }
 }
