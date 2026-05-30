@@ -672,7 +672,7 @@ export default function Sidebar({
                             <p className="text-[11px] text-slate-400 mt-3">or draw directly on the map →</p>
                         </div>
                     )}
-                    <ul className="list-none p-0 m-0 px-4 pb-4">
+                    <ul className="list-none p-0 m-0 px-4 pt-4 pb-4">
                         {layers.find(l => l.id === activeLayerId)?.features.features.map((feature: any, index: number) => {
                             const color = feature.properties?.color || '#3388ff';
                             const isSelected = selectedIndices.has(index);

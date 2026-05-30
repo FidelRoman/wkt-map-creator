@@ -170,7 +170,6 @@ body {
   display: flex;
   align-items: center;
   padding: 10px 20px;
-  border-bottom: 1px solid var(--divider-color);
   background: var(--surface-color);
   cursor: pointer;
   transition: background 0.2s;
