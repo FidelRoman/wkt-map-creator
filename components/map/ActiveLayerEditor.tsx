@@ -278,7 +278,26 @@ export default function ActiveLayerEditor({
         });
     };
 
-    const _onCreated = (e: any) => {
+    // Memoized active layer — avoids O(n) .find() on every render.
+    // Declared here (before the draw handlers) because handlerStateRef reads it
+    // during render; referencing it later would hit the temporal dead zone.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const activeLayer = useMemo(() => layers.find(l => l.id === activeLayerId), [layers, activeLayerId]);
+
+    // Keep the latest values in a ref so the draw handlers below can stay
+    // referentially STABLE (useCallback with []). react-leaflet-draw's
+    // EditControl rebuilds the draw control whenever onCreated/onEdited/
+    // onDeleted change identity, and its cleanup removes the control — which
+    // cancels an in-progress drawing. Inline handlers got a new identity on
+    // every render, so any unrelated re-render (e.g. when Firebase finishes
+    // loading and `layers` updates) tore down the draw mid-stroke. Reading
+    // fresh values from a ref lets the handlers stay stable while still seeing
+    // the current state.
+    const handlerStateRef = useRef({ activeLayerId, activeLayer, plan, onUpdateLayer, onUpgradeRequired, onClearSelection });
+    handlerStateRef.current = { activeLayerId, activeLayer, plan, onUpdateLayer, onUpgradeRequired, onClearSelection };
+
+    const _onCreated = useCallback((e: any) => {
+        const { activeLayerId, activeLayer, plan, onUpdateLayer, onUpgradeRequired } = handlerStateRef.current;
         const layer = e.layer;
         if (activeLayerId && featureGroupRef.current) {
             const featureCount = activeLayer?.features?.features?.length ?? 0;
@@ -299,20 +318,22 @@ export default function ActiveLayerEditor({
             featureGroupRef.current.removeLayer(layer);
             onUpdateLayer(activeLayerId, geojson);
         }
-    };
+    }, []);
 
-    const _onEdited = () => {
+    const _onEdited = useCallback(() => {
+        const { activeLayerId, onUpdateLayer } = handlerStateRef.current;
         if (activeLayerId && featureGroupRef.current) {
             onUpdateLayer(activeLayerId, featureGroupRef.current.toGeoJSON());
         }
-    };
+    }, []);
 
-    const _onDeleted = () => {
+    const _onDeleted = useCallback(() => {
+        const { activeLayerId, onUpdateLayer, onClearSelection } = handlerStateRef.current;
         if (activeLayerId && featureGroupRef.current) {
             if (onClearSelection) onClearSelection();
             onUpdateLayer(activeLayerId, featureGroupRef.current.toGeoJSON());
         }
-    };
+    }, []);
 
     // NOTE: We intentionally do NOT add our own `map.on('draw:created')`
     // listener here. react-leaflet-draw's EditControl already binds one
@@ -450,10 +471,6 @@ export default function ActiveLayerEditor({
         setBufferInputOpen(false);
         setBufferDistance('500');
     };
-
-    // Memoized active layer — avoids O(n) .find() on every render
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    const activeLayer = useMemo(() => layers.find(l => l.id === activeLayerId), [layers, activeLayerId]);
 
     if (!activeLayer?.visible) return null;
     const activeLayerData = activeLayer?.features;
