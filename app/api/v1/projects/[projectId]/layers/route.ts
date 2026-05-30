@@ -8,25 +8,26 @@ const CORS = { 'Access-Control-Allow-Origin': '*' };
 
 async function verifyApiKey(apiKey: string): Promise<{ uid: string; plan: string } | null> {
     const db = getAdminDb();
-    const snapshot = await db
-        .collection('users')
-        .where('apiKeys', 'array-contains-any', [{ key: apiKey }])
-        .limit(1)
-        .get();
 
-    if (!snapshot.empty) {
-        const data = snapshot.docs[0].data();
-        return { uid: snapshot.docs[0].id, plan: data.plan ?? 'free' };
+    // Fast path: O(1) index lookup
+    const indexDoc = await db.collection('apiKeyIndex').doc(apiKey).get();
+    if (indexDoc.exists) {
+        const { uid } = indexDoc.data() as { uid: string };
+        const userDoc = await db.collection('users').doc(uid).get();
+        if (userDoc.exists) {
+            return { uid, plan: userDoc.data()?.plan ?? 'free' };
+        }
     }
 
-    const allUsersSnapshot = await db.collection('users').where('plan', '==', 'pro').get();
-    for (const userDoc of allUsersSnapshot.docs) {
+    // Legacy fallback: scan Pro users (old keys without index entry)
+    const proSnapshot = await db.collection('users').where('plan', '==', 'pro').get();
+    for (const userDoc of proSnapshot.docs) {
         const userData = userDoc.data();
         const apiKeys: any[] = userData.apiKeys ?? [];
         const found = apiKeys.find((k: any) => k.key === apiKey);
         if (found) {
-            const updatedKeys = apiKeys.map((k: any) => k.key === apiKey ? { ...k, lastUsed: new Date() } : k);
-            await userDoc.ref.update({ apiKeys: updatedKeys });
+            // Back-fill the index so next call is O(1)
+            await db.collection('apiKeyIndex').doc(apiKey).set({ uid: userDoc.id, createdAt: found.createdAt ?? new Date() });
             return { uid: userDoc.id, plan: userData.plan ?? 'pro' };
         }
     }

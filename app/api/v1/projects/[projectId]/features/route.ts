@@ -8,6 +8,11 @@ export const runtime = 'nodejs';
 const CORS = { 'Access-Control-Allow-Origin': '*' } as const;
 const monthlyLimit = PLAN_LIMITS['pro'].apiRateLimitPerMonth ?? 1000;
 
+// In-memory API key cache — avoids a Firestore read on every request
+// TTL: 5 minutes. Acceptable tradeoff: revoked keys work for up to 5 min.
+const apiKeyCache = new Map<string, { result: { uid: string; plan: string } | null; expiresAt: number }>();
+const API_KEY_CACHE_TTL_MS = 5 * 60 * 1000;
+
 /**
  * Checks the monthly rate limit for a user and increments the counter.
  * Returns a 429 NextResponse if the limit is reached, or null if the call is allowed.
@@ -34,32 +39,39 @@ async function checkRateLimit(uid: string): Promise<{ error: NextResponse } | { 
 }
 
 async function verifyApiKey(apiKey: string): Promise<{ uid: string; plan: string } | null> {
+    // Check in-memory cache first
+    const cached = apiKeyCache.get(apiKey);
+    if (cached && cached.expiresAt > Date.now()) return cached.result;
+
     const db = getAdminDb();
 
-    // ── Fast path: O(1) index lookup (new keys written since Sprint 3) ─────────
+    // ── Fast path: O(1) index lookup ─────────────────────────────────────────
     const indexDoc = await db.collection('apiKeyIndex').doc(apiKey).get();
     if (indexDoc.exists) {
         const { uid } = indexDoc.data() as { uid: string };
         const userDoc = await db.collection('users').doc(uid).get();
         if (userDoc.exists) {
-            return { uid, plan: userDoc.data()?.plan ?? 'free' };
+            const result = { uid, plan: userDoc.data()?.plan ?? 'free' };
+            apiKeyCache.set(apiKey, { result, expiresAt: Date.now() + API_KEY_CACHE_TTL_MS });
+            return result;
         }
     }
 
-    // ── Legacy fallback: scan Pro users (old keys without index entry) ─────────
-    // Runs only when index misses — gradually becomes a no-op as users rotate keys.
+    // ── Legacy fallback: scan Pro users (old keys without index entry) ────────
     const proSnapshot = await db.collection('users').where('plan', '==', 'pro').get();
     for (const userDoc of proSnapshot.docs) {
         const userData = userDoc.data();
         const apiKeys: any[] = userData.apiKeys ?? [];
         const found = apiKeys.find((k: any) => k.key === apiKey);
         if (found) {
-            // Back-fill the index so next call is O(1)
             await db.collection('apiKeyIndex').doc(apiKey).set({ uid: userDoc.id, createdAt: found.createdAt ?? new Date() });
-            return { uid: userDoc.id, plan: userData.plan ?? 'pro' };
+            const result = { uid: userDoc.id, plan: userData.plan ?? 'pro' };
+            apiKeyCache.set(apiKey, { result, expiresAt: Date.now() + API_KEY_CACHE_TTL_MS });
+            return result;
         }
     }
 
+    apiKeyCache.set(apiKey, { result: null, expiresAt: Date.now() + API_KEY_CACHE_TTL_MS });
     return null;
 }
 
@@ -182,6 +194,7 @@ export async function GET(
     }, {
         headers: {
             'Content-Type': 'application/geo+json',
+            'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
             'X-Total-Count': String(allFeatures.length),
             'X-Rate-Limit-Remaining': String(rateLimit.remaining),
             'Access-Control-Allow-Origin': '*',

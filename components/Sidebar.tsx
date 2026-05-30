@@ -1,6 +1,7 @@
 "use client";
-import { useState, Dispatch, SetStateAction, useRef, useEffect } from "react";
+import { useState, Dispatch, SetStateAction, useRef, useEffect, memo } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import Modal from "@/components/Modal";
 import { Project, Layer, createProject } from "@/lib/firebase";
 import { useAuth } from "@/components/AuthWrapper";
@@ -76,6 +77,57 @@ interface SidebarProps {
     canRedo?: boolean;
     isImporting?: boolean;
 }
+
+const FeatureListItem = memo(function FeatureListItem({
+    feature, index, activeLayerId, isSelected, renamingFeatureIndex, renamingName,
+    onToggleSelection, onFocusFeature, startRenaming, onCopyWkt, deleteFeature, updateFeatureColor,
+    saveRename, setRenamingFeatureIndex, setRenamingName,
+}: {
+    feature: any; index: number; activeLayerId: string | null; isSelected: boolean;
+    renamingFeatureIndex: number | null; renamingName: string;
+    onToggleSelection: (i: number, multi: boolean) => void;
+    onFocusFeature: (f: any) => void;
+    startRenaming: (i: number, name: any, e: React.MouseEvent) => void;
+    onCopyWkt: (f: any) => void;
+    deleteFeature: (i: number) => void;
+    updateFeatureColor: (i: number, color: string) => void;
+    saveRename: (i: number) => void;
+    setRenamingFeatureIndex: (i: number | null) => void;
+    setRenamingName: (n: string) => void;
+}) {
+    const color = feature.properties?.color || '#3388ff';
+    const featureKey = feature.id ?? `${activeLayerId}-${index}`;
+
+    return (
+        <li
+            key={featureKey}
+            onClick={(e) => { onToggleSelection(index, e.metaKey || e.ctrlKey); onFocusFeature(feature); }}
+            className={`flex items-center p-3 mb-2 rounded-xl border transition-all cursor-pointer ${isSelected ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 shadow-sm' : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700'}`}
+        >
+            <div className="relative w-6 h-6 rounded-md mr-3 shadow-inner overflow-hidden shrink-0" style={{ backgroundColor: color }}>
+                <input type="color" value={color} onChange={(e) => updateFeatureColor(index, e.target.value)} onClick={(e) => e.stopPropagation()} className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" />
+            </div>
+            {renamingFeatureIndex === index ? (
+                <input
+                    type="text" value={renamingName}
+                    onChange={(e) => setRenamingName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') saveRename(index); if (e.key === 'Escape') setRenamingFeatureIndex(null); }}
+                    onBlur={() => saveRename(index)} autoFocus onClick={(e) => e.stopPropagation()}
+                    className="flex-1 px-2 py-1 mx-2 text-sm border border-blue-300 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+            ) : (
+                <span className={`flex-1 font-medium truncate ${isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-slate-700 dark:text-slate-200'}`} title={feature.properties?.name}>
+                    {feature.properties?.name || `Feature ${index + 1}`}
+                </span>
+            )}
+            <div className="flex items-center gap-1">
+                <button onClick={(e) => startRenaming(index, feature.properties?.name, e)} className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Renombrar"><PencilSquareIcon className="w-4 h-4" /></button>
+                <button onClick={(e) => { e.stopPropagation(); onCopyWkt(feature); }} className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Copiar WKT"><DocumentDuplicateIcon className="w-4 h-4" /></button>
+                <button onClick={(e) => { e.stopPropagation(); deleteFeature(index); }} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><TrashIcon className="w-4 h-4" /></button>
+            </div>
+        </li>
+    );
+});
 
 export default function Sidebar({
     projects,
@@ -673,77 +725,26 @@ export default function Sidebar({
                         </div>
                     )}
                     <ul className="list-none p-0 m-0 px-4 pt-4 pb-4">
-                        {layers.find(l => l.id === activeLayerId)?.features.features.map((feature: any, index: number) => {
-                            const color = feature.properties?.color || '#3388ff';
-                            const isSelected = selectedIndices.has(index);
-
-                            return (
-                                <li
-                                    key={index}
-                                    onClick={(e) => {
-                                        onToggleSelection(index, e.metaKey || e.ctrlKey);
-                                        onFocusFeature(feature);
-                                    }}
-                                    className={`flex items-center p-3 mb-2 rounded-xl border transition-all cursor-pointer ${isSelected ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 shadow-sm' : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700'}`}
-                                >
-                                    <div
-                                        className="relative w-6 h-6 rounded-md mr-3 shadow-inner overflow-hidden shrink-0"
-                                        style={{ backgroundColor: color }}
-                                    >
-                                        <input
-                                            type="color"
-                                            value={color}
-                                            onChange={(e) => updateFeatureColor(index, e.target.value)}
-                                            onClick={(e) => e.stopPropagation()}
-                                            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                                        />
-                                    </div>
-
-                                    {renamingFeatureIndex === index ? (
-                                        <input
-                                            type="text"
-                                            value={renamingName}
-                                            onChange={(e) => setRenamingName(e.target.value)}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter') saveRename(index);
-                                                if (e.key === 'Escape') setRenamingFeatureIndex(null);
-                                            }}
-                                            onBlur={() => saveRename(index)}
-                                            autoFocus
-                                            onClick={(e) => e.stopPropagation()}
-                                            className="flex-1 px-2 py-1 mx-2 text-sm border border-blue-300 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                        />
-                                    ) : (
-                                        <span className={`flex-1 font-medium truncate ${isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-slate-700 dark:text-slate-200'}`} title={feature.properties?.name}>
-                                            {feature.properties?.name || `Feature ${index + 1}`}
-                                        </span>
-                                    )}
-
-                                    <div className="flex items-center gap-1">
-                                        <button
-                                            onClick={(e) => startRenaming(index, feature.properties?.name, e)}
-                                            className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
-                                            title="Renombrar"
-                                        >
-                                            <PencilSquareIcon className="w-4 h-4" />
-                                        </button>
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); onCopyWkt(feature); }}
-                                            className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
-                                            title="Copiar WKT"
-                                        >
-                                            <DocumentDuplicateIcon className="w-4 h-4" />
-                                        </button>
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); deleteFeature(index); }}
-                                            className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                        >
-                                            <TrashIcon className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                </li>
-                            );
-                        })}
+                        {layers.find(l => l.id === activeLayerId)?.features.features.map((feature: any, index: number) => (
+                            <FeatureListItem
+                                key={feature.id ?? `${activeLayerId}-${index}`}
+                                feature={feature}
+                                index={index}
+                                activeLayerId={activeLayerId}
+                                isSelected={selectedIndices.has(index)}
+                                renamingFeatureIndex={renamingFeatureIndex}
+                                renamingName={renamingName}
+                                onToggleSelection={onToggleSelection}
+                                onFocusFeature={onFocusFeature}
+                                startRenaming={startRenaming}
+                                onCopyWkt={onCopyWkt}
+                                deleteFeature={deleteFeature}
+                                updateFeatureColor={updateFeatureColor}
+                                saveRename={saveRename}
+                                setRenamingFeatureIndex={setRenamingFeatureIndex}
+                                setRenamingName={setRenamingName}
+                            />
+                        ))}
                     </ul>
                 </div>
 
@@ -774,9 +775,11 @@ export default function Sidebar({
                     </div>
                 ) : (
                     <div className="user-profile">
-                        <img
+                        <Image
                             src={user?.photoURL || "https://via.placeholder.com/36"}
                             alt={user?.displayName ?? 'Foto de perfil'}
+                            width={36}
+                            height={36}
                             className="user-avatar"
                         />
                         <div className="user-info">

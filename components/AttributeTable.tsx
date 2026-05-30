@@ -1,11 +1,18 @@
 "use client";
-import { useState, useMemo, useCallback, useRef } from 'react';
+import { useState, useMemo, useRef, forwardRef, CSSProperties } from 'react';
 import { XMarkIcon, ChevronUpIcon, ChevronDownIcon, PlusIcon, ArrowDownTrayIcon, SparklesIcon } from '@heroicons/react/24/outline';
-import * as turf from '@turf/turf';
+import { List } from 'react-window';
 import { stringify } from 'wellknown';
 import type { Layer } from '@/lib/firebase';
 import type { PlanId } from '@/lib/plans';
 import { hasFeature } from '@/lib/plans';
+
+// Lazy-load turf — only needed for area/perimeter calculations
+let turfCache: typeof import('@turf/turf') | null = null;
+async function getTurf() {
+    if (!turfCache) turfCache = await import('@turf/turf');
+    return turfCache;
+}
 
 interface AttributeTableProps {
     layer: Layer | null;
@@ -22,6 +29,91 @@ type SortDir = 'asc' | 'desc' | null;
 
 const formatArea = (m2: number) => m2 >= 1_000_000 ? `${(m2 / 1_000_000).toFixed(2)} km²` : `${(m2 / 10_000).toFixed(2)} ha`;
 const formatLength = (m: number) => m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${m.toFixed(0)} m`;
+
+const ROW_HEIGHT = 33;
+
+interface RowData {
+    filtered: any[];
+    customCols: string[];
+    editingCell: { row: number; col: string } | null;
+    editValue: string;
+    selectedIndices: Set<number>;
+    onToggleSelection: (i: number, multi: boolean) => void;
+    onFocusFeature: (f: any) => void;
+    startEdit: (row: number, col: string, value: string) => void;
+    saveEdit: () => void;
+    setEditValue: (v: string) => void;
+}
+
+function TableRow({
+    index,
+    style,
+    filtered,
+    customCols,
+    editingCell,
+    editValue,
+    selectedIndices,
+    onToggleSelection,
+    onFocusFeature,
+    startEdit,
+    saveEdit,
+    setEditValue,
+}: { index: number; style: CSSProperties } & RowData) {
+    const row = filtered[index];
+    if (!row) return null;
+    const i = index;
+
+    return (
+        <tr
+            style={{ ...style, display: 'flex', alignItems: 'center', boxSizing: 'border-box' }}
+            className={`border-b border-slate-100 dark:border-slate-700 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors ${selectedIndices.has(row.index) ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''}`}
+            onClick={() => { onToggleSelection(row.index, false); onFocusFeature(row.feature); }}
+        >
+            <td className="px-2 py-1 text-slate-400 dark:text-slate-500 w-8 shrink-0">{row.index + 1}</td>
+            <td className="px-3 py-1 min-w-[160px]" onClick={e => { e.stopPropagation(); startEdit(i, 'name', row.name); }}>
+                {editingCell?.row === i && editingCell.col === 'name' ? (
+                    <input autoFocus value={editValue} onChange={e => setEditValue(e.target.value)} onBlur={saveEdit} onKeyDown={e => e.key === 'Enter' && saveEdit()} className="w-full text-xs border border-indigo-400 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded px-1 py-0.5 focus:outline-none" onClick={e => e.stopPropagation()} />
+                ) : (
+                    <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 rounded-full shrink-0" style={{ background: row.color }} />
+                        <span className="truncate max-w-[140px]" title={row.name}>{row.name}</span>
+                    </div>
+                )}
+            </td>
+            <td className="px-3 py-1 text-slate-500 dark:text-slate-400 w-28 shrink-0">{row.geomType}</td>
+            <td className="px-3 py-1 text-slate-500 dark:text-slate-400 tabular-nums w-28 shrink-0">{row.area > 0 ? formatArea(row.area) : '—'}</td>
+            <td className="px-3 py-1 text-slate-500 dark:text-slate-400 tabular-nums w-28 shrink-0">{row.perimeter > 0 ? formatLength(row.perimeter) : '—'}</td>
+            {customCols.map(col => (
+                <td key={col} className="px-3 py-1 min-w-[100px]" onClick={e => { e.stopPropagation(); startEdit(i, col, row.feature.properties?.[col] ?? ''); }}>
+                    {editingCell?.row === i && editingCell.col === col ? (
+                        <input autoFocus value={editValue} onChange={e => setEditValue(e.target.value)} onBlur={saveEdit} onKeyDown={e => e.key === 'Enter' && saveEdit()} className="w-full text-xs border border-indigo-400 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded px-1 py-0.5 focus:outline-none" onClick={e => e.stopPropagation()} />
+                    ) : (
+                        <span className="text-slate-600 dark:text-slate-300">{row.feature.properties?.[col] ?? ''}</span>
+                    )}
+                </td>
+            ))}
+            <td className="px-2 py-1 w-6 shrink-0" />
+        </tr>
+    );
+}
+
+// react-window v2 rowComponent signature
+function RowComponent(props: {
+    ariaAttributes: { 'aria-posinset': number; 'aria-setsize': number; role: 'listitem' };
+    index: number;
+    style: CSSProperties;
+} & RowData) {
+    const { ariaAttributes: _aria, ...rest } = props;
+    return <TableRow {...rest} />;
+}
+
+// Outer element wraps the scrollable container as a table body context
+const InnerElement = forwardRef<HTMLTableSectionElement, any>(({ children, ...rest }, ref) => (
+    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <tbody ref={ref} {...rest}>{children}</tbody>
+    </table>
+));
+InnerElement.displayName = 'InnerElement';
 
 export default function AttributeTable({
     layer,
@@ -41,7 +133,7 @@ export default function AttributeTable({
     const [addingColumn, setAddingColumn] = useState(false);
     const [newColName, setNewColName] = useState('');
 
-    const isPro = hasFeature(plan, 'hasVersionHistory'); // proxy for pro/business
+    const isPro = hasFeature(plan, 'hasVersionHistory');
 
     const geomCache = useRef(new WeakMap<any, { area: number; perimeter: number }>());
 
@@ -65,19 +157,19 @@ export default function AttributeTable({
             let perimeter = 0;
 
             if (geom) {
-                let cached = geomCache.current.get(geom);
-                if (!cached) {
-                    try {
-                        if (geomType.includes('Polygon')) {
-                            area = turf.area(f);
-                            perimeter = turf.length(f, { units: 'meters' });
-                        }
-                    } catch { /* ignore */ }
-                    cached = { area, perimeter };
-                    geomCache.current.set(geom, cached);
-                } else {
+                const cached = geomCache.current.get(geom);
+                if (cached) {
                     area = cached.area;
                     perimeter = cached.perimeter;
+                } else if (geomType.includes('Polygon')) {
+                    // Async compute — result shows on next render cycle
+                    getTurf().then(turf => {
+                        try {
+                            const result = { area: turf.area(f), perimeter: turf.length(f, { units: 'meters' }) };
+                            geomCache.current.set(geom, result);
+                        } catch { /* ignore */ }
+                    });
+                    geomCache.current.set(geom, { area: 0, perimeter: 0 });
                 }
             }
 
@@ -131,10 +223,7 @@ export default function AttributeTable({
     const confirmAddColumn = () => {
         if (!newColName.trim() || !layer) { setAddingColumn(false); setNewColName(''); return; }
         const name = newColName.trim();
-        const newFeatures = features.map(f => ({
-            ...f,
-            properties: { ...f.properties, [name]: '' }
-        }));
+        const newFeatures = features.map(f => ({ ...f, properties: { ...f.properties, [name]: '' } }));
         onUpdateLayer(layer.id, { ...layer.features, features: newFeatures });
         setAddingColumn(false);
         setNewColName('');
@@ -170,10 +259,28 @@ export default function AttributeTable({
         );
     }
 
+    const TOOLBAR_HEIGHT = 40;
+    const THEAD_HEIGHT = 34;
+    const TOTAL_HEIGHT = 240;
+    const listHeight = TOTAL_HEIGHT - TOOLBAR_HEIGHT - THEAD_HEIGHT;
+
+    const rowData: RowData = {
+        filtered,
+        customCols,
+        editingCell,
+        editValue,
+        selectedIndices,
+        onToggleSelection,
+        onFocusFeature,
+        startEdit,
+        saveEdit,
+        setEditValue,
+    };
+
     return (
-        <div className="flex flex-col bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700" style={{ height: '240px' }}>
+        <div className="flex flex-col bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700" style={{ height: `${TOTAL_HEIGHT}px` }}>
             {/* Toolbar */}
-            <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-100 dark:border-slate-700 shrink-0">
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-100 dark:border-slate-700 shrink-0" style={{ height: TOOLBAR_HEIGHT }}>
                 <span className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
                     {layer?.name ?? 'No layer'} — {filtered.length} features
                 </span>
@@ -185,32 +292,18 @@ export default function AttributeTable({
                 />
                 <div className="flex-1" />
                 {addingColumn ? (
-                    <input
-                        autoFocus
-                        value={newColName}
-                        onChange={e => setNewColName(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') confirmAddColumn(); if (e.key === 'Escape') { setAddingColumn(false); setNewColName(''); } }}
-                        onBlur={confirmAddColumn}
-                        placeholder="Column name"
-                        className="text-xs px-2 py-1 border border-indigo-400 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-400 w-36"
-                    />
+                    <input autoFocus value={newColName} onChange={e => setNewColName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') confirmAddColumn(); if (e.key === 'Escape') { setAddingColumn(false); setNewColName(''); } }} onBlur={confirmAddColumn} placeholder="Column name" className="text-xs px-2 py-1 border border-indigo-400 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-400 w-36" />
                 ) : (
-                    <button onClick={() => setAddingColumn(true)} className="text-xs flex items-center gap-1 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 px-2 py-1 rounded border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700" title="Add column">
-                        <PlusIcon className="w-3.5 h-3.5" /> Column
-                    </button>
+                    <button onClick={() => setAddingColumn(true)} className="text-xs flex items-center gap-1 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 px-2 py-1 rounded border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700" title="Add column"><PlusIcon className="w-3.5 h-3.5" /> Column</button>
                 )}
-                <button onClick={exportCsv} className="text-xs flex items-center gap-1 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 px-2 py-1 rounded border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700" title="Export CSV">
-                    <ArrowDownTrayIcon className="w-3.5 h-3.5" /> CSV
-                </button>
-                <button onClick={onClose} className="text-slate-400 hover:text-slate-700 ml-1">
-                    <XMarkIcon className="w-4 h-4" />
-                </button>
+                <button onClick={exportCsv} className="text-xs flex items-center gap-1 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 px-2 py-1 rounded border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700" title="Export CSV"><ArrowDownTrayIcon className="w-3.5 h-3.5" /> CSV</button>
+                <button onClick={onClose} className="text-slate-400 hover:text-slate-700 ml-1"><XMarkIcon className="w-4 h-4" /></button>
             </div>
 
-            {/* Table */}
-            <div className="overflow-auto flex-1">
-                <table className="text-xs w-full border-collapse">
-                    <thead className="sticky top-0 bg-slate-50 dark:bg-slate-900 z-10">
+            {/* Sticky header */}
+            <div className="overflow-x-auto shrink-0 bg-slate-50 dark:bg-slate-900" style={{ height: THEAD_HEIGHT }}>
+                <table className="text-xs w-full border-collapse" style={{ tableLayout: 'auto', minWidth: 560 + customCols.length * 100 }}>
+                    <thead>
                         <tr>
                             <th className="w-8 px-2 py-1.5 border-b border-slate-200 dark:border-slate-700 text-left text-slate-400 dark:text-slate-500">#</th>
                             {['name', 'geomType', 'area', 'perimeter', ...customCols].map(col => (
@@ -224,51 +317,25 @@ export default function AttributeTable({
                             <th className="px-3 py-1.5 border-b border-slate-200 dark:border-slate-700 text-left text-slate-400 w-6" />
                         </tr>
                     </thead>
-                    <tbody>
-                        {filtered.map((row, i) => (
-                            <tr
-                                key={row.index}
-                                className={`border-b border-slate-100 dark:border-slate-700 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors ${selectedIndices.has(row.index) ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''}`}
-                                onClick={() => { onToggleSelection(row.index, false); onFocusFeature(row.feature); }}
-                            >
-                                <td className="px-2 py-1 text-slate-400 dark:text-slate-500">{row.index + 1}</td>
-
-                                {/* Name — editable */}
-                                <td className="px-3 py-1" onClick={e => { e.stopPropagation(); startEdit(i, 'name', row.name); }}>
-                                    {editingCell?.row === i && editingCell.col === 'name' ? (
-                                        <input autoFocus value={editValue} onChange={e => setEditValue(e.target.value)} onBlur={saveEdit} onKeyDown={e => e.key === 'Enter' && saveEdit()} className="w-full text-xs border border-indigo-400 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded px-1 py-0.5 focus:outline-none" onClick={e => e.stopPropagation()} />
-                                    ) : (
-                                        <div className="flex items-center gap-1.5">
-                                            <div className="w-3 h-3 rounded-full shrink-0" style={{ background: row.color }} />
-                                            <span className="truncate max-w-[140px]" title={row.name}>{row.name}</span>
-                                        </div>
-                                    )}
-                                </td>
-
-                                <td className="px-3 py-1 text-slate-500 dark:text-slate-400">{row.geomType}</td>
-                                <td className="px-3 py-1 text-slate-500 dark:text-slate-400 tabular-nums">{row.area > 0 ? formatArea(row.area) : '—'}</td>
-                                <td className="px-3 py-1 text-slate-500 dark:text-slate-400 tabular-nums">{row.perimeter > 0 ? formatLength(row.perimeter) : '—'}</td>
-
-                                {/* Custom columns — editable */}
-                                {customCols.map(col => (
-                                    <td key={col} className="px-3 py-1" onClick={e => { e.stopPropagation(); startEdit(i, col, row.feature.properties?.[col] ?? ''); }}>
-                                        {editingCell?.row === i && editingCell.col === col ? (
-                                            <input autoFocus value={editValue} onChange={e => setEditValue(e.target.value)} onBlur={saveEdit} onKeyDown={e => e.key === 'Enter' && saveEdit()} className="w-full text-xs border border-indigo-400 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded px-1 py-0.5 focus:outline-none" onClick={e => e.stopPropagation()} />
-                                        ) : (
-                                            <span className="text-slate-600 dark:text-slate-300">{row.feature.properties?.[col] ?? ''}</span>
-                                        )}
-                                    </td>
-                                ))}
-
-                                <td className="px-2 py-1" />
-                            </tr>
-                        ))}
-                        {filtered.length === 0 && (
-                            <tr><td colSpan={5 + customCols.length} className="text-center text-slate-400 dark:text-slate-500 py-6">No features in this layer</td></tr>
-                        )}
-                    </tbody>
                 </table>
             </div>
+
+            {/* Virtualized body */}
+            {filtered.length === 0 ? (
+                <div className="flex items-center justify-center text-slate-400 dark:text-slate-500 text-xs" style={{ height: listHeight }}>
+                    No features in this layer
+                </div>
+            ) : (
+                <List
+                    defaultHeight={listHeight}
+                    rowCount={filtered.length}
+                    rowHeight={ROW_HEIGHT}
+                    rowComponent={RowComponent}
+                    rowProps={rowData}
+                    className="text-xs"
+                    tagName="div"
+                />
+            )}
         </div>
     );
 }

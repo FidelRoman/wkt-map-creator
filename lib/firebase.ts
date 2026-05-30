@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
-import { getFirestore, collection, addDoc, serverTimestamp, query, where, orderBy, getDocs, doc, updateDoc, getDoc, deleteDoc, setDoc, onSnapshot, type Unsubscribe } from "firebase/firestore";
+import { getFirestore, collection, addDoc, serverTimestamp, query, where, orderBy, limit, getDocs, doc, updateDoc, getDoc, deleteDoc, setDoc, onSnapshot, type Unsubscribe } from "firebase/firestore";
 import type { PlanId } from './plans';
 
 const firebaseConfig = {
@@ -366,23 +366,17 @@ export async function getProject(projectId: string): Promise<Project | null> {
 
 export async function getPublicProjects(limitCount = 24): Promise<Project[]> {
     try {
-        // No orderBy to avoid requiring a composite index; sort client-side instead
         const q = query(
             collection(db, PROJECTS_COLLECTION),
-            where('isPublic', '==', true)
+            where('isPublic', '==', true),
+            orderBy('updatedAt', 'desc'),
+            limit(limitCount)
         );
         const snapshot = await getDocs(q);
-        const projects = snapshot.docs.map(d => {
+        return snapshot.docs.map(d => {
             const data = d.data();
             return { id: d.id, ...data, layers: data.layers ? parseLayers(data.layers) : [] } as Project;
         });
-        return projects
-            .sort((a, b) => {
-                const aTime = a.updatedAt?.seconds ?? 0;
-                const bTime = b.updatedAt?.seconds ?? 0;
-                return bTime - aTime;
-            })
-            .slice(0, limitCount);
     } catch (error) {
         console.error("Error fetching public projects:", error);
         return [];

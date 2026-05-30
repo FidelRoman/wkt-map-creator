@@ -18,8 +18,6 @@ import ErrorBoundary from '@/components/ErrorBoundary';
 import CsvImportModal, { type CsvImportConfig } from '@/components/CsvImportModal';
 import { stringify } from 'wellknown';
 import { checkLimit, hasFeature } from '@/lib/plans';
-// @ts-ignore
-import tokml from 'tokml';
 
 // Dynamically import Map to avoid SSR window issues
 const Map = dynamic(() => import('@/components/Map'), {
@@ -58,25 +56,30 @@ function ProjectApp() {
         setLayers(action, true);
     }, [setLayers]);
 
-    // Keyboard shortcuts (Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y)
+    // Stable refs so the keyboard handler never needs to be re-registered
+    const undoRef = useRef(undo);
+    const redoRef = useRef(redo);
+    useEffect(() => { undoRef.current = undo; }, [undo]);
+    useEffect(() => { redoRef.current = redo; }, [redo]);
+
+    // Keyboard shortcuts (Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y) — registered once
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
             if (!trackHistoryRef.current) return;
             const tag = (e.target as HTMLElement)?.tagName;
-            // Don't intercept when typing in inputs, textareas, etc.
             if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) return;
             if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
                 e.preventDefault();
-                if (e.shiftKey) redo(); else undo();
+                if (e.shiftKey) redoRef.current(); else undoRef.current();
             }
             if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
                 e.preventDefault();
-                redo();
+                redoRef.current();
             }
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [undo, redo]);
+    }, []); // empty deps — handler uses refs, never stale
 
     // States for feedback
     const [drawRequest, setDrawRequest] = useState<{ type: 'polygon' | 'point', id: number } | null>(null);
@@ -184,14 +187,14 @@ function ProjectApp() {
     }, [currentProject, user, accessDenied]);
 
 
-    // Auto-save effect (debounced)
+    // Auto-save effect (debounced) — setIsSaving(true) only when the save actually starts
     useEffect(() => {
         if (!projectId || layers.length === 0) return;
-        if (isReadOnly) return; // SKIP SAVE
+        if (isReadOnly) return;
 
-        setIsSaving(true);
         const timeout = setTimeout(() => {
             if (currentProject) {
+                setIsSaving(true);
                 saveProjectLayers(projectId, layers).then(() => {
                     setIsSaving(false);
                 });
@@ -459,7 +462,7 @@ function ProjectApp() {
         }
     };
 
-    const handleExportLayer = (layerId: string, format: 'csv' | 'geojson' | 'kml' = 'csv') => {
+    const handleExportLayer = async (layerId: string, format: 'csv' | 'geojson' | 'kml' = 'csv') => {
         const layer = layers.find(l => l.id === layerId);
         if (!layer) return;
 
@@ -470,6 +473,8 @@ function ProjectApp() {
                 setUpgradeModalReason({ type: 'feature', featureKey: 'hasKmlExport', requiredPlan: 'pro' });
                 return;
             }
+            // @ts-ignore
+            const tokml = (await import('tokml')).default;
             const kmlStr = tokml(layer.features, { documentName: layer.name, documentDescription: '' });
             const dataStr = "data:application/vnd.google-earth.kml+xml;charset=utf-8," + encodeURIComponent(kmlStr);
             const a = document.createElement('a');

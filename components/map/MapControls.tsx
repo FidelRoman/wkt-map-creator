@@ -73,14 +73,16 @@ export default function MapControls({ activeTileLayer, setActiveTileLayer }: Map
     const [showLayerMenu, setShowLayerMenu] = useState(false);
     const [showDonateModal, setShowDonateModal] = useState(false);
 
-    // Debounce search
+    // Debounce search with AbortController to cancel stale requests
     useEffect(() => {
-        const timer = setTimeout(async () => {
-            if (searchQuery.length < 3) {
-                setSuggestions([]);
-                return;
-            }
+        if (searchQuery.length < 3) {
+            setSuggestions([]);
+            return;
+        }
 
+        const controller = new AbortController();
+
+        const timer = setTimeout(async () => {
             setIsSearching(true);
             try {
                 const url = new URL("https://nominatim.openstreetmap.org/search");
@@ -90,18 +92,21 @@ export default function MapControls({ activeTileLayer, setActiveTileLayer }: Map
                 url.searchParams.set("addressdetails", "1");
                 url.searchParams.set("dedupe", "1");
 
-                const response = await fetch(url.toString());
+                const response = await fetch(url.toString(), { signal: controller.signal });
                 const data = await response.json();
                 setSuggestions(data);
                 setShowSuggestions(true);
-            } catch (error) {
-                console.error("Search error:", error);
+            } catch (error: any) {
+                if (error.name !== 'AbortError') console.error("Search error:", error);
             } finally {
                 setIsSearching(false);
             }
         }, 500);
 
-        return () => clearTimeout(timer);
+        return () => {
+            clearTimeout(timer);
+            controller.abort();
+        };
     }, [searchQuery]);
 
     const handleSelectSuggestion = (suggestion: any) => {
@@ -154,27 +159,12 @@ export default function MapControls({ activeTileLayer, setActiveTileLayer }: Map
 
                 {/* Suggestions Dropdown */}
                 {showSuggestions && suggestions.length > 0 && (
-                    <div style={{
-                        marginTop: '5px',
-                        background: 'var(--surface-color)',
-                        borderRadius: '4px',
-                        boxShadow: '0 4px 6px rgba(0,0,0,0.2)',
-                        maxHeight: '300px',
-                        overflowY: 'auto'
-                    }}>
-                        {suggestions.map((item, idx) => (
+                    <div className="map-suggestions-dropdown">
+                        {suggestions.map((item) => (
                             <div
-                                key={idx}
+                                key={item.place_id ?? item.display_name}
                                 onClick={() => handleSelectSuggestion(item)}
-                                style={{
-                                    padding: '8px 12px',
-                                    borderBottom: idx < suggestions.length - 1 ? '1px solid var(--divider-color)' : 'none',
-                                    cursor: 'pointer',
-                                    fontSize: '14px',
-                                    color: 'var(--text-main)'
-                                }}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--surface-muted)'}
-                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--surface-color)'}
+                                className="map-suggestion-item"
                             >
                                 {item.display_name}
                             </div>

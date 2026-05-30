@@ -615,3 +615,30 @@ body {
 .animate-fade-in-up {
   animation: fadeInUp 0.2s ease-out both;
 }
+
+
+/* Map search suggestions */
+.map-suggestions-dropdown {
+  margin-top: 5px;
+  background: var(--surface-color);
+  border-radius: 4px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.map-suggestion-item {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--divider-color);
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-main);
+}
+
+.map-suggestion-item:last-child {
+  border-bottom: none;
+}
+
+.map-suggestion-item:hover {
+  background-color: var(--surface-muted);
+}

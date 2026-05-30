@@ -1,8 +1,14 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { FeatureGroup, useMap } from 'react-leaflet';
 import { EditControl } from 'react-leaflet-draw';
 import L from 'leaflet';
-import * as turf from '@turf/turf';
+
+// Lazy-loaded once and cached — avoids including 150KB turf in the initial bundle
+let turfCache: typeof import('@turf/turf') | null = null;
+async function getTurf() {
+    if (!turfCache) turfCache = await import('@turf/turf');
+    return turfCache;
+}
 import { stringifyWKT } from '@/lib/map-utils';
 import InitialDataLoader from './InitialDataLoader';
 import { Layer } from '@/lib/firebase';
@@ -42,11 +48,13 @@ export default function ActiveLayerEditor({
     isReadOnly = false,
 }: ActiveLayerEditorProps) {
     const featureGroupRef = useRef<L.FeatureGroup>(null);
+    const prevSelectedRef = useRef<Set<number>>(new Set());
     const [menu, setMenu] = useState<{ x: number, y: number, layer: L.Layer | null, index: number } | null>(null);
     const [editingLayer, setEditingLayer] = useState<L.Layer | null>(null);
     const [bufferInputOpen, setBufferInputOpen] = useState(false);
     const [bufferDistance, setBufferDistance] = useState('500');
     const [commentsFeature, setCommentsFeature] = useState<{ index: number; name: string; note: string } | null>(null);
+    const [isSpatialProcessing, setIsSpatialProcessing] = useState(false);
     const map = useMap();
 
     // --- Selection Logic ---
@@ -61,27 +69,35 @@ export default function ActiveLayerEditor({
         }
     };
 
-    const updateSelectionStyles = () => {
+    const updateSelectionStyles = useCallback(() => {
         if (!featureGroupRef.current) return;
         const allLayers = featureGroupRef.current.getLayers();
+        const prev = prevSelectedRef.current;
 
-        allLayers.forEach((l: any, index: number) => {
-            if (selectedIndices.has(index)) {
-                if (typeof l.setStyle === 'function') {
-                    l.setStyle({ dashArray: '10, 10', weight: 4, color: l.feature?.properties?.color || '#3388ff' });
-                }
-            } else {
-                if (typeof l.setStyle === 'function') {
-                    l.setStyle({ dashArray: null, weight: 2, color: l.feature?.properties?.color || '#3388ff' });
-                }
+        // Only update layers whose selection state actually changed
+        const toSelect = [...selectedIndices].filter(i => !prev.has(i));
+        const toDeselect = [...prev].filter(i => !selectedIndices.has(i));
+
+        toSelect.forEach(index => {
+            const l = allLayers[index] as any;
+            if (l && typeof l.setStyle === 'function') {
+                l.setStyle({ dashArray: '10, 10', weight: 4, color: l.feature?.properties?.color || '#3388ff' });
             }
         });
-    };
+        toDeselect.forEach(index => {
+            const l = allLayers[index] as any;
+            if (l && typeof l.setStyle === 'function') {
+                l.setStyle({ dashArray: null, weight: 2, color: l.feature?.properties?.color || '#3388ff' });
+            }
+        });
+
+        prevSelectedRef.current = new Set(selectedIndices);
+    }, [selectedIndices]);
 
     // Re-apply styles when selection changes
     useEffect(() => {
         updateSelectionStyles();
-    }, [selectedIndices]);
+    }, [updateSelectionStyles]);
 
     // Keyboard (Escape)
     useEffect(() => {
@@ -115,7 +131,7 @@ export default function ActiveLayerEditor({
         setMenu({ x: e.originalEvent.clientX, y: e.originalEvent.clientY, layer: layer, index });
     };
 
-    const handleSubtract = () => {
+    const handleSubtract = async () => {
         if (!menu?.layer || selectedIndices.size !== 2 || menu.index === -1) {
             return;
         }
@@ -127,17 +143,13 @@ export default function ActiveLayerEditor({
             return;
         }
 
-        const allLayers = featureGroupRef.current.getLayers();
-        const subjectLayer = allLayers[subjectIndex];
-        const clipLayer = allLayers[otherIndex];
-
-        if (!subjectLayer || !clipLayer) return;
-
+        setIsSpatialProcessing(true);
         try {
-            // @ts-ignore
-            const sG = subjectLayer.toGeoJSON();
-            // @ts-ignore
-            const cG = clipLayer.toGeoJSON();
+            const turf = await getTurf();
+            // Single toGeoJSON() call — extract both features from it
+            const currentGeoJSON = featureGroupRef.current.toGeoJSON() as any;
+            const sG = currentGeoJSON.features[subjectIndex];
+            const cG = currentGeoJSON.features[otherIndex];
 
             // @ts-ignore
             const sGTyped = turf.rewind(sG, { reverse: true });
@@ -157,20 +169,14 @@ export default function ActiveLayerEditor({
 
             if (!difference) {
                 onShowToast?.("Warning: The polygon was completely subtracted and removed", 'warning');
-
-                const currentGeoJSON = featureGroupRef.current.toGeoJSON() as any;
-                const features = currentGeoJSON.features.filter((_: any, i: number) => i !== subjectIndex);
-                const newCollection = { ...currentGeoJSON, features };
-
+                const newCollection = { ...currentGeoJSON, features: currentGeoJSON.features.filter((_: any, i: number) => i !== subjectIndex) };
                 if (activeLayerId) onUpdateLayer(activeLayerId, newCollection);
                 setMenu(null);
                 if (onClearSelection) onClearSelection();
                 return;
             }
 
-            const currentGeoJSON = featureGroupRef.current.toGeoJSON() as any;
-            const features = currentGeoJSON.features;
-            const newFeatures = features.filter((_: any, i: number) => i !== subjectIndex);
+            const newFeatures = currentGeoJSON.features.filter((_: any, i: number) => i !== subjectIndex);
             newFeatures.push(difference);
 
             if (activeLayerId) {
@@ -184,10 +190,12 @@ export default function ActiveLayerEditor({
         } catch (err: any) {
             console.error("Subtract error:", err);
             onShowToast?.(`Subtract failed: ${err.message || "invalid geometry"}`, 'error');
+        } finally {
+            setIsSpatialProcessing(false);
         }
     };
 
-    const handleAdd = () => {
+    const handleAdd = async () => {
         if (!menu?.layer || selectedIndices.size !== 2 || menu.index === -1) {
             return;
         }
@@ -199,17 +207,13 @@ export default function ActiveLayerEditor({
             return;
         }
 
-        const allLayers = featureGroupRef.current.getLayers();
-        const subjectLayer = allLayers[subjectIndex];
-        const clipLayer = allLayers[otherIndex];
-
-        if (!subjectLayer || !clipLayer) return;
-
+        setIsSpatialProcessing(true);
         try {
-            // @ts-ignore
-            const sG = subjectLayer.toGeoJSON();
-            // @ts-ignore
-            const cG = clipLayer.toGeoJSON();
+            const turf = await getTurf();
+            // Single toGeoJSON() call — extract both features from it
+            const currentGeoJSON = featureGroupRef.current.toGeoJSON() as any;
+            const sG = currentGeoJSON.features[subjectIndex];
+            const cG = currentGeoJSON.features[otherIndex];
 
             // @ts-ignore
             const sGTyped = turf.rewind(sG, { reverse: true });
@@ -237,11 +241,7 @@ export default function ActiveLayerEditor({
                 return;
             }
 
-            const currentGeoJSON = featureGroupRef.current.toGeoJSON() as any;
-            const features = currentGeoJSON.features;
-            
-            // Remove both original polygons and add the union
-            const newFeatures = features.filter((_: any, i: number) => i !== subjectIndex && i !== otherIndex);
+            const newFeatures = currentGeoJSON.features.filter((_: any, i: number) => i !== subjectIndex && i !== otherIndex);
             newFeatures.push(unionFeature);
 
             if (activeLayerId) {
@@ -255,6 +255,8 @@ export default function ActiveLayerEditor({
         } catch (err: any) {
             console.error("Union error:", err);
             onShowToast?.(`Union failed: ${err.message || "invalid geometry"}`, 'error');
+        } finally {
+            setIsSpatialProcessing(false);
         }
     };
 
@@ -271,12 +273,11 @@ export default function ActiveLayerEditor({
         layer.on('contextmenu', (e: any) => {
             handleContextMenu(e, layer);
         });
-    }
+    };
 
     const _onCreated = (e: any) => {
         const layer = e.layer;
         if (activeLayerId && featureGroupRef.current) {
-            const activeLayer = layers.find(l => l.id === activeLayerId);
             const featureCount = activeLayer?.features?.features?.length ?? 0;
             const check = checkLimit(plan, 'maxFeaturesPerLayer', featureCount);
             if (!check.allowed) {
@@ -384,7 +385,6 @@ export default function ActiveLayerEditor({
 
     const handleOpenComments = () => {
         if (!menu || menu.index === -1) { setMenu(null); return; }
-        const activeLayer = layers.find(l => l.id === activeLayerId);
         const feature = activeLayer?.features?.features?.[menu.index];
         const name = feature?.properties?.name ?? `Feature ${menu.index + 1}`;
         const note = feature?.properties?.note ?? '';
@@ -395,7 +395,6 @@ export default function ActiveLayerEditor({
 
     const handleSaveNote = (note: string) => {
         if (!commentsFeature || !activeLayerId) return;
-        const activeLayer = layers.find(l => l.id === activeLayerId);
         if (!activeLayer) return;
         const updatedFeatures = activeLayer.features.features.map((f: any, i: number) =>
             i === commentsFeature.index ? { ...f, properties: { ...f.properties, note } } : f
@@ -423,41 +422,49 @@ export default function ActiveLayerEditor({
         setBufferInputOpen(true);
     };
 
-    const handleBufferConfirm = () => {
+    const handleBufferConfirm = async () => {
         const distMeters = parseFloat(bufferDistance);
         if (isNaN(distMeters) || distMeters <= 0) {
             onShowToast?.("Invalid distance — enter a positive number", 'warning');
             return;
         }
         if (!menu?.layer || !activeLayerId || !featureGroupRef.current) { setMenu(null); setBufferInputOpen(false); return; }
+        setIsSpatialProcessing(true);
         try {
-            // @ts-ignore
-            const feature = menu.layer.toGeoJSON();
+            const turf = await getTurf();
+            // Single toGeoJSON() call
+            const currentGeoJSON = featureGroupRef.current.toGeoJSON() as any;
+            const feature = currentGeoJSON.features[menu.index];
             const buffered = turf.buffer(feature, distMeters / 1000, { units: 'kilometers' });
             if (!buffered) { onShowToast?.("Buffer failed: could not generate geometry", 'error'); setMenu(null); setBufferInputOpen(false); return; }
             buffered.properties = { name: `Buffer ${distMeters}m`, color: '#f59e0b' };
 
-            const currentGeoJSON = featureGroupRef.current.toGeoJSON() as any;
             const newFeatures = [...currentGeoJSON.features, buffered];
             onUpdateLayer(activeLayerId, { ...currentGeoJSON, features: newFeatures });
             onShowToast?.(`Buffer of ${distMeters}m created`, 'success');
         } catch (err: any) {
             onShowToast?.(`Buffer failed: ${err.message || "invalid geometry"}`, 'error');
+        } finally {
+            setIsSpatialProcessing(false);
         }
         setMenu(null);
         setBufferInputOpen(false);
         setBufferDistance('500');
     };
 
-    if (!layers.find(l => l.id === activeLayerId)?.visible) return null;
-    const activeLayerData = layers.find(l => l.id === activeLayerId)?.features;
+    // Memoized active layer — avoids O(n) .find() on every render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const activeLayer = useMemo(() => layers.find(l => l.id === activeLayerId), [layers, activeLayerId]);
+
+    if (!activeLayer?.visible) return null;
+    const activeLayerData = activeLayer?.features;
 
     // Derived state for Subtract Button
     const showSubtract = menu && selectedIndices.has(menu.index) && selectedIndices.size === 2;
 
     return (
         <>
-            <FeatureGroup ref={featureGroupRef} key={activeLayerId}>
+            <FeatureGroup ref={featureGroupRef}>
                 <EditControl
                     position="topleft"
                     onCreated={_onCreated}
@@ -469,10 +476,19 @@ export default function ActiveLayerEditor({
                 />
                 <InitialDataLoader
                     data={activeLayerData}
+                    layerId={activeLayerId}
                     groupRef={featureGroupRef}
                     setupLayerEvents={setupLayerEvents}
                 />
             </FeatureGroup>
+
+            {isSpatialProcessing && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.2)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ background: 'var(--surface-color)', padding: '16px 24px', borderRadius: '12px', boxShadow: 'var(--shadow-lg)', fontSize: '14px', color: 'var(--text-main)' }}>
+                        Processing…
+                    </div>
+                </div>
+            )}
 
             {menu && (
                 <div

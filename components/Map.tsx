@@ -112,7 +112,7 @@ export default function MapComponent(props: MapProps) {
                 } : { color: '#64748b' };
                 return (
                     <GeoJSON
-                        key={`${layer.id}-${JSON.stringify(s)}`}
+                        key={layer.id}
                         data={layer.features}
                         pathOptions={pathOptions}
                         pointToLayer={s?.pointRadius ? (_feature, latlng) =>
