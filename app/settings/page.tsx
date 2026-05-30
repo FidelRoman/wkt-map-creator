@@ -15,9 +15,10 @@ import {
     ArrowLeftIcon, CheckIcon, SparklesIcon,
     ArrowRightStartOnRectangleIcon, TrashIcon, ShieldCheckIcon,
     ChartBarIcon, UserCircleIcon, CreditCardIcon, ExclamationTriangleIcon,
-    KeyIcon, PlusIcon
+    KeyIcon, PlusIcon, SunIcon, MoonIcon
 } from '@heroicons/react/24/outline';
 import Toast, { type ToastType } from '@/components/Toast';
+import { useDarkMode } from '@/lib/useDarkMode';
 
 const PLAN_COLORS: Record<PlanId, string> = {
     free: '#6b7280',
@@ -31,9 +32,9 @@ const PLAN_LABELS: Record<PlanId, string> = {
 
 function SectionHeader({ icon: Icon, title }: { icon: React.ElementType; title: string }) {
     return (
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
+        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center gap-2">
             <Icon className="w-4 h-4 text-slate-400" />
-            <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">{title}</h2>
+            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">{title}</h2>
         </div>
     );
 }
@@ -45,13 +46,13 @@ function UsageBar({ label, value, max }: { label: string; value: number; max: nu
     return (
         <div>
             <div className="flex justify-between text-xs mb-1">
-                <span className="text-slate-600">{label}</span>
+                <span className="text-slate-600 dark:text-slate-300">{label}</span>
                 <span className={`font-semibold ${isOver ? 'text-red-600' : isWarning ? 'text-amber-600' : 'text-slate-500'}`}>
                     {value}{max !== null ? `/${max}` : ''}
                 </span>
             </div>
             {max !== null && (
-                <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div className="h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
                     <div
                         className="h-full rounded-full transition-all"
                         style={{
@@ -68,6 +69,7 @@ function UsageBar({ label, value, max }: { label: string; value: number; max: nu
 function SettingsContent() {
     const router = useRouter();
     const { user, userProfile, refreshProfile, loading } = useAuth();
+    const { dark, toggle: toggleDark } = useDarkMode();
     const [displayName, setDisplayName] = useState('');
     const [savingName, setSavingName] = useState(false);
     const [nameSaved, setNameSaved] = useState(false);
@@ -209,7 +211,7 @@ function SettingsContent() {
 
     if (loading || !userProfile) {
         return (
-            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
                 <div className="w-6 h-6 border-2 border-slate-300 border-t-transparent rounded-full animate-spin" />
             </div>
         );
@@ -234,21 +236,24 @@ function SettingsContent() {
         : null;
 
     return (
-        <div className="min-h-screen bg-slate-50">
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
             {/* Header */}
-            <div className="bg-white border-b border-slate-200 sticky top-0 z-10">
+            <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-10">
                 <div className="max-w-2xl mx-auto px-6 h-14 flex items-center gap-3">
-                    <Link href="/" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+                    <Link href="/" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                         <ArrowLeftIcon className="w-5 h-5" />
                     </Link>
-                    <h1 className="text-base font-semibold text-slate-800">Settings</h1>
+                    <h1 className="text-base font-semibold text-slate-800 dark:text-slate-100">Settings</h1>
+                    <button onClick={toggleDark} title={dark ? 'Light mode' : 'Dark mode'} className="ml-auto p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                        {dark ? <SunIcon className="w-5 h-5" /> : <MoonIcon className="w-5 h-5" />}
+                    </button>
                 </div>
             </div>
 
             <div className="max-w-2xl mx-auto px-6 py-8 space-y-5">
 
                 {/* ── Perfil ── */}
-                <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                <section className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
                     <SectionHeader icon={UserCircleIcon} title="Profile" />
                     <div className="px-6 py-5 space-y-5">
                         <div className="flex items-center gap-4">
@@ -260,23 +265,23 @@ function SettingsContent() {
                                 </div>
                             )}
                             <div>
-                                <p className="font-semibold text-slate-800">{userProfile.displayName}</p>
-                                <p className="text-sm text-slate-500">{userProfile.email}</p>
+                                <p className="font-semibold text-slate-800 dark:text-slate-100">{userProfile.displayName}</p>
+                                <p className="text-sm text-slate-500 dark:text-slate-400">{userProfile.email}</p>
                                 {memberSince && (
-                                    <p className="text-xs text-slate-400 mt-0.5">Member since {memberSince}</p>
+                                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Member since {memberSince}</p>
                                 )}
                             </div>
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1.5">Name</label>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5">Name</label>
                             <div className="flex gap-2">
                                 <input
                                     type="text"
                                     value={displayName}
                                     onChange={e => setDisplayName(e.target.value)}
                                     onKeyDown={e => e.key === 'Enter' && handleSaveName()}
-                                    className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 transition-shadow"
+                                    className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow"
                                     placeholder="Your name"
                                 />
                                 <button
@@ -292,20 +297,20 @@ function SettingsContent() {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1.5">Email</label>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5">Email</label>
                             <input
                                 type="email"
                                 value={userProfile.email}
                                 readOnly
-                                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-500 bg-slate-50 cursor-not-allowed"
+                                className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-700 cursor-not-allowed"
                             />
-                            <p className="text-xs text-slate-400 mt-1">Linked to your Google account. Cannot be changed.</p>
+                            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Linked to your Google account. Cannot be changed.</p>
                         </div>
                     </div>
                 </section>
 
                 {/* ── Uso ── */}
-                <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                <section className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
                     <SectionHeader icon={ChartBarIcon} title="Usage" />
                     <div className="px-6 py-5 space-y-4">
                         <UsageBar
@@ -342,7 +347,7 @@ function SettingsContent() {
                 </section>
 
                 {/* ── Suscripción ── */}
-                <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                <section className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
                     <SectionHeader icon={CreditCardIcon} title="Subscription" />
                     <div className="px-6 py-5">
                         <div className="flex items-center justify-between">
@@ -357,7 +362,7 @@ function SettingsContent() {
                                 <div>
                                     {isPaid ? (
                                         <>
-                                            <p className="text-sm font-medium text-slate-800">Active plan</p>
+                                            <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Active plan</p>
                                             {renewalDate && userProfile.subscriptionStatus !== 'canceled' && (
                                                 <p className="text-xs text-slate-500">Renews on {renewalDate}</p>
                                             )}
@@ -369,7 +374,7 @@ function SettingsContent() {
                                             )}
                                         </>
                                     ) : (
-                                        <p className="text-sm text-slate-500">Limited projects and layers</p>
+                                        <p className="text-sm text-slate-500 dark:text-slate-400">Limited projects and layers</p>
                                     )}
                                 </div>
                             </div>
@@ -396,21 +401,21 @@ function SettingsContent() {
 
                 {/* ── API Keys ── */}
                 {isPaid && (
-                    <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                    <section className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
                         <SectionHeader icon={KeyIcon} title="API Keys" />
                         <div className="px-6 py-5 space-y-5">
-                            <p className="text-sm text-slate-600">
+                            <p className="text-sm text-slate-600 dark:text-slate-300">
                                 API keys let you access your project data programmatically via the REST API.
                             </p>
                             
                             {userProfile.apiKeys && userProfile.apiKeys.length > 0 && (
                                 <div className="space-y-3">
                                     {userProfile.apiKeys.map((k) => (
-                                        <div key={k.key} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border border-slate-200 rounded-xl bg-slate-50 gap-3">
+                                        <div key={k.key} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-700 gap-3">
                                             <div className="overflow-hidden">
-                                                <p className="font-semibold text-sm text-slate-800">{k.name}</p>
-                                                <p className="font-mono text-xs text-slate-500 truncate">{k.key}</p>
-                                                <p className="text-xs text-slate-400 mt-1">
+                                                <p className="font-semibold text-sm text-slate-800 dark:text-slate-100">{k.name}</p>
+                                                <p className="font-mono text-xs text-slate-500 dark:text-slate-400 truncate">{k.key}</p>
+                                                <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
                                                     Creada: {new Date(k.createdAt?.seconds ? k.createdAt.seconds * 1000 : k.createdAt).toLocaleDateString()}
                                                     {' · '}
                                                     Último uso: {k.lastUsed ? new Date(k.lastUsed?.seconds ? k.lastUsed.seconds * 1000 : k.lastUsed).toLocaleDateString() : 'Nunca'}
@@ -435,7 +440,7 @@ function SettingsContent() {
                                         value={newKeyName}
                                         onChange={(e) => setNewKeyName(e.target.value)}
                                         placeholder="New API key name"
-                                        className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                         onKeyDown={(e) => e.key === 'Enter' && handleGenerateApiKey()}
                                     />
                                     <button
@@ -455,17 +460,17 @@ function SettingsContent() {
                 )}
 
                 {/* ── Seguridad ── */}
-                <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                <section className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
                     <SectionHeader icon={ShieldCheckIcon} title="Security" />
                     <div className="px-6 py-5 space-y-4">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm font-medium text-slate-700">Authentication provider</p>
-                                <p className="text-xs text-slate-500 mt-0.5">Your access is linked to your Google account.</p>
+                                <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Authentication provider</p>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Your access is linked to your Google account.</p>
                             </div>
-                            <div className="flex items-center gap-2 bg-slate-100 rounded-full px-3 py-1.5">
+                            <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-700 rounded-full px-3 py-1.5">
                                 <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-4 h-4" />
-                                <span className="text-xs font-semibold text-slate-700">Google</span>
+                                <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Google</span>
                             </div>
                         </div>
                         {user?.metadata?.lastSignInTime && (
@@ -477,10 +482,10 @@ function SettingsContent() {
                             </div>
                         )}
 
-                        <div className="pt-1 border-t border-slate-100">
+                        <div className="pt-1 border-t border-slate-100 dark:border-slate-700">
                             <button
                                 onClick={handleSignOut}
-                                className="flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-slate-900 px-3 py-2 rounded-lg hover:bg-slate-100 transition-colors w-full"
+                                className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors w-full"
                             >
                                 <ArrowRightStartOnRectangleIcon className="w-4 h-4 text-slate-400" />
                                 Sign out
@@ -490,16 +495,16 @@ function SettingsContent() {
                 </section>
 
                 {/* ── Zona de peligro ── */}
-                <section className="bg-white rounded-2xl border border-red-200 overflow-hidden">
-                    <div className="px-6 py-4 border-b border-red-100 flex items-center gap-2">
+                <section className="bg-white dark:bg-slate-800 rounded-2xl border border-red-200 dark:border-red-900 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-red-100 dark:border-red-900 flex items-center gap-2">
                         <ExclamationTriangleIcon className="w-4 h-4 text-red-400" />
-                        <h2 className="text-sm font-semibold text-red-700 uppercase tracking-wide">Danger zone</h2>
+                        <h2 className="text-sm font-semibold text-red-700 dark:text-red-400 uppercase tracking-wide">Danger zone</h2>
                     </div>
                     <div className="px-6 py-5">
                         <div className="flex items-start justify-between gap-4">
                             <div>
-                                <p className="text-sm font-medium text-slate-800">Delete account</p>
-                                <p className="text-xs text-slate-500 mt-0.5">
+                                <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Delete account</p>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                                     Permanently delete your account and all your projects. This action cannot be undone.
                                 </p>
                             </div>
@@ -515,7 +520,7 @@ function SettingsContent() {
                 </section>
 
                 {/* Legal links */}
-                <div className="flex items-center justify-center gap-4 text-xs text-slate-400 pb-4">
+                <div className="flex items-center justify-center gap-4 text-xs text-slate-400 dark:text-slate-500 pb-4">
                     <Link href="/terms" className="hover:text-slate-600 transition-colors">Terms of Service</Link>
                     <span>·</span>
                     <Link href="/privacy" className="hover:text-slate-600 transition-colors">Privacy Policy</Link>
@@ -564,7 +569,7 @@ function SettingsContent() {
                             value={deleteConfirmText}
                             onChange={e => setDeleteConfirmText(e.target.value)}
                             placeholder="DELETE"
-                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                             autoComplete="off"
                         />
                     </div>

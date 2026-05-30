@@ -16,6 +16,7 @@
   --divider-color: #f1f5f9;
   --surface-color: #ffffff;
   --surface-muted: #f8fafc;
+  --selected-bg: #eff6ff;
 }
 
 .dark {
@@ -31,6 +32,7 @@
   --divider-color: #1e293b;
   --surface-color: #1e293b;
   --surface-muted: #0f172a;
+  --selected-bg: rgba(99, 102, 241, 0.25);
 }
 
 body {
@@ -179,7 +181,7 @@ body {
 }
 
 .layer-item.active {
-  background: #eef2ff;
+  background: var(--selected-bg);
   border-left: 3px solid var(--primary-color);
 }
 
@@ -418,6 +420,32 @@ body {
   margin-top: 12px;
 }
 
+/* Leaflet controls dark mode */
+.dark .leaflet-bar a,
+.dark .leaflet-control-zoom a {
+  background-color: var(--surface-color) !important;
+  color: var(--text-secondary) !important;
+  border-color: var(--border-color) !important;
+}
+
+.dark .leaflet-bar a:hover,
+.dark .leaflet-control-zoom a:hover {
+  background-color: var(--surface-muted) !important;
+}
+
+.dark .leaflet-control-attribution {
+  background-color: var(--surface-color) !important;
+  color: var(--text-secondary) !important;
+}
+
+/* Draw toolbar icons: match zoom controls gray */
+.dark .leaflet-draw-toolbar a {
+  background-color: var(--surface-color) !important;
+  border-color: var(--border-color) !important;
+  filter: brightness(0) invert(0.58);
+}
+
+
 /* Context Menu */
 .context-menu {
   position: absolute;
@@ -542,7 +570,7 @@ body {
 
 .poly-item.selected {
   border-color: var(--primary-color);
-  background: #eef2ff;
+  background: var(--selected-bg);
 }
 
 .color-swatch {

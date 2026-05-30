@@ -699,7 +699,7 @@ function Dashboard() {
           <button
             data-tour="new-project"
             onClick={() => { setNewProjectName(""); setIsModalOpen(true); }}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-medium transition-colors shadow-sm shadow-indigo-200"
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-medium transition-colors shadow-sm dark:shadow-none"
           >
             <PlusIcon className="w-5 h-5" />
             New Project

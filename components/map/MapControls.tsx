@@ -13,18 +13,6 @@ export const MAP_LAYERS: Record<string, { name: string, url: string, attribution
         attribution: '&copy; OpenStreetMap contributors',
         preview: 'https://a.tile.openstreetmap.org/12/2048/1360.png'
     },
-    'satellite': {
-        name: 'Satellite',
-        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-        attribution: 'Tiles &copy; Esri',
-        preview: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/12/1360/2048'
-    },
-    'terrain': {
-        name: 'Terrain',
-        url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-        attribution: 'Map data: &copy; OpenStreetMap contributors, SRTM | Map style: &copy; OpenTopoMap (CC-BY-SA)',
-        preview: 'https://a.tile.opentopomap.org/12/2048/1360.png'
-    },
     'dark': {
         name: 'Dark',
         url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
@@ -43,12 +31,6 @@ export const MAP_LAYERS: Record<string, { name: string, url: string, attribution
         attribution: '© Mapbox',
         preview: `https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/12/2048/1360?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}`
     },
-    'mapbox_outdoors': {
-        name: 'Mapbox Outdoors',
-        url: `https://api.mapbox.com/styles/v1/mapbox/outdoors-v11/tiles/{z}/{x}/{y}?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}`,
-        attribution: '© Mapbox',
-        preview: `https://api.mapbox.com/styles/v1/mapbox/outdoors-v11/tiles/12/2048/1360?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}`
-    },
     'mapbox_light': {
         name: 'Mapbox Light',
         url: `https://api.mapbox.com/styles/v1/mapbox/light-v10/tiles/{z}/{x}/{y}?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}`,
@@ -61,18 +43,6 @@ export const MAP_LAYERS: Record<string, { name: string, url: string, attribution
         attribution: '© Mapbox',
         preview: `https://api.mapbox.com/styles/v1/mapbox/dark-v10/tiles/12/2048/1360?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}`
     },
-    'mapbox_satellite': {
-        name: 'Mapbox Satellite',
-        url: `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/{z}/{x}/{y}?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}`,
-        attribution: '© Mapbox',
-        preview: `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/12/2048/1360?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}`
-    },
-    'mapbox_satellite_streets': {
-        name: 'Mapbox Sat. Streets',
-        url: `https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v11/tiles/{z}/{x}/{y}?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}`,
-        attribution: '© Mapbox',
-        preview: `https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v11/tiles/12/2048/1360?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}`
-    }
 };
 
 export default function MapControls({ activeTileLayer, setActiveTileLayer }: MapControlsProps) {
@@ -158,17 +128,17 @@ export default function MapControls({ activeTileLayer, setActiveTileLayer }: Map
                 flexDirection: 'column',
                 width: '300px'
             }}>
-                <div style={{ display: 'flex', background: 'white', borderRadius: '4px', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>
+                <div style={{ display: 'flex', background: 'var(--surface-color)', borderRadius: '4px', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>
                     <input
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         onFocus={() => setShowSuggestions(true)}
-                        onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} // Delay to allow click
+                        onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                         placeholder="Search address…"
-                        style={{ border: 'none', padding: '8px 12px', borderRadius: '4px', outline: 'none', flex: 1 }}
+                        style={{ border: 'none', padding: '8px 12px', borderRadius: '4px', outline: 'none', flex: 1, background: 'var(--surface-color)', color: 'var(--text-main)' }}
                     />
-                    <div style={{ padding: '8px', color: '#666' }}>
+                    <div style={{ padding: '8px', color: 'var(--text-secondary)' }}>
                         {isSearching ? (
                             <div style={{
                                 width: '16px', height: '16px',
@@ -186,9 +156,9 @@ export default function MapControls({ activeTileLayer, setActiveTileLayer }: Map
                 {showSuggestions && suggestions.length > 0 && (
                     <div style={{
                         marginTop: '5px',
-                        background: 'white',
+                        background: 'var(--surface-color)',
                         borderRadius: '4px',
-                        boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+                        boxShadow: '0 4px 6px rgba(0,0,0,0.2)',
                         maxHeight: '300px',
                         overflowY: 'auto'
                     }}>
@@ -198,12 +168,13 @@ export default function MapControls({ activeTileLayer, setActiveTileLayer }: Map
                                 onClick={() => handleSelectSuggestion(item)}
                                 style={{
                                     padding: '8px 12px',
-                                    borderBottom: idx < suggestions.length - 1 ? '1px solid #eee' : 'none',
+                                    borderBottom: idx < suggestions.length - 1 ? '1px solid var(--divider-color)' : 'none',
                                     cursor: 'pointer',
-                                    fontSize: '14px'
+                                    fontSize: '14px',
+                                    color: 'var(--text-main)'
                                 }}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
-                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--surface-muted)'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--surface-color)'}
                             >
                                 {item.display_name}
                             </div>
@@ -228,7 +199,8 @@ export default function MapControls({ activeTileLayer, setActiveTileLayer }: Map
                     <button
                         onClick={toggleLayerMenu}
                         style={{
-                            background: 'white',
+                            background: 'var(--surface-color)',
+                            color: 'var(--text-main)',
                             border: 'none',
                             borderRadius: '4px',
                             boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
@@ -248,10 +220,11 @@ export default function MapControls({ activeTileLayer, setActiveTileLayer }: Map
                             position: 'absolute',
                             top: '40px',
                             right: '0',
-                            background: 'white',
+                            background: 'var(--surface-color)',
+                            border: '1px solid var(--border-color)',
                             padding: '10px',
                             borderRadius: '8px',
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                            boxShadow: 'var(--shadow-lg)',
                             width: '200px',
                             display: 'flex',
                             flexDirection: 'column',
@@ -268,8 +241,8 @@ export default function MapControls({ activeTileLayer, setActiveTileLayer }: Map
                                         padding: '5px',
                                         borderRadius: '4px',
                                         cursor: 'pointer',
-                                        backgroundColor: activeTileLayer === key ? '#eff6ff' : 'transparent',
-                                        border: activeTileLayer === key ? '1px solid #3b82f6' : '1px solid transparent'
+                                        backgroundColor: activeTileLayer === key ? 'var(--selected-bg)' : 'transparent',
+                                        border: activeTileLayer === key ? '1px solid var(--primary-color)' : '1px solid transparent'
                                     }}
                                 >
                                     <div style={{
@@ -277,11 +250,11 @@ export default function MapControls({ activeTileLayer, setActiveTileLayer }: Map
                                         height: '40px',
                                         borderRadius: '4px',
                                         overflow: 'hidden',
-                                        border: '1px solid #ddd',
+                                        border: '1px solid var(--border-color)',
                                         backgroundImage: `url(${layer.preview})`,
                                         backgroundSize: 'cover'
                                     }} />
-                                    <span style={{ fontSize: '14px', fontWeight: activeTileLayer === key ? 500 : 400 }}>{layer.name}</span>
+                                    <span style={{ fontSize: '14px', fontWeight: activeTileLayer === key ? 500 : 400, color: 'var(--text-main)' }}>{layer.name}</span>
                                 </div>
                             ))}
                         </div>
@@ -292,7 +265,7 @@ export default function MapControls({ activeTileLayer, setActiveTileLayer }: Map
                 <button
                     onClick={() => setShowDonateModal(true)}
                     style={{
-                        background: 'white',
+                        background: 'var(--surface-color)',
                         border: 'none',
                         borderRadius: '4px',
                         boxShadow: '0 2px 4px rgba(0,0,0,0.2)',

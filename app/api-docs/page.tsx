@@ -35,7 +35,7 @@ function Endpoint({ method, path, description, children }: { method: string; pat
 
 export default function ApiDocsPage() {
     return (
-        <div className="min-h-screen bg-slate-50">
+        <div className="min-h-screen bg-slate-50 text-slate-800">
             <div className="bg-white border-b border-slate-200 sticky top-0 z-10">
                 <div className="max-w-4xl mx-auto px-6 h-14 flex items-center gap-3">
                     <Link href="/" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">

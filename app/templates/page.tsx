@@ -2,12 +2,13 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeftIcon, MapIcon, SparklesIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, MapIcon, SparklesIcon, SunIcon, MoonIcon } from '@heroicons/react/24/outline';
 import { TEMPLATES, type Template } from '@/lib/templates';
 import { createProject } from '@/lib/firebase';
 import { useAuth } from '@/components/AuthWrapper';
 import AuthWrapper from '@/components/AuthWrapper';
 import { checkLimit } from '@/lib/plans';
+import { useDarkMode } from '@/lib/useDarkMode';
 
 const TAG_COLORS: Record<string, string> = {
     'points': 'bg-blue-50 text-blue-600',
@@ -27,8 +28,7 @@ const TAG_COLORS: Record<string, string> = {
 
 function TemplateCard({ template, onUse, isUsing }: { template: Template; onUse: (t: Template) => void; isUsing: boolean }) {
     return (
-        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden hover:shadow-md transition-shadow">
-            {/* Visual preview */}
+        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden hover:shadow-md transition-shadow">
             <div className="h-28 flex items-center justify-center relative" style={{ background: `linear-gradient(135deg, ${template.color}18, ${template.color}35)` }}>
                 <div className="text-5xl opacity-30" style={{ color: template.color }}>
                     {template.tags.includes('points') ? '·' : template.tags.includes('lines') ? '~' : '□'}
@@ -39,12 +39,12 @@ function TemplateCard({ template, onUse, isUsing }: { template: Template; onUse:
             </div>
 
             <div className="p-4">
-                <h3 className="font-semibold text-slate-800 text-sm mb-1">{template.name}</h3>
-                <p className="text-xs text-slate-500 leading-relaxed mb-3">{template.description}</p>
+                <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-sm mb-1">{template.name}</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-3">{template.description}</p>
 
                 <div className="flex flex-wrap gap-1 mb-3">
                     {template.tags.map(tag => (
-                        <span key={tag} className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${TAG_COLORS[tag] ?? 'bg-slate-100 text-slate-500'}`}>{tag}</span>
+                        <span key={tag} className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${TAG_COLORS[tag] ?? 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'}`}>{tag}</span>
                     ))}
                 </div>
 
@@ -65,6 +65,7 @@ function TemplateCard({ template, onUse, isUsing }: { template: Template; onUse:
 
 function TemplatesApp() {
     const { user, userProfile } = useAuth();
+    const { dark, toggle: toggleDark } = useDarkMode();
     const plan = userProfile?.plan ?? 'free';
     const [usingId, setUsingId] = useState<string | null>(null);
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -117,28 +118,31 @@ function TemplatesApp() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-50">
-            <div className="bg-white border-b border-slate-200 sticky top-0 z-10">
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+            <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-10">
                 <div className="max-w-5xl mx-auto px-6 h-14 flex items-center gap-3">
-                    <Link href="/" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+                    <Link href="/" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                         <ArrowLeftIcon className="w-5 h-5" />
                     </Link>
                     <div className="flex items-center gap-2">
                         <SparklesIcon className="w-5 h-5 text-indigo-600" />
-                        <h1 className="text-base font-semibold text-slate-800">Map Templates</h1>
+                        <h1 className="text-base font-semibold text-slate-800 dark:text-slate-100">Map Templates</h1>
                     </div>
                     <span className="ml-auto text-xs text-slate-400">{TEMPLATES.length} templates available</span>
+                    <button onClick={toggleDark} title={dark ? 'Light mode' : 'Dark mode'} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                        {dark ? <SunIcon className="w-5 h-5" /> : <MoonIcon className="w-5 h-5" />}
+                    </button>
                 </div>
             </div>
 
             <div className="max-w-5xl mx-auto px-6 py-8">
                 <div className="mb-6">
-                    <h2 className="text-2xl font-bold text-slate-900">Start with real data</h2>
-                    <p className="text-slate-500 mt-1 text-sm">Create a project pre-loaded with geographic data in one click. Templates count toward your project limit.</p>
+                    <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Start with real data</h2>
+                    <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm">Create a project pre-loaded with geographic data in one click. Templates count toward your project limit.</p>
                 </div>
 
                 {!user && (
-                    <div className="mb-6 p-4 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-indigo-800">
+                    <div className="mb-6 p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-xl text-sm text-indigo-800 dark:text-indigo-300">
                         <strong>Sign in</strong> to use templates and save projects.{' '}
                         <Link href="/" className="underline font-medium">Go to home →</Link>
                     </div>

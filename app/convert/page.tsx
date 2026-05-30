@@ -2,7 +2,8 @@
 
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
-import { ArrowLeftIcon, ClipboardDocumentIcon, CheckIcon, ArrowsRightLeftIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, ClipboardDocumentIcon, CheckIcon, ArrowsRightLeftIcon, SunIcon, MoonIcon } from '@heroicons/react/24/outline';
+import { useDarkMode } from '@/lib/useDarkMode';
 
 type TabId = 'wkt-geojson' | 'geojson-wkt' | 'wkt-wkb' | 'wkb-wkt' | 'batch';
 
@@ -104,10 +105,10 @@ function CopyButton({ text }: { text: string }) {
     return (
         <button
             onClick={handleCopy}
-            className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 px-2 py-1 rounded-lg hover:bg-slate-100 transition-colors"
+            className="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 px-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
         >
             {copied ? <CheckIcon className="w-3.5 h-3.5 text-emerald-500" /> : <ClipboardDocumentIcon className="w-3.5 h-3.5" />}
-            {copied ? 'Copiado' : 'Copiar'}
+            {copied ? 'Copied' : 'Copy'}
         </button>
     );
 }
@@ -115,6 +116,7 @@ function CopyButton({ text }: { text: string }) {
 export default function ConvertPage() {
     const [activeTab, setActiveTab] = useState<TabId>('wkt-geojson');
     const [input, setInput] = useState('');
+    const { dark, toggle: toggleDark } = useDarkMode();
 
     const tab = TABS.find(t => t.id === activeTab)!;
     const { result, error } = convert(activeTab, input);
@@ -125,37 +127,40 @@ export default function ConvertPage() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-50">
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
             {/* Header */}
-            <div className="bg-white border-b border-slate-200 sticky top-0 z-10">
+            <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-10">
                 <div className="max-w-5xl mx-auto px-6 h-14 flex items-center gap-3">
-                    <Link href="/" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+                    <Link href="/" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                         <ArrowLeftIcon className="w-5 h-5" />
                     </Link>
                     <div className="flex items-center gap-2">
                         <ArrowsRightLeftIcon className="w-5 h-5 text-indigo-600" />
-                        <h1 className="text-base font-semibold text-slate-800">Geometry Converter</h1>
+                        <h1 className="text-base font-semibold text-slate-800 dark:text-slate-100">Geometry Converter</h1>
                     </div>
                     <span className="ml-auto text-xs text-slate-400">100% client-side — no data sent to server</span>
+                    <button onClick={toggleDark} title={dark ? 'Light mode' : 'Dark mode'} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                        {dark ? <SunIcon className="w-5 h-5" /> : <MoonIcon className="w-5 h-5" />}
+                    </button>
                 </div>
             </div>
 
             <div className="max-w-5xl mx-auto px-6 py-8">
                 {/* SEO heading */}
                 <div className="mb-6">
-                    <h2 className="text-2xl font-bold text-slate-900">WKT to GeoJSON Converter — Free Online Tool</h2>
-                    <p className="text-slate-500 mt-1 text-sm">
+                    <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">WKT to GeoJSON Converter — Free Online Tool</h2>
+                    <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm">
                         Convert WKT (Well-Known Text) to GeoJSON, WKB hex, and back. Supports POLYGON, POINT, LINESTRING, MULTIPOLYGON and all OGC geometry types from PostGIS, Shapely, GDAL.
                     </p>
                 </div>
 
                 {/* Tabs */}
-                <div className="flex gap-1 bg-slate-100 rounded-xl p-1 mb-6 flex-wrap">
+                <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 mb-6 flex-wrap">
                     {TABS.map(t => (
                         <button
                             key={t.id}
                             onClick={() => handleTabChange(t.id)}
-                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${activeTab === t.id ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${activeTab === t.id ? 'bg-white dark:bg-slate-700 shadow text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
                         >
                             {t.label}
                         </button>
@@ -165,9 +170,9 @@ export default function ConvertPage() {
                 {/* Editor */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Input */}
-                    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-                        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Input</span>
+                    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700">
+                            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Input</span>
                             {input && <CopyButton text={input} />}
                         </div>
                         <textarea
@@ -175,14 +180,14 @@ export default function ConvertPage() {
                             onChange={e => setInput(e.target.value)}
                             placeholder={tab.inputPlaceholder}
                             spellCheck={false}
-                            className="w-full h-72 px-4 py-3 text-sm font-mono text-slate-800 resize-none focus:outline-none placeholder:text-slate-300"
+                            className="w-full h-72 px-4 py-3 text-sm font-mono text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800 resize-none focus:outline-none placeholder:text-slate-300 dark:placeholder:text-slate-600"
                         />
                     </div>
 
                     {/* Output */}
-                    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-                        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{tab.outputLabel}</span>
+                    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700">
+                            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">{tab.outputLabel}</span>
                             {result && <CopyButton text={result} />}
                         </div>
                         {error ? (
@@ -196,16 +201,16 @@ export default function ConvertPage() {
                                 readOnly
                                 placeholder={input ? 'Processing…' : 'Result will appear here'}
                                 spellCheck={false}
-                                className="w-full h-72 px-4 py-3 text-sm font-mono text-slate-800 resize-none focus:outline-none bg-slate-50 placeholder:text-slate-300"
+                                className="w-full h-72 px-4 py-3 text-sm font-mono text-slate-800 dark:text-slate-100 resize-none focus:outline-none bg-slate-50 dark:bg-slate-900 placeholder:text-slate-300 dark:placeholder:text-slate-600"
                             />
                         )}
                     </div>
                 </div>
 
                 {/* Quick reference */}
-                <section className="mt-10 bg-white border border-slate-200 rounded-2xl overflow-hidden">
-                    <div className="px-6 py-4 border-b border-slate-100">
-                        <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">WKT examples</h3>
+                <section className="mt-10 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
+                    <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700">
+                        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wide">WKT examples</h3>
                     </div>
                     <div className="px-6 py-5 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
                         {[
@@ -220,7 +225,7 @@ export default function ConvertPage() {
                                 <p className="text-[10px] text-slate-400 font-sans font-semibold uppercase mb-1">{type}</p>
                                 <button
                                     onClick={() => { setActiveTab('wkt-geojson'); setInput(wkt); }}
-                                    className="text-left text-slate-600 hover:text-indigo-600 transition-colors break-all"
+                                    className="text-left text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors break-all"
                                 >
                                     {wkt}
                                 </button>
@@ -237,12 +242,12 @@ export default function ConvertPage() {
                         { q: 'What is WKB (Well-Known Binary)?', a: 'WKB is the binary equivalent of WKT, typically stored as a hex string. PostGIS returns WKB by default (e.g., 0101000000...). Use ST_AsText() to get WKT, or paste the hex here to convert.' },
                         { q: 'How to convert PostGIS geometry to GeoJSON?', a: 'Run: SELECT ST_AsText(geom) FROM your_table. Paste the result here and select "WKT → GeoJSON". Or use ST_AsGeoJSON(geom) directly in PostgreSQL.' },
                     ].map(({ q, a }) => (
-                        <details key={q} className="bg-white border border-slate-200 rounded-xl">
-                            <summary className="px-5 py-4 text-sm font-medium text-slate-800 cursor-pointer list-none flex items-center justify-between">
+                        <details key={q} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl">
+                            <summary className="px-5 py-4 text-sm font-medium text-slate-800 dark:text-slate-100 cursor-pointer list-none flex items-center justify-between">
                                 {q}
                                 <span className="text-slate-400 text-lg leading-none">+</span>
                             </summary>
-                            <p className="px-5 pb-4 text-sm text-slate-500">{a}</p>
+                            <p className="px-5 pb-4 text-sm text-slate-500 dark:text-slate-400">{a}</p>
                         </details>
                     ))}
                 </section>

@@ -41,7 +41,7 @@ export default function PlanBadge({ plan, projectCount, onShowToast }: PlanBadge
             <button
                 onClick={handleManage}
                 aria-label={plan === 'free' ? 'Upgrade to Pro' : 'Manage subscription'}
-                className="flex items-center gap-2 w-full px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors text-left group"
+                className="flex items-center gap-2 w-full px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors text-left group"
             >
                 <div
                     className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-white text-xs font-bold flex-shrink-0"
@@ -53,11 +53,11 @@ export default function PlanBadge({ plan, projectCount, onShowToast }: PlanBadge
 
                 {plan === 'free' && maxProjects !== null && projectCount !== undefined && (
                     <div className="flex-1 min-w-0">
-                        <div className="flex justify-between text-xs text-gray-500 mb-0.5">
+                        <div className="flex justify-between text-xs text-gray-500 dark:text-slate-400 mb-0.5">
                             <span>Projects</span>
                             <span>{projectCount}/{maxProjects}</span>
                         </div>
-                        <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                        <div className="h-1.5 bg-gray-200 dark:bg-slate-600 rounded-full overflow-hidden">
                             <div
                                 className="h-full rounded-full transition-all"
                                 style={{
@@ -70,7 +70,7 @@ export default function PlanBadge({ plan, projectCount, onShowToast }: PlanBadge
                 )}
 
                 {plan !== 'free' && (
-                    <span className="ml-auto text-xs text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span className="ml-auto text-xs text-gray-400 dark:text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity">
                         Manage →
                     </span>
                 )}
