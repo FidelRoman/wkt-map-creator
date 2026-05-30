@@ -420,6 +420,14 @@ body {
 }
 
 /* Leaflet controls dark mode */
+/* Leaflet's touch mode wraps every control bar in a chunky 2px translucent
+   border. The zoom control is one bar but the draw control is two bars, so its
+   separators looked heavier. Slim every bar down to a subtle 1px so the draw
+   toolbar separators match the zoom (+/-) control. */
+.dark .leaflet-bar {
+  border: 1px solid var(--border-color) !important;
+}
+
 .dark .leaflet-bar a,
 .dark .leaflet-control-zoom a {
   background-color: var(--surface-color) !important;
@@ -438,19 +446,31 @@ body {
 }
 
 /* Draw toolbar icons in dark mode.
-   leaflet-draw ships dark sprite icons designed for a white button. The old
-   `brightness(0)` flattened both the background AND the icon to the same gray,
-   making the icon invisible (empty gray boxes). Instead we keep leaflet's
-   native white button and invert the whole control: the white background turns
-   dark (matching the zoom controls) and the dark icons turn light and visible. */
+   leaflet-draw paints its dark sprite icons as the <a>'s background-image.
+   Filtering the whole <a> to lighten the icon also lightened its border
+   (turning the subtle dark divider into a thick gray line). So we leave the
+   <a> untouched — it already inherits the surface background + subtle border
+   from the .leaflet-bar rules above, matching the zoom controls — and repaint
+   the icon on a ::before that inherits the same sprite and inverts ONLY the
+   icon to light gray. The border is never filtered, so it stays dark. */
 .dark .leaflet-draw-toolbar a {
-  background-color: #ffffff !important;
-  border-color: #cccccc !important;
-  filter: invert(0.87) hue-rotate(180deg);
+  position: relative;
 }
 
-.dark .leaflet-draw-toolbar a:hover {
-  background-color: #e8e8e8 !important;
+.dark .leaflet-draw-toolbar a::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: inherit;
+  background-position: inherit;
+  background-size: inherit;
+  background-repeat: inherit;
+  filter: brightness(0) invert(0.62);
+  pointer-events: none;
+}
+
+.dark .leaflet-draw-toolbar a:hover::before {
+  filter: brightness(0) invert(0.85);
 }
 
 
