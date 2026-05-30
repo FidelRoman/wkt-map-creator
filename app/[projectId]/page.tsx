@@ -8,7 +8,8 @@ import AuthWrapper, { useAuth } from '@/components/AuthWrapper';
 import { Project, Layer, getUserProjects, getProject, saveProjectLayers, forkProject } from '@/lib/firebase';
 import VersionHistoryPanel from '@/components/VersionHistoryPanel';
 import { analytics } from '@/lib/analytics';
-import { parseWKT, calculateStats, generateColor } from '@/lib/map-utils';
+import { parseWKT, generateColor } from '@/lib/map-utils';
+import { useUndoableState } from '@/lib/useUndoableState';
 import { parseCSVLine } from '@/lib/csv-utils';
 import Modal from '@/components/Modal';
 import Toast, { type ToastType } from '@/components/Toast';
@@ -40,51 +41,22 @@ function ProjectApp() {
 
     const [projects, setProjects] = useState<Project[]>([]);
     const [currentProject, setCurrentProject] = useState<Project | null>(null);
-    const [layers, setLayers] = useState<Layer[]>([]);
+    const [
+        layers,
+        setLayers,
+        undo,
+        redo,
+        canUndo,
+        canRedo,
+        trackHistoryRef,
+        resetLayers
+    ] = useUndoableState<Layer[]>([]);
     const [activeLayerId, setActiveLayerId] = useState<string | null>(null);
-
-    // ── Undo / Redo ────────────────────────────────────────────────────────────
-    const MAX_HISTORY = 10;
-    const [layerPast, setLayerPast] = useState<Layer[][]>([]);
-    const [layerFuture, setLayerFuture] = useState<Layer[][]>([]);
-    // Use a ref to gate history tracking — we don't want to track the initial load
-    const trackHistoryRef = useRef(false);
 
     /** Wrap setLayers for undoable operations (drawing, imports, spatial ops) */
     const setLayersUndoable = useCallback((action: Layer[] | ((prev: Layer[]) => Layer[])) => {
-        setLayers(prev => {
-            const next = typeof action === 'function' ? action(prev) : action;
-            if (trackHistoryRef.current) {
-                setLayerPast(p => [...p.slice(-(MAX_HISTORY - 1)), prev]);
-                setLayerFuture([]);
-            }
-            return next;
-        });
-    }, []);
-
-    const undo = useCallback(() => {
-        setLayerPast(past => {
-            if (past.length === 0) return past;
-            const previous = past[past.length - 1];
-            setLayers(current => {
-                setLayerFuture(f => [current, ...f.slice(0, MAX_HISTORY - 1)]);
-                return previous;
-            });
-            return past.slice(0, -1);
-        });
-    }, []);
-
-    const redo = useCallback(() => {
-        setLayerFuture(future => {
-            if (future.length === 0) return future;
-            const next = future[0];
-            setLayers(current => {
-                setLayerPast(p => [...p.slice(-(MAX_HISTORY - 1)), current]);
-                return next;
-            });
-            return future.slice(1);
-        });
-    }, []);
+        setLayers(action, true);
+    }, [setLayers]);
 
     // Keyboard shortcuts (Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y)
     useEffect(() => {
@@ -241,9 +213,7 @@ function ProjectApp() {
         if (loadedLayers.length === 0) {
             loadedLayers = [{ id: 'l1', name: 'Base', visible: true, features: { type: 'FeatureCollection', features: [] } }];
         }
-        setLayers(loadedLayers);
-        setLayerPast([]);
-        setLayerFuture([]);
+        resetLayers(loadedLayers);
         setActiveLayerId(loadedLayers[0].id);
         setIsSaving(false);
         // Enable history after initial load settles
@@ -621,7 +591,7 @@ function ProjectApp() {
         <div className="flex h-screen w-screen overflow-hidden">
             {/* View-mode banner for collaborators with viewer role */}
             {isReadOnly && !accessDenied && currentProject && (
-                <div className="fixed top-0 left-0 right-0 z-[500] bg-amber-50 border-b border-amber-200 px-4 py-1.5 flex items-center justify-center gap-2 text-xs text-amber-800">
+                <div className="fixed top-0 left-0 right-0 z-500 bg-amber-50 border-b border-amber-200 px-4 py-1.5 flex items-center justify-center gap-2 text-xs text-amber-800">
                     <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                     <span><strong>View mode</strong> — your changes are local and won't be saved.</span>
                     {currentProject.isPublic && (
@@ -665,12 +635,12 @@ function ProjectApp() {
                 // Undo / Redo
                 onUndo={!isReadOnly ? undo : undefined}
                 onRedo={!isReadOnly ? redo : undefined}
-                canUndo={layerPast.length > 0}
-                canRedo={layerFuture.length > 0}
+                canUndo={canUndo}
+                canRedo={canRedo}
             />
             <div className={`flex-1 relative ${isReadOnly && currentProject ? 'pt-8' : ''}`}>
                 {canFork && !isReadOnly && (
-                    <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[400]">
+                    <div className="absolute top-3 left-1/2 -translate-x-1/2 z-400">
                         <button
                             onClick={handleForkProject}
                             disabled={isForkingProject}
@@ -738,9 +708,7 @@ function ProjectApp() {
                     ownerId={user.uid}
                     layers={layers}
                     onRestore={(restoredLayers) => {
-                        setLayers(restoredLayers);
-                        setLayerPast([]);
-                        setLayerFuture([]);
+                        resetLayers(restoredLayers);
                     }}
                     plan={plan}
                     onUpgradeRequired={() => {

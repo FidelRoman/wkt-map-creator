@@ -1,5 +1,5 @@
 "use client";
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { XMarkIcon, ChevronUpIcon, ChevronDownIcon, PlusIcon, ArrowDownTrayIcon, SparklesIcon } from '@heroicons/react/24/outline';
 import * as turf from '@turf/turf';
 import { stringify } from 'wellknown';
@@ -43,6 +43,8 @@ export default function AttributeTable({
 
     const isPro = hasFeature(plan, 'hasVersionHistory'); // proxy for pro/business
 
+    const geomCache = useRef(new WeakMap<any, { area: number; perimeter: number }>());
+
     const features: any[] = useMemo(() => layer?.features?.features ?? [], [layer]);
 
     const customCols = useMemo(() => {
@@ -57,15 +59,28 @@ export default function AttributeTable({
 
     const rows = useMemo(() => {
         return features.map((f, i) => {
-            const geomType = f.geometry?.type ?? 'Unknown';
+            const geom = f.geometry;
+            const geomType = geom?.type ?? 'Unknown';
             let area = 0;
             let perimeter = 0;
-            try {
-                if (geomType.includes('Polygon')) {
-                    area = turf.area(f);
-                    perimeter = turf.length(f, { units: 'meters' });
+
+            if (geom) {
+                let cached = geomCache.current.get(geom);
+                if (!cached) {
+                    try {
+                        if (geomType.includes('Polygon')) {
+                            area = turf.area(f);
+                            perimeter = turf.length(f, { units: 'meters' });
+                        }
+                    } catch { /* ignore */ }
+                    cached = { area, perimeter };
+                    geomCache.current.set(geom, cached);
+                } else {
+                    area = cached.area;
+                    perimeter = cached.perimeter;
                 }
-            } catch { /* ignore */ }
+            }
+
             return { index: i, name: f.properties?.name ?? `Feature ${i + 1}`, color: f.properties?.color ?? '#888', geomType, area, perimeter, feature: f };
         });
     }, [features]);
@@ -158,7 +173,7 @@ export default function AttributeTable({
     return (
         <div className="flex flex-col bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700" style={{ height: '240px' }}>
             {/* Toolbar */}
-            <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-100 dark:border-slate-700 flex-shrink-0">
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-100 dark:border-slate-700 shrink-0">
                 <span className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
                     {layer?.name ?? 'No layer'} — {filtered.length} features
                 </span>
@@ -224,7 +239,7 @@ export default function AttributeTable({
                                         <input autoFocus value={editValue} onChange={e => setEditValue(e.target.value)} onBlur={saveEdit} onKeyDown={e => e.key === 'Enter' && saveEdit()} className="w-full text-xs border border-indigo-400 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded px-1 py-0.5 focus:outline-none" onClick={e => e.stopPropagation()} />
                                     ) : (
                                         <div className="flex items-center gap-1.5">
-                                            <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: row.color }} />
+                                            <div className="w-3 h-3 rounded-full shrink-0" style={{ background: row.color }} />
                                             <span className="truncate max-w-[140px]" title={row.name}>{row.name}</span>
                                         </div>
                                     )}

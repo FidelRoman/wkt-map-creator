@@ -43,22 +43,3 @@ export function subtractPolygons(subjectFeature: any, clipFeature: any) {
         return null;
     }
 }
-
-export function calculateStats(layers: any[]) {
-    let count = 0;
-    let area = 0;
-
-    layers.forEach(layer => {
-        if (!layer.visible || !layer.features) return;
-
-        turf.flatten(layer.features).features.forEach((f) => {
-            count++;
-            const a = turf.area(f);
-            area += a;
-        });
-    });
-
-    // Convert area to hectares if > 10000, else m2
-    // actually, let's just return raw meters and format in UI
-    return { count, area };
-}
