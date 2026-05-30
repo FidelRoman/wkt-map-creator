@@ -290,8 +290,13 @@ export default function ActiveLayerEditor({
                 }
                 return;
             }
-            setupLayerEvents(layer);
+            // Read the new geometry (the drawn layer is already in the group),
+            // then remove leaflet-draw's layer. State is the single source of
+            // truth: InitialDataLoader re-renders the feature from the updated
+            // GeoJSON. If we keep this layer, the feature shows twice on the map
+            // (once here, once from the loader) while the features list shows 1.
             const geojson = featureGroupRef.current.toGeoJSON();
+            featureGroupRef.current.removeLayer(layer);
             onUpdateLayer(activeLayerId, geojson);
         }
     };
@@ -309,23 +314,14 @@ export default function ActiveLayerEditor({
         }
     };
 
-    // Handle manual draw events
-    useEffect(() => {
-        if (!map) return;
-        const handleManual = (e: any) => {
-            if (e.layerType === 'polygon' || e.layerType === 'marker') {
-                if (featureGroupRef.current && !featureGroupRef.current.hasLayer(e.layer)) {
-                    featureGroupRef.current.addLayer(e.layer);
-                    setupLayerEvents(e.layer);
-                    if (activeLayerId) {
-                        onUpdateLayer(activeLayerId, featureGroupRef.current.toGeoJSON());
-                    }
-                }
-            }
-        };
-        map.on('draw:created', handleManual);
-        return () => { map.off('draw:created', handleManual); };
-    }, [map, activeLayerId]);
+    // NOTE: We intentionally do NOT add our own `map.on('draw:created')`
+    // listener here. react-leaflet-draw's EditControl already binds one
+    // globally (it adds the drawn layer to the FeatureGroup and calls
+    // onCreated → _onCreated) for EVERY draw, including the sidebar's
+    // `new L.Draw.Polygon(map)`. A second listener double-processed the same
+    // event, which made each drawn feature render twice on the map while the
+    // features list showed only one. _onCreated + InitialDataLoader are the
+    // single source of truth.
 
     // FlyTo Requests
     useEffect(() => {
