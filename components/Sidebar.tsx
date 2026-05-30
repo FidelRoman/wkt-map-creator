@@ -620,7 +620,7 @@ export default function Sidebar({
                 })()}
 
                 {/* Features Section */}
-                <div className="layers-header" style={{ borderTop: 'none' }}>
+                <div className="layers-header" style={{ borderTop: '1px solid var(--divider-color)' }}>
                     <h2 style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }} className="flex items-center gap-2">
                         Features
                         {activeLayerId && (() => {
@@ -919,17 +919,17 @@ export default function Sidebar({
             >
                 <div className="space-y-3">
                     <div>
-                        <label className="text-sm font-medium text-slate-700 block mb-1">Table name</label>
+                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1">Table name</label>
                         <input
                             type="text"
                             value={sqlTableName}
                             onChange={e => handleSqlTableNameChange(e.target.value)}
-                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+                            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
                             placeholder="my_table"
                         />
                     </div>
                     <div className="relative">
-                        <label className="text-sm font-medium text-slate-700 block mb-1">Generated SQL</label>
+                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1">Generated SQL</label>
                         <pre className="bg-slate-900 text-green-400 text-xs p-4 rounded-xl overflow-auto max-h-72 font-mono whitespace-pre-wrap break-all">{sqlOutput}</pre>
                         <button
                             onClick={() => {
@@ -937,12 +937,12 @@ export default function Sidebar({
                                 setSqlCopied(true);
                                 setTimeout(() => setSqlCopied(false), 2000);
                             }}
-                            className="absolute top-8 right-2 text-xs bg-white text-slate-700 px-2 py-1 rounded border border-slate-200 hover:bg-slate-50"
+                            className="absolute top-8 right-2 text-xs bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 px-2 py-1 rounded border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600"
                         >
-                            {sqlCopied ? '✓ Copiado' : 'Copiar'}
+                            {sqlCopied ? '✓ Copied' : 'Copy'}
                         </button>
                     </div>
-                    <p className="text-xs text-slate-400">Compatible con PostgreSQL + PostGIS. Usa <code className="bg-slate-100 px-1 rounded">ST_GeomFromText()</code> con SRID 4326.</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500">Compatible with PostgreSQL + PostGIS. Uses <code className="bg-slate-100 dark:bg-slate-700 px-1 rounded">ST_GeomFromText()</code> with SRID 4326.</p>
                 </div>
             </Modal>
         </>

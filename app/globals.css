@@ -159,7 +159,7 @@ body {
 /* Layers Panel items */
 .layers-header {
   background: var(--surface-muted);
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--divider-color);
   padding: 12px 20px;
   display: flex;
   justify-content: space-between;
