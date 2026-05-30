@@ -137,18 +137,17 @@ export async function createSnapshot(projectId: string, ownerId: string, name: s
 
 export async function getSnapshots(projectId: string, ownerId: string, limitCount: number = 20): Promise<Snapshot[]> {
     try {
-        // Query by ownerId (matches the security rule) + filter projectId client-side.
-        // This avoids needing a composite index and satisfies the Firestore rule:
-        // "allow read: if request.auth.uid == resource.data.ownerId"
+        // Query by ownerId and projectId.
+        // Multiple equality filters do not require a composite index in Firestore (index merging handles it).
+        // This keeps the request highly performant and secure.
         const q = query(
             collection(db, 'snapshots'),
-            where('ownerId', '==', ownerId)
-            // No orderBy — avoids composite index requirement; we sort client-side below
+            where('ownerId', '==', ownerId),
+            where('projectId', '==', projectId)
         );
         const snapshot = await getDocs(q);
         return snapshot.docs
             .map(d => ({ id: d.id, ...d.data() }) as Snapshot)
-            .filter(s => s.projectId === projectId)
             .sort((a, b) => {
                 const tsA = a.createdAt?.seconds ?? 0;
                 const tsB = b.createdAt?.seconds ?? 0;
