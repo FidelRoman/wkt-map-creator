@@ -190,19 +190,21 @@ export default function MapControls({ activeTileLayer, setActiveTileLayer }: Map
                         onClick={toggleLayerMenu}
                         style={{
                             background: 'var(--surface-color)',
-                            color: 'var(--text-main)',
-                            border: 'none',
+                            color: 'var(--text-secondary)',
+                            border: '1px solid var(--border-color)',
                             borderRadius: '4px',
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                            padding: '8px',
+                            boxShadow: '0 1px 5px rgba(0,0,0,0.65)',
+                            padding: '5px',
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '5px'
+                            gap: '5px',
+                            width: '26px',
+                            height: '26px',
+                            justifyContent: 'center'
                         }}
                     >
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><polygon points="12 2 2 7 12 12 22 7 12 2" /><polyline points="2 17 12 22 22 17" /><polyline points="2 12 12 17 22 12" /></svg>
-                        <span>Capas</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><polygon points="12 2 2 7 12 12 22 7 12 2" /><polyline points="2 17 12 22 22 17" /><polyline points="2 12 12 17 22 12" /></svg>
                     </button>
 
                     {showLayerMenu && (
@@ -256,17 +258,19 @@ export default function MapControls({ activeTileLayer, setActiveTileLayer }: Map
                     onClick={() => setShowDonateModal(true)}
                     style={{
                         background: 'var(--surface-color)',
-                        border: 'none',
+                        border: '1px solid var(--border-color)',
                         borderRadius: '4px',
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                        padding: '8px',
+                        boxShadow: '0 1px 5px rgba(0,0,0,0.65)',
+                        padding: '4px',
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center'
+                        justifyContent: 'center',
+                        width: '26px',
+                        height: '26px'
                     }}
                 >
-                    <img src="/yape.png" alt="Yape" width="32" height="32" style={{ borderRadius: '4px' }} />
+                    <img src="/yape.png" alt="Yape" width="16" height="16" style={{ borderRadius: '2px' }} />
                 </button>
             </div>
 

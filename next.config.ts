@@ -15,6 +15,11 @@ const nextConfig: NextConfig = {
     ],
   },
   async headers() {
+    // Only set immutable caching in production. In development this makes the
+    // browser cache hashed chunks for a year, so edited modules keep serving
+    // stale chunks ("module factory is not available"). Next already serves
+    // hashed static assets with proper cache headers, so this is just a prod tweak.
+    if (process.env.NODE_ENV !== "production") return [];
     return [
       {
         source: "/_next/static/(.*)",

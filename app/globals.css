@@ -437,11 +437,20 @@ body {
   color: var(--text-secondary) !important;
 }
 
-/* Draw toolbar icons: match zoom controls gray */
+/* Draw toolbar icons in dark mode.
+   leaflet-draw ships dark sprite icons designed for a white button. The old
+   `brightness(0)` flattened both the background AND the icon to the same gray,
+   making the icon invisible (empty gray boxes). Instead we keep leaflet's
+   native white button and invert the whole control: the white background turns
+   dark (matching the zoom controls) and the dark icons turn light and visible. */
 .dark .leaflet-draw-toolbar a {
-  background-color: var(--surface-color) !important;
-  border-color: var(--border-color) !important;
-  filter: brightness(0) invert(0.58);
+  background-color: #ffffff !important;
+  border-color: #cccccc !important;
+  filter: invert(0.87) hue-rotate(180deg);
+}
+
+.dark .leaflet-draw-toolbar a:hover {
+  background-color: #e8e8e8 !important;
 }
 
 

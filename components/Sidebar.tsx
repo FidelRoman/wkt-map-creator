@@ -1,7 +1,6 @@
 "use client";
 import { useState, Dispatch, SetStateAction, useRef, useEffect, memo } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import Modal from "@/components/Modal";
 import { Project, Layer, createProject } from "@/lib/firebase";
 import { useAuth } from "@/components/AuthWrapper";
@@ -775,12 +774,13 @@ export default function Sidebar({
                     </div>
                 ) : (
                     <div className="user-profile">
-                        <Image
+                        <img
                             src={user?.photoURL || "https://via.placeholder.com/36"}
                             alt={user?.displayName ?? 'Foto de perfil'}
                             width={36}
                             height={36}
                             className="user-avatar"
+                            referrerPolicy="no-referrer"
                         />
                         <div className="user-info">
                             <div className="flex items-center gap-1.5">
