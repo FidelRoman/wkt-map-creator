@@ -570,7 +570,7 @@ export default function Sidebar({
                     </div>
                 </div>
 
-                <div style={{ flex: '0 0 150px', minHeight: '100px', borderBottom: '1px solid #e2e8f0', overflowY: 'auto' }}>
+                <div style={{ flex: '0 0 150px', minHeight: '100px', borderBottom: '1px solid var(--border-color)', overflowY: 'auto' }}>
                     <div id="layers-list">
                         {layers.map(layer => (
                             <div
@@ -620,7 +620,7 @@ export default function Sidebar({
                 })()}
 
                 {/* Features Section */}
-                <div className="layers-header" style={{ borderTop: '1px solid var(--divider-color)' }}>
+                <div className="layers-header">
                     <h2 style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }} className="flex items-center gap-2">
                         Features
                         {activeLayerId && (() => {
