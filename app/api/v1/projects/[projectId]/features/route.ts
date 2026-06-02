@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
 import { PLAN_LIMITS } from '@/lib/plans';
 import { stringify } from 'wellknown';
+
+// Subcollection feature id generator (Firestore-compatible 20-char ID)
+const FSID_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+function newId() { let s = ''; for (let i = 0; i < 20; i++) s += FSID_CHARS[Math.floor(Math.random() * 62)]; return s; }
 
 export const runtime = 'nodejs';
 
@@ -131,42 +136,33 @@ export async function GET(
         }
     }
 
-    // Build GeoJSON response
+    // Build GeoJSON response — read features from the subcollection
     const layers: any[] = projectData.layers ?? [];
     const allFeatures: any[] = [];
 
-    for (const layer of layers) {
-        if (layerFilter && layer.id !== layerFilter) continue;
-        const featuresRaw = typeof layer.features === 'string' ? JSON.parse(layer.features) : layer.features;
-        const features = featuresRaw?.features ?? [];
-
-        for (const feature of features) {
-            if (nameFilter && !feature.properties?.name?.toLowerCase().includes(nameFilter)) continue;
-
-            if (bbox) {
-                const geom = feature.geometry;
-                if (geom?.coordinates) {
-                    const coords = geom.coordinates.flat(Infinity);
-                    const lngs = coords.filter((_: any, i: number) => i % 2 === 0);
-                    const lats = coords.filter((_: any, i: number) => i % 2 === 1);
-                    const minLng = Math.min(...lngs);
-                    const maxLng = Math.max(...lngs);
-                    const minLat = Math.min(...lats);
-                    const maxLat = Math.max(...lats);
-                    if (maxLng < bbox[0] || minLng > bbox[2] || maxLat < bbox[1] || minLat > bbox[3]) continue;
-                }
-            }
-
-            allFeatures.push({
-                ...feature,
-                properties: {
-                    ...feature.properties,
-                    _layerId: layer.id,
-                    _layerName: layer.name,
-                    _wkt: (() => { try { return stringify(feature.geometry); } catch { return null; } })(),
-                }
-            });
+    let q: any = db.collection('projects').doc(projectId).collection('features').orderBy('order', 'asc');
+    if (layerFilter) q = q.where('layerId', '==', layerFilter);
+    const featSnap = await q.get();
+    for (const d of featSnap.docs) {
+        const raw = d.data();
+        let geometry: any = null; let properties: any = {};
+        try { geometry = typeof raw.geometry === 'string' ? JSON.parse(raw.geometry) : raw.geometry; } catch { /* skip */ }
+        try { properties = typeof raw.properties === 'string' ? JSON.parse(raw.properties) : (raw.properties ?? {}); } catch { /* skip */ }
+        const layer = layers.find((l: any) => l.id === raw.layerId);
+        if (nameFilter && !properties?.name?.toLowerCase().includes(nameFilter)) continue;
+        if (bbox && geometry?.coordinates) {
+            const coords = geometry.coordinates.flat(Infinity);
+            const lngs = coords.filter((_: any, i: number) => i % 2 === 0);
+            const lats = coords.filter((_: any, i: number) => i % 2 === 1);
+            if (Math.max(...lngs) < bbox[0] || Math.min(...lngs) > bbox[2] ||
+                Math.max(...lats) < bbox[1] || Math.min(...lats) > bbox[3]) continue;
         }
+        allFeatures.push({ type: 'Feature', id: d.id, geometry, properties: {
+            ...properties,
+            _layerId: raw.layerId,
+            _layerName: layer?.name ?? '',
+            _wkt: (() => { try { return stringify(geometry); } catch { return null; } })(),
+        }});
     }
 
     const paginated = allFeatures.slice(offset, offset + limit);
@@ -233,27 +229,39 @@ export async function POST(
     const layerIdx = layers.findIndex((l: any) => l.id === layerId);
     if (layerIdx === -1) return NextResponse.json({ error: 'Layer not found' }, { status: 404, headers: CORS });
 
-    const layer = layers[layerIdx];
-    const existingFeatures = (() => {
-        try {
-            const fc = typeof layer.features === 'string' ? JSON.parse(layer.features) : layer.features;
-            return fc?.features ?? [];
-        } catch { return []; }
-    })();
-
-    const limits = PLAN_LIMITS['pro'];
+    // Write each feature as an independent document in the subcollection
+    const existingCount = (projectData.layerFeatureCounts?.[layerId] ?? 0) as number;
+    const limits = PLAN_LIMITS[user.plan as 'free' | 'pro'] ?? PLAN_LIMITS['free'];
     const maxFeatures = limits.maxFeaturesPerLayer ?? 500;
-    if (existingFeatures.length + features.length > maxFeatures) {
+    if (existingCount + features.length > maxFeatures) {
         return NextResponse.json({ error: `Exceeds maxFeaturesPerLayer limit (${maxFeatures})` }, { status: 422, headers: CORS });
     }
-
-    const merged = [...existingFeatures, ...features];
-    layers[layerIdx] = { ...layer, features: JSON.stringify({ type: 'FeatureCollection', features: merged }) };
-    await db.collection('projects').doc(projectId).update({ layers });
-
-    return NextResponse.json({ added: features.length, total: merged.length }, {
-        status: 201,
-        headers: CORS
+    const batch = db.batch();
+    let baseOrder = existingCount * 1024;
+    const addedIds: string[] = [];
+    for (const f of features) {
+        const fid = f.id || newId();
+        addedIds.push(fid);
+        // Serialize geometry/properties as JSON strings (Firestore rejects nested arrays)
+        batch.set(db.collection('projects').doc(projectId).collection('features').doc(fid), {
+            layerId,
+            geometry: JSON.stringify(f.geometry ?? null),
+            properties: JSON.stringify(f.properties ?? {}),
+            order: (baseOrder += 1024),
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+            createdBy: 'api',
+        });
+    }
+    // Bump project metadata
+    batch.update(db.collection('projects').doc(projectId), {
+        [`layerFeatureCounts.${layerId}`]: FieldValue.increment(features.length),
+        featureCount: FieldValue.increment(features.length),
+        updatedAt: FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+    return NextResponse.json({ added: features.length, total: existingCount + features.length, featureIds: addedIds }, {
+        status: 201, headers: CORS
     });
 }
 
@@ -288,27 +296,37 @@ export async function DELETE(
         return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400, headers: CORS });
     }
 
-    const { layerId, featureIndex } = body;
-    if (!layerId || typeof featureIndex !== 'number') {
-        return NextResponse.json({ error: 'Body must include layerId (string) and featureIndex (number)' }, { status: 400, headers: CORS });
+    const { layerId, featureId, featureIndex } = body;
+    if (!layerId || (typeof featureId !== 'string' && typeof featureIndex !== 'number')) {
+        return NextResponse.json({ error: 'Body must include layerId and either featureId (string) or featureIndex (number, deprecated)' }, { status: 400, headers: CORS });
     }
 
     const layers: any[] = projectData.layers ?? [];
     const layerIdx = layers.findIndex((l: any) => l.id === layerId);
     if (layerIdx === -1) return NextResponse.json({ error: 'Layer not found' }, { status: 404, headers: CORS });
 
-    const layer = layers[layerIdx];
-    const fc = typeof layer.features === 'string' ? JSON.parse(layer.features) : layer.features;
-    const features: any[] = fc?.features ?? [];
-    if (featureIndex < 0 || featureIndex >= features.length) {
-        return NextResponse.json({ error: `featureIndex ${featureIndex} out of range (0–${features.length - 1})` }, { status: 422, headers: CORS });
+    let resolvedId = featureId;
+    if (!resolvedId && typeof featureIndex === 'number') {
+        // Compat: resolve featureIndex → featureId by order
+        const snap = await db.collection('projects').doc(projectId).collection('features')
+            .where('layerId', '==', layerId).orderBy('order', 'asc').get();
+        const featDocs = snap.docs;
+        if (featureIndex < 0 || featureIndex >= featDocs.length) {
+            return NextResponse.json({ error: `featureIndex ${featureIndex} out of range` }, { status: 422, headers: CORS });
+        }
+        resolvedId = featDocs[featureIndex].id;
     }
-
-    features.splice(featureIndex, 1);
-    layers[layerIdx] = { ...layer, features: JSON.stringify({ type: 'FeatureCollection', features }) };
-    await db.collection('projects').doc(projectId).update({ layers });
-
-    return NextResponse.json({ deleted: true, remaining: features.length }, {
-        headers: CORS
+    const featRef = db.collection('projects').doc(projectId).collection('features').doc(resolvedId);
+    const featSnap = await featRef.get();
+    if (!featSnap.exists) return NextResponse.json({ error: 'Feature not found' }, { status: 404, headers: CORS });
+    const batch = db.batch();
+    batch.delete(featRef);
+    batch.update(db.collection('projects').doc(projectId), {
+        [`layerFeatureCounts.${layerId}`]: FieldValue.increment(-1),
+        featureCount: FieldValue.increment(-1),
+        updatedAt: FieldValue.serverTimestamp(),
     });
+    await batch.commit();
+    const deprecationHeaders = !featureId ? { ...CORS, 'Deprecation': 'featureIndex is deprecated; use featureId' } : CORS;
+    return NextResponse.json({ deleted: true, featureId: resolvedId }, { headers: deprecationHeaders });
 }

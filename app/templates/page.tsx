@@ -100,8 +100,8 @@ function TemplatesApp() {
             };
 
             const { id } = await createProject(template.name, user.uid, user.displayName ?? 'User', user.email ?? '');
-            const { saveProjectLayers } = await import('@/lib/firebase');
-            await saveProjectLayers(id, [{
+            const { saveProjectWithFeatures } = await import('@/lib/firebase');
+            await saveProjectWithFeatures(id, [{
                 id: 'layer_' + Date.now(),
                 name: template.layerName,
                 visible: true,

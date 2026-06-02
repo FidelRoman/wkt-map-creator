@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
-import { getFirestore, collection, addDoc, serverTimestamp, query, where, orderBy, limit, getDocs, doc, updateDoc, getDoc, deleteDoc, setDoc, onSnapshot, type Unsubscribe } from "firebase/firestore";
+import { getFirestore, collection, addDoc, serverTimestamp, query, where, orderBy, limit, getDocs, doc, updateDoc, getDoc, deleteDoc, setDoc, onSnapshot, writeBatch, type Unsubscribe } from "firebase/firestore";
 import type { PlanId } from './plans';
 
 const firebaseConfig = {
@@ -181,6 +181,25 @@ export interface Layer {
     style?: LayerStyle;
 }
 
+// ── Feature subcollection model ────────────────────────────────────────────────
+// Each feature is an independent Firestore document under
+// projects/{id}/features/{featureId}.  The `id` field mirrors the doc id and
+// is also stored as Feature.id in the in-memory GeoJSON so the diff can track
+// it across undo/redo cycles.  geometry/properties are stored as JSON strings
+// because Firestore rejects nested arrays (GeoJSON coordinates).
+
+export interface FeatureDoc {
+    layerId: string;
+    geometry: any;
+    properties: Record<string, any>;
+    order: number;              // append-only integer; tie-break: createdAt + id
+    createdAt: any;
+    updatedAt: any;
+    createdBy: string;          // uid | 'api' | 'import' | 'fork'
+}
+
+export type LayerMeta = Pick<Layer, 'id' | 'name' | 'visible' | 'style'> & { order?: number };
+
 export interface Project {
     id?: string;
     name: string;
@@ -193,28 +212,30 @@ export interface Project {
     isPublic: boolean;
     collaborators: string[];
     roles?: Record<string, 'editor' | 'viewer'>;
+    // Subcollection metadata (kept on the project doc)
+    bbox?: [number, number, number, number] | null;
+    featureCount?: number;
+    layerFeatureCounts?: Record<string, number>;
 }
 
-// Create a new project
+// Create a new project — features live in the projects/{id}/features subcollection
 export async function createProject(name: string, ownerId: string, ownerName: string, ownerEmail: string): Promise<{ id: string; name: string }> {
     try {
+        const defaultLayerId = 'layer_' + Date.now();
         const docRef = await addDoc(collection(db, PROJECTS_COLLECTION), {
-            name: name,
-            ownerId: ownerId,
-            ownerName: ownerName,
-            ownerEmail: ownerEmail,
+            name,
+            ownerId,
+            ownerName,
+            ownerEmail,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
-            layers: [
-                {
-                    id: 'layer_' + Date.now(),
-                    name: 'Capa 1',
-                    visible: true,
-                    features: JSON.stringify({ type: "FeatureCollection", features: [] })
-                }
-            ],
+            // Layers: metadata only, no features blob
+            layers: [{ id: defaultLayerId, name: 'Capa 1', visible: true }],
             isPublic: false,
-            collaborators: []
+            collaborators: [],
+            featureCount: 0,
+            layerFeatureCounts: { [defaultLayerId]: 0 },
+            bbox: null,
         });
         await incrementProjectCount(ownerId, 1);
         return { id: docRef.id, name };
@@ -224,12 +245,15 @@ export async function createProject(name: string, ownerId: string, ownerName: st
     }
 }
 
-// Helper to parse layers
+// Helper to parse layers — also backfills feature ids in memory (idempotent)
 const parseLayers = (layers: any[]): Layer[] => {
-    return layers.map(l => ({
-        ...l,
-        features: (typeof l.features === 'string') ? JSON.parse(l.features) : l.features
-    }));
+    // Import inline to avoid a module-level cycle (map-utils → firebase is fine,
+    // but we keep the import lazy so tests can mock it easily).
+    const { ensureFeatureIds } = require('@/lib/map-utils');
+    return layers.map(l => {
+        const fc = (typeof l.features === 'string') ? JSON.parse(l.features) : l.features;
+        return { ...l, features: ensureFeatureIds(fc) };
+    });
 };
 
 // Get user's projects
@@ -281,26 +305,48 @@ export async function getSharedProjects(userEmail: string): Promise<Project[]> {
     }
 }
 
-// Save/Update project layers
-export async function saveProjectLayers(projectId: string, layers: Layer[]) {
+// Replace a project's layers + features (subcollection) in one shot.
+// Used when seeding a project from a template, the anonymous editor, or a fork.
+// Writes layer metadata to the project doc and every feature to the subcollection.
+export async function saveProjectWithFeatures(projectId: string, layers: Layer[]) {
     if (!projectId) return;
+    const { ensureFeatureIds, computeBbox } = require('@/lib/map-utils');
 
-    try {
-        // Serialize features to avoid nested array issues
-        const serializedLayers = layers.map(l => ({
-            ...l,
-            features: JSON.stringify(l.features)
-        }));
+    const layersMeta = layers.map((l, i) => ({
+        id: l.id, name: l.name, visible: l.visible ?? true, style: l.style ?? null, order: i,
+    }));
 
-        const projectRef = doc(db, PROJECTS_COLLECTION, projectId);
-        await updateDoc(projectRef, {
-            layers: serializedLayers,
-            updatedAt: serverTimestamp()
+    const batch = writeBatch(db);
+    const allFeatures: any[] = [];
+    const layerFeatureCounts: Record<string, number> = {};
+
+    for (const l of layers) {
+        const fc = ensureFeatureIds(typeof l.features === 'string' ? JSON.parse(l.features) : l.features);
+        const feats: any[] = fc?.features ?? [];
+        layerFeatureCounts[l.id] = feats.length;
+        feats.forEach((f: any, i: number) => {
+            allFeatures.push(f);
+            batch.set(featureDocRef(projectId, f.id), {
+                layerId: l.id,
+                geometry: JSON.stringify(f.geometry ?? null),
+                properties: JSON.stringify(f.properties ?? {}),
+                order: (i + 1) * 1024,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+                createdBy: 'seed',
+            });
         });
-        console.log("Project layers saved");
-    } catch (error) {
-        console.error("Error saving project:", error);
     }
+
+    batch.update(doc(db, PROJECTS_COLLECTION, projectId), {
+        layers: layersMeta,
+        featureCount: allFeatures.length,
+        layerFeatureCounts,
+        bbox: computeBbox(allFeatures) ?? null,
+        updatedAt: serverTimestamp(),
+    });
+
+    await batch.commit();
 }
 
 // Update sharing settings
@@ -343,27 +389,6 @@ export async function deleteProject(projectId: string, ownerId?: string) {
     }
 }
 
-// Load a specific project (by ID)
-export async function getProject(projectId: string): Promise<Project | null> {
-    try {
-        const docRef = doc(db, PROJECTS_COLLECTION, projectId);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-            const data = docSnap.data();
-            return {
-                id: docSnap.id,
-                ...data,
-                layers: data.layers ? parseLayers(data.layers) : []
-            } as Project;
-        } else {
-            return null;
-        }
-    } catch (error) {
-        console.error("Error getting project:", error);
-        throw error;
-    }
-}
-
 export async function getPublicProjects(limitCount = 24): Promise<Project[]> {
     try {
         const q = query(
@@ -384,12 +409,9 @@ export async function getPublicProjects(limitCount = 24): Promise<Project[]> {
 }
 
 export async function forkProject(sourceProjectId: string, targetUserId: string, targetUserName: string, targetUserEmail: string): Promise<string> {
-    const source = await getProject(sourceProjectId);
+    const source = await getProjectWithFeatures(sourceProjectId);
     if (!source) throw new Error('Source project not found');
-    const serializedLayers = (source.layers ?? []).map(l => ({
-        ...l,
-        features: typeof l.features === 'string' ? l.features : JSON.stringify(l.features)
-    }));
+    // Create the empty project doc, then seed its features subcollection
     const docRef = await addDoc(collection(db, PROJECTS_COLLECTION), {
         name: `${source.name} (copia)`,
         ownerId: targetUserId,
@@ -397,10 +419,14 @@ export async function forkProject(sourceProjectId: string, targetUserId: string,
         ownerEmail: targetUserEmail,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        layers: serializedLayers,
+        layers: [],
         isPublic: false,
         collaborators: [],
+        featureCount: 0,
+        layerFeatureCounts: {},
+        bbox: null,
     });
+    await saveProjectWithFeatures(docRef.id, source.layers ?? []);
     await incrementProjectCount(targetUserId, 1);
     return docRef.id;
 }
@@ -448,4 +474,228 @@ export function subscribeToComments(
 
 export async function resolveComment(projectId: string, commentId: string): Promise<void> {
     await updateDoc(doc(db, 'projects', projectId, 'comments', commentId), { resolved: true });
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// FEATURE SUBCOLLECTION API
+// All projects store their features under projects/{id}/features.
+// ══════════════════════════════════════════════════════════════════════════════
+
+const FEATURES_SUBCOLL = 'features';
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function featuresRef(projectId: string) {
+    return collection(db, PROJECTS_COLLECTION, projectId, FEATURES_SUBCOLL);
+}
+
+function featureDocRef(projectId: string, featureId: string) {
+    return doc(db, PROJECTS_COLLECTION, projectId, FEATURES_SUBCOLL, featureId);
+}
+
+// Deserialize a feature doc from Firestore (geometry and properties are stored as JSON strings)
+function deserializeFeatureDoc(id: string, raw: any): any {
+    let geometry: any = null;
+    let properties: any = {};
+    try { geometry = typeof raw.geometry === 'string' ? JSON.parse(raw.geometry) : raw.geometry; } catch { /* malformed */ }
+    try { properties = typeof raw.properties === 'string' ? JSON.parse(raw.properties) : (raw.properties ?? {}); } catch { /* malformed */ }
+    return { type: 'Feature', id, geometry, properties };
+}
+
+/** Read the project doc + all feature docs, reconstructing Layer[].features grouped by layerId. */
+export async function getProjectWithFeatures(projectId: string): Promise<Project | null> {
+    const projectSnap = await getDoc(doc(db, PROJECTS_COLLECTION, projectId));
+    if (!projectSnap.exists()) return null;
+    const data = projectSnap.data();
+
+    const featureSnap = await getDocs(query(featuresRef(projectId), orderBy('order', 'asc')));
+    const byLayer: Record<string, any[]> = {};
+    featureSnap.docs.forEach(d => {
+        const f = d.data();
+        if (!byLayer[f.layerId]) byLayer[f.layerId] = [];
+        byLayer[f.layerId].push(deserializeFeatureDoc(d.id, f));
+    });
+
+    const layers: Layer[] = (data.layers ?? []).map((l: any) => ({
+        ...l,
+        features: { type: 'FeatureCollection', features: byLayer[l.id] ?? [] }
+    }));
+
+    return { id: projectSnap.id, ...data, layers } as Project;
+}
+
+/** Real-time listener over the features subcollection.
+ *  The first snapshot serves as the initial load (no separate getDocs needed).
+ *  Uses metadata.hasPendingWrites to skip echoing our own writes. */
+export function subscribeToProjectFeatures(
+    projectId: string,
+    cb: (features: { id: string; data: FeatureDoc }[], fromCache: boolean, hasPendingWrites: boolean) => void
+): Unsubscribe {
+    const q = query(featuresRef(projectId), orderBy('order', 'asc'));
+    return onSnapshot(q, { includeMetadataChanges: true }, snap => {
+        // Deserialize geometry/properties from JSON strings
+        cb(
+            snap.docs.map(d => {
+                const raw = d.data();
+                return {
+                    id: d.id,
+                    data: {
+                        ...raw,
+                        geometry: typeof raw.geometry === 'string' ? JSON.parse(raw.geometry) : raw.geometry,
+                        properties: typeof raw.properties === 'string' ? JSON.parse(raw.properties) : (raw.properties ?? {}),
+                    } as FeatureDoc
+                };
+            }),
+            snap.metadata.fromCache,
+            snap.metadata.hasPendingWrites
+        );
+    });
+}
+
+// ── Single-feature writes ─────────────────────────────────────────────────────
+
+export async function createFeature(
+    projectId: string,
+    featureId: string,
+    doc_: FeatureDoc
+): Promise<void> {
+    await setDoc(featureDocRef(projectId, featureId), {
+        ...doc_,
+        geometry: JSON.stringify(doc_.geometry ?? null),
+        properties: JSON.stringify(doc_.properties ?? {}),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+    });
+}
+
+export async function updateFeature(
+    projectId: string,
+    featureId: string,
+    patch: Partial<Pick<FeatureDoc, 'geometry' | 'properties' | 'layerId' | 'order'>>
+): Promise<void> {
+    await updateDoc(featureDocRef(projectId, featureId), {
+        ...(patch.geometry !== undefined ? { geometry: JSON.stringify(patch.geometry) } : {}),
+        ...(patch.properties !== undefined ? { properties: JSON.stringify(patch.properties) } : {}),
+        ...(patch.layerId !== undefined ? { layerId: patch.layerId } : {}),
+        ...(patch.order !== undefined ? { order: patch.order } : {}),
+        updatedAt: serverTimestamp(),
+    });
+}
+
+export async function deleteFeature(projectId: string, featureId: string): Promise<void> {
+    await deleteDoc(featureDocRef(projectId, featureId));
+}
+
+// ── Bulk changeset write (≤500 ops, batched) ──────────────────────────────────
+
+import type { FeatureChangeset } from '@/lib/map-utils';
+import { computeBbox } from '@/lib/map-utils';
+
+export async function bulkWriteChangeset(
+    projectId: string,
+    cs: FeatureChangeset,
+    layerOrderMap: Record<string, number>, // layerId → base order (for creates)
+    createdBy = 'editor'
+): Promise<void> {
+    if (!cs.creates.length && !cs.updates.length && !cs.deletes.length) return;
+
+    const OPS_PER_BATCH = 450;
+    let batch = writeBatch(db);
+    let opCount = 0;
+
+    const flush = async () => { await batch.commit(); batch = writeBatch(db); opCount = 0; };
+    const tick = async () => { opCount++; if (opCount >= OPS_PER_BATCH) await flush(); };
+
+    for (const f of cs.creates) {
+        const order = (layerOrderMap[f.__layerId] ?? 0) + (Date.now() % 1_000_000);
+        // Serialize geometry/properties to JSON strings (Firestore rejects nested arrays)
+        batch.set(featureDocRef(projectId, f.id), {
+            layerId: f.__layerId ?? '',
+            geometry: JSON.stringify(f.geometry ?? null),
+            properties: JSON.stringify(f.properties ?? {}),
+            order,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            createdBy,
+        });
+        await tick();
+    }
+    for (const u of cs.updates) {
+        batch.update(featureDocRef(projectId, u.id), {
+            ...(u.geometry ? { geometry: JSON.stringify(u.geometry) } : {}),
+            ...(u.properties ? { properties: JSON.stringify(u.properties) } : {}),
+            updatedAt: serverTimestamp(),
+        });
+        await tick();
+    }
+    for (const id of cs.deletes) {
+        batch.delete(featureDocRef(projectId, id));
+        await tick();
+    }
+    if (opCount > 0) await flush();
+
+    // Bump project metadata (updatedAt, bbox, featureCount)
+    // Computed from the full current feature set — done async, best-effort
+    _bumpProjectMeta(projectId).catch(e => console.error('[bulkWriteChangeset] meta update failed', e));
+}
+
+async function _bumpProjectMeta(projectId: string): Promise<void> {
+    const snap = await getDocs(featuresRef(projectId));
+    const features = snap.docs.map(d => {
+        const raw = d.data();
+        let geometry: any = null;
+        try { geometry = typeof raw.geometry === 'string' ? JSON.parse(raw.geometry) : raw.geometry; } catch { /* ignore */ }
+        return { id: d.id, geometry, layerId: raw.layerId };
+    });
+    const bbox = computeBbox(features);
+    const byLayer: Record<string, number> = {};
+    features.forEach((f: any) => { byLayer[f.layerId] = (byLayer[f.layerId] ?? 0) + 1; });
+    await updateDoc(doc(db, PROJECTS_COLLECTION, projectId), {
+        bbox: bbox ?? null,
+        featureCount: features.length,
+        layerFeatureCounts: byLayer,
+        updatedAt: serverTimestamp(),
+    });
+}
+
+// ── Layer metadata write (no features) ───────────────────────────────────────
+
+export async function saveLayersMeta(projectId: string, layers: LayerMeta[]): Promise<void> {
+    await updateDoc(doc(db, PROJECTS_COLLECTION, projectId), {
+        layers,
+        updatedAt: serverTimestamp(),
+    });
+}
+
+// ── Cascade deletes ───────────────────────────────────────────────────────────
+
+/** Delete all features belonging to a layer in batches (≤500). */
+export async function deleteLayerCascade(projectId: string, layerId: string): Promise<void> {
+    const q = query(featuresRef(projectId), where('layerId', '==', layerId));
+    const snap = await getDocs(q);
+    const OPS = 450;
+    let batch = writeBatch(db);
+    let count = 0;
+    for (const d of snap.docs) {
+        batch.delete(d.ref);
+        count++;
+        if (count >= OPS) { await batch.commit(); batch = writeBatch(db); count = 0; }
+    }
+    if (count > 0) await batch.commit();
+    // Update counts
+    await _bumpProjectMeta(projectId).catch(console.error);
+}
+
+/** Delete all features of a project (call before deleteProject). */
+export async function deleteProjectFeaturesCascade(projectId: string): Promise<void> {
+    const snap = await getDocs(featuresRef(projectId));
+    const OPS = 450;
+    let batch = writeBatch(db);
+    let count = 0;
+    for (const d of snap.docs) {
+        batch.delete(d.ref);
+        count++;
+        if (count >= OPS) { await batch.commit(); batch = writeBatch(db); count = 0; }
+    }
+    if (count > 0) await batch.commit();
 }

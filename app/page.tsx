@@ -30,7 +30,15 @@ const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
 function getProjectThumbnailUrl(project: Project): string | null {
   if (!MAPBOX_TOKEN) return null;
-  const allFeatures = project.layers?.flatMap(l => l.features?.features ?? []) ?? [];
+  // v2 projects store a pre-computed bbox on the document — no need to load features
+  const bbox: any = (project as any).bbox;
+  if (Array.isArray(bbox) && bbox.length === 4) {
+    const [minLng, minLat, maxLng, maxLat] = bbox;
+    const pad = 0.001;
+    return `https://api.mapbox.com/styles/v1/mapbox/light-v10/static/[${minLng - pad},${minLat - pad},${maxLng + pad},${maxLat + pad}]/320x160@2x?padding=20&access_token=${MAPBOX_TOKEN}`;
+  }
+  // v1 fallback: compute from features blob (legacy projects not yet migrated)
+  const allFeatures = project.layers?.flatMap((l: any) => l.features?.features ?? []) ?? [];
   if (allFeatures.length === 0) return null;
   let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
   const collect = (c: any): void => {
@@ -38,7 +46,7 @@ function getProjectThumbnailUrl(project: Project): string | null {
     if (typeof c[0] === 'number') { const [lng, lat] = c; if (lng < minLng) minLng = lng; if (lng > maxLng) maxLng = lng; if (lat < minLat) minLat = lat; if (lat > maxLat) maxLat = lat; }
     else c.forEach(collect);
   };
-  allFeatures.forEach(f => collect(f.geometry?.coordinates ?? []));
+  allFeatures.forEach((f: any) => collect(f.geometry?.coordinates ?? []));
   if (!isFinite(minLng)) return null;
   const pad = 0.001;
   return `https://api.mapbox.com/styles/v1/mapbox/light-v10/static/[${minLng - pad},${minLat - pad},${maxLng + pad},${maxLat + pad}]/320x160@2x?padding=20&access_token=${MAPBOX_TOKEN}`;
@@ -737,7 +745,12 @@ function Dashboard() {
                       </span>
                     </div>
                     <p className="text-sm text-slate-500 dark:text-slate-400 flex-1">
-                      {project.layers?.length || 0} layers &bull; {project.layers?.reduce((acc, l) => acc + (l.features?.features?.length || 0), 0) || 0} features
+                      {project.layers?.length || 0} layers &bull; {
+                        // v2: use the pre-computed featureCount on the doc;
+                        // v1 fallback: sum from the features blob.
+                        (project as any).featureCount ??
+                        project.layers?.reduce((acc, l) => acc + (l.features?.features?.length || 0), 0) ?? 0
+                      } features
                     </p>
                     <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 flex items-center text-sm text-indigo-600 dark:text-indigo-400 font-medium">
                       Open Project &rarr;

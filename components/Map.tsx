@@ -92,7 +92,11 @@ export default function MapComponent(props: MapProps) {
     const currentLayer = MAP_LAYERS[activeTileLayer] || MAP_LAYERS['osm'];
 
     return (
-        <MapContainer center={[20, 0]} zoom={2} style={{ height: "100%", width: "100%" }}>
+        // key={projectId} ensures Leaflet gets a fresh DOM container whenever
+        // the project changes.  Without it, Leaflet throws "Map container is
+        // being reused by another instance" when the component unmounts and
+        // remounts during the loading → loaded transition.
+        <MapContainer key={projectId ?? 'map'} center={[20, 0]} zoom={2} style={{ height: "100%", width: "100%" }}>
             <MapAutoFit layers={props.layers} projectId={projectId} />
             <MapControls activeTileLayer={activeTileLayer} setActiveTileLayer={setActiveTileLayer} />
             <TileLayer

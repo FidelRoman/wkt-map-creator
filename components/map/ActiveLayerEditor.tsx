@@ -9,7 +9,7 @@ async function getTurf() {
     if (!turfCache) turfCache = await import('@turf/turf');
     return turfCache;
 }
-import { stringifyWKT } from '@/lib/map-utils';
+import { stringifyWKT, newFeatureId, ensureFeatureIds } from '@/lib/map-utils';
 import InitialDataLoader from './InitialDataLoader';
 import { Layer } from '@/lib/firebase';
 import { checkLimit, hasFeature, type PlanId } from '@/lib/plans';
@@ -180,7 +180,7 @@ export default function ActiveLayerEditor({
             }
 
             const newFeatures = currentGeoJSON.features.filter((_: any, i: number) => i !== subjectIndex);
-            newFeatures.push(difference);
+            newFeatures.push({ ...difference, id: newFeatureId() });
 
             if (activeLayerId) {
                 onUpdateLayer(activeLayerId, { ...currentGeoJSON, features: newFeatures });
@@ -245,7 +245,8 @@ export default function ActiveLayerEditor({
             }
 
             const newFeatures = currentGeoJSON.features.filter((_: any, i: number) => i !== subjectIndex && i !== otherIndex);
-            newFeatures.push(unionFeature);
+            // Result of union gets a fresh id (it's a new feature, not an edit)
+            newFeatures.push({ ...unionFeature, id: newFeatureId() });
 
             if (activeLayerId) {
                 onUpdateLayer(activeLayerId, { ...currentGeoJSON, features: newFeatures });
@@ -314,16 +315,22 @@ export default function ActiveLayerEditor({
             // truth: InitialDataLoader re-renders the feature from the updated
             // GeoJSON. If we keep this layer, the feature shows twice on the map
             // (once here, once from the loader) while the features list shows 1.
+            // Assign stable id to the drawn feature. Leaflet's toGeoJSON copies
+            // layer.feature (including id) but newly drawn layers have no
+            // layer.feature yet — so we stamp it on the layer before serialising,
+            // then remove the raw draw layer (InitialDataLoader owns rendering).
+            if (!layer.feature) layer.feature = { type: 'Feature', properties: {} };
+            if (!layer.feature.id) layer.feature.id = newFeatureId();
             const geojson = featureGroupRef.current.toGeoJSON();
             featureGroupRef.current.removeLayer(layer);
-            onUpdateLayer(activeLayerId, geojson);
+            onUpdateLayer(activeLayerId, ensureFeatureIds(geojson));
         }
     }, []);
 
     const _onEdited = useCallback(() => {
         const { activeLayerId, onUpdateLayer } = handlerStateRef.current;
         if (activeLayerId && featureGroupRef.current) {
-            onUpdateLayer(activeLayerId, featureGroupRef.current.toGeoJSON());
+            onUpdateLayer(activeLayerId, ensureFeatureIds(featureGroupRef.current.toGeoJSON()));
         }
     }, []);
 
@@ -457,6 +464,7 @@ export default function ActiveLayerEditor({
             const feature = currentGeoJSON.features[menu.index];
             const buffered = turf.buffer(feature, distMeters / 1000, { units: 'kilometers' });
             if (!buffered) { onShowToast?.("Buffer failed: could not generate geometry", 'error'); setMenu(null); setBufferInputOpen(false); return; }
+            buffered.id = newFeatureId();
             buffered.properties = { name: `Buffer ${distMeters}m`, color: '#f59e0b' };
 
             const newFeatures = [...currentGeoJSON.features, buffered];

@@ -48,6 +48,28 @@ service cloud.firestore {
       allow delete: if isOwner(resource);
     }
 
+    // --- Features subcollection (schemaVersion: 2) ---
+    // `list` is evaluated once per query (not per doc), so loading N features
+    // does NOT trigger N get() calls on the parent project.
+    match /projects/{projectId}/features/{featureId} {
+      function parentProject() {
+        return get(/databases/$(database)/documents/projects/$(projectId)).data;
+      }
+      function canReadProject() {
+        return parentProject().isPublic == true ||
+               (isSignedIn() && (parentProject().ownerId == request.auth.uid ||
+                request.auth.token.email in parentProject().collaborators));
+      }
+      function canEditProject() {
+        return isSignedIn() && (
+          parentProject().ownerId == request.auth.uid ||
+          (request.auth.token.email in parentProject().collaborators &&
+           parentProject().roles.get(request.auth.token.email, 'editor') != 'viewer'));
+      }
+      allow read:   if canReadProject();
+      allow create, update, delete: if canEditProject();
+    }
+
     // --- Comments (subcollection of projects) ---
     match /projects/{projectId}/comments/{commentId} {
       // Owner and collaborators can read

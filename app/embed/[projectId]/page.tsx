@@ -1,4 +1,4 @@
-import { getProject } from '@/lib/firebase';
+import { getProjectWithFeatures } from '@/lib/firebase';
 import EmbedViewer from './EmbedViewer';
 import { notFound } from 'next/navigation';
 
@@ -8,7 +8,7 @@ interface EmbedPageProps {
 
 export default async function EmbedPage({ params }: EmbedPageProps) {
     const { projectId } = await params;
-    const project = await getProject(projectId);
+    const project = await getProjectWithFeatures(projectId);
 
     if (!project || !project.isPublic) {
         notFound();

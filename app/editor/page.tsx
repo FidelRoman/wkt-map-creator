@@ -6,7 +6,7 @@ import Sidebar from '@/components/Sidebar';
 import AuthWrapper, { useAuth } from '@/components/AuthWrapper';
 import { generateColor, parseWKT } from '@/lib/map-utils';
 import { parseCSVLine } from '@/lib/csv-utils';
-import { auth, googleProvider, createProject, saveProjectLayers } from '@/lib/firebase';
+import { auth, googleProvider, createProject, saveProjectWithFeatures } from '@/lib/firebase';
 import { signInWithPopup, onAuthStateChanged, type User } from 'firebase/auth';
 import { stringify } from 'wellknown';
 import { useRouter } from 'next/navigation';
@@ -77,7 +77,7 @@ function SandboxEditor() {
             );
 
             if (hasFeatures) {
-                await saveProjectLayers(id, [{ ...currentLayer, id: 'layer_1' }]);
+                await saveProjectWithFeatures(id, [{ ...currentLayer, id: 'layer_1' }]);
             }
 
             localStorage.removeItem(SANDBOX_STORAGE_KEY);

@@ -30,7 +30,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useDarkMode } from "@/lib/useDarkMode";
 import ShareModal from "@/components/ShareModal";
-import { generateColor, parseWKT } from "@/lib/map-utils";
+import { generateColor, parseWKT, newFeatureId } from "@/lib/map-utils";
 import { generatePostgisSQL } from "@/lib/export-utils";
 import LayerStyleEditor from "@/components/map/LayerStyleEditor";
 import type { LayerStyle } from "@/lib/firebase";
@@ -383,6 +383,7 @@ export default function Sidebar({
 
         const newFeature = {
             type: "Feature",
+            id: newFeatureId(),
             properties: {
                 name: `WKT Feature ${Date.now().toString().slice(-4)}`,
                 color: generateColor(),

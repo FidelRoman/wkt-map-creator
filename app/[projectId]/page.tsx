@@ -5,10 +5,10 @@ import dynamic from 'next/dynamic';
 import { useParams } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import AuthWrapper, { useAuth } from '@/components/AuthWrapper';
-import { Project, Layer, getUserProjects, getProject, saveProjectLayers, forkProject } from '@/lib/firebase';
+import { Project, Layer, getUserProjects, getProjectWithFeatures, subscribeToProjectFeatures, bulkWriteChangeset, saveLayersMeta, forkProject } from '@/lib/firebase';
 import VersionHistoryPanel from '@/components/VersionHistoryPanel';
 import { analytics } from '@/lib/analytics';
-import { parseWKT, generateColor } from '@/lib/map-utils';
+import { parseWKT, generateColor, newFeatureId, ensureFeatureIds, diffFeatures } from '@/lib/map-utils';
 import { useUndoableState } from '@/lib/useUndoableState';
 import { parseCSVLine } from '@/lib/csv-utils';
 import Modal from '@/components/Modal';
@@ -18,6 +18,7 @@ import ErrorBoundary from '@/components/ErrorBoundary';
 import CsvImportModal, { type CsvImportConfig } from '@/components/CsvImportModal';
 import { stringify } from 'wellknown';
 import { checkLimit, hasFeature } from '@/lib/plans';
+
 
 // Dynamically import Map to avoid SSR window issues
 const Map = dynamic(() => import('@/components/Map'), {
@@ -55,6 +56,16 @@ function ProjectApp() {
     const setLayersUndoable = useCallback((action: Layer[] | ((prev: Layer[]) => Layer[])) => {
         setLayers(action, true);
     }, [setLayers]);
+
+    // Flat array of features last successfully persisted to Firestore.
+    // Plain array avoids the Turbopack HMR prototype-chain breakage that
+    // happens with Map instances (Map.prototype.values becomes undefined
+    // after a hot reload, crashing the autosave and losing drawn features).
+    const lastPersistedRef = useRef<any[]>([]);
+    // Signature of the layer metadata last persisted (id/name/visible/style/order).
+    // Lets the autosave detect layer changes (new/renamed/deleted/visibility)
+    // independently of feature changes — in v2 these are saved separately.
+    const lastLayersMetaRef = useRef<string>('');
 
     // Stable refs so the keyboard handler never needs to be re-registered
     const undoRef = useRef(undo);
@@ -134,22 +145,69 @@ function ProjectApp() {
         }
     }, [user]);
 
-    // Load specific project from URL
+    // Load specific project from URL (project doc + features subcollection)
     useEffect(() => {
-        if (projectId) {
-            getProject(projectId).then(p => {
-                if (p) {
-                    loadProject(p);
-                } else {
-                    // Project not found
-                    window.location.href = '/404';
-                }
-            }).catch(e => {
-                console.error("Error loading project:", e);
+        if (!projectId) return;
+        getProjectWithFeatures(projectId).then(p => {
+            if (p) {
+                loadProject(p);
+            } else {
                 window.location.href = '/404';
-            });
-        }
+            }
+        }).catch(e => {
+            console.error("Error loading project:", e);
+            window.location.href = '/404';
+        });
     }, [projectId]);
+
+    // Realtime listener — only injects features added remotely (API / other
+    // users) that don't yet exist in local state.  It intentionally never
+    // modifies or removes local features because the editor is the source of
+    // truth for anything the user is actively working on.  The autosave diff
+    // handles conflicts on the write side.
+    const dirtyIdsRef = useRef<Set<string>>(new Set());
+
+    useEffect(() => {
+        if (!projectId || !currentProject) return;
+
+        const unsub = subscribeToProjectFeatures(projectId, (docs, _fromCache, hasPendingWrites) => {
+            if (hasPendingWrites) return; // our own write echoing — skip
+
+            setLayers(prev => {
+                // Build a set of all ids already in local state
+                const localIds = new Set(prev.flatMap(l => (l.features?.features ?? []).map((f: any) => f.id)));
+
+                // Group docs that are ONLY in remote (not yet in local) by layer
+                const newByLayer: Record<string, any[]> = {};
+                for (const { id, data } of docs) {
+                    if (localIds.has(id)) continue; // already present locally — don't touch
+                    if (!newByLayer[data.layerId]) newByLayer[data.layerId] = [];
+                    newByLayer[data.layerId].push({
+                        type: 'Feature', id,
+                        geometry: data.geometry,
+                        properties: data.properties,
+                    });
+                }
+
+                // Nothing new to inject
+                if (Object.keys(newByLayer).length === 0) return prev;
+
+                return prev.map(l => {
+                    const incoming = newByLayer[l.id];
+                    if (!incoming?.length) return l;
+                    return {
+                        ...l,
+                        features: {
+                            ...l.features,
+                            features: [...(l.features?.features ?? []), ...incoming],
+                        },
+                    };
+                });
+            });
+        });
+        return () => unsub();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [projectId, currentProject?.id]);
 
     // Access Control
     const [accessDenied, setAccessDenied] = useState(false);
@@ -187,20 +245,73 @@ function ProjectApp() {
     }, [currentProject, user, accessDenied]);
 
 
-    // Auto-save effect (debounced) — setIsSaving(true) only when the save actually starts
+    // Saving state: 'idle' | 'saving' | 'saved' | 'error'
+    const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+    const saveRetryRef = useRef(0);
+
+    // Auto-save effect (debounced 2s).  Writes only what changed:
+    // layer metadata via saveLayersMeta, and feature creates/updates/deletes
+    // via bulkWriteChangeset.  `lastPersistedRef` tracks what's in Firestore so
+    // the diff is accurate and we skip saves when nothing changed.
     useEffect(() => {
         if (!projectId || layers.length === 0) return;
         if (isReadOnly) return;
 
-        const timeout = setTimeout(() => {
-            if (currentProject) {
-                setIsSaving(true);
-                saveProjectLayers(projectId, layers).then(() => {
-                    setIsSaving(false);
+        const timeout = setTimeout(async () => {
+            if (!currentProject) return;
+
+            const allNext: any[] = layers.flatMap(l =>
+                (l.features?.features ?? []).map((f: any) => ({ ...f, __layerId: l.id }))
+            );
+            const cs = diffFeatures(Array.isArray(lastPersistedRef.current) ? lastPersistedRef.current : [], allNext);
+            const featuresDirty = cs.creates.length > 0 || cs.updates.length > 0 || cs.deletes.length > 0;
+
+            // Layer metadata (id/name/visible/style/order) — saved separately.
+            const layersMeta = layers.map((l, i) => ({
+                id: l.id, name: l.name, visible: l.visible ?? true, style: l.style ?? null, order: i,
+            }));
+            const layersMetaSig = JSON.stringify(layersMeta);
+            const layersDirty = layersMetaSig !== lastLayersMetaRef.current;
+
+            if (!featuresDirty && !layersDirty) return;
+
+            if (process.env.NODE_ENV === 'development') {
+                console.debug('[autosave]', {
+                    creates: cs.creates.length, updates: cs.updates.length, deletes: cs.deletes.length,
+                    layersDirty,
                 });
+            }
+
+            setSaveStatus('saving');
+            // Mark created/updated ids as dirty so the realtime listener skips them
+            [...cs.creates.map((f: any) => f.id), ...cs.updates.map(u => u.id)]
+                .forEach(id => dirtyIdsRef.current.add(id));
+
+            try {
+                // Save layer metadata FIRST so feature docs reference layers that exist.
+                if (layersDirty) await saveLayersMeta(projectId, layersMeta as any);
+                if (featuresDirty) {
+                    const layerOrderMap: Record<string, number> = {};
+                    layers.forEach(l => {
+                        layerOrderMap[l.id] = (l.features?.features?.length ?? 0) * 1024;
+                    });
+                    await bulkWriteChangeset(projectId, cs, layerOrderMap);
+                }
+                lastPersistedRef.current = allNext.filter((f: any) => f.id);
+                lastLayersMetaRef.current = layersMetaSig;
+                // Clear dirty ids after successful save
+                [...cs.creates.map((f: any) => f.id), ...cs.updates.map(u => u.id)]
+                    .forEach(id => dirtyIdsRef.current.delete(id));
+                saveRetryRef.current = 0;
+                setSaveStatus('saved');
+                setTimeout(() => setSaveStatus('idle'), 2000);
+            } catch (err) {
+                console.error('[autosave] save failed:', err);
+                setSaveStatus('error');
             }
         }, 2000);
         return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [layers, projectId, isReadOnly]);
 
 
@@ -219,6 +330,14 @@ function ProjectApp() {
         resetLayers(loadedLayers);
         setActiveLayerId(loadedLayers[0].id);
         setIsSaving(false);
+        // Seed lastPersistedRef so the first autosave diff is accurate.
+        // Plain array — avoids the Turbopack HMR Map prototype-chain issue.
+        const allFeatures = loadedLayers.flatMap((l: any) => l.features?.features ?? []);
+        lastPersistedRef.current = allFeatures.filter((f: any) => f.id);
+        // Seed layer-meta signature so we don't re-save unchanged layers on load.
+        lastLayersMetaRef.current = JSON.stringify(loadedLayers.map((l: any, i: number) => ({
+            id: l.id, name: l.name, visible: l.visible ?? true, style: l.style ?? null, order: i,
+        })));
         // Enable history after initial load settles
         setTimeout(() => { trackHistoryRef.current = true; }, 300);
     };
@@ -265,6 +384,7 @@ function ProjectApp() {
                 .filter(f => f?.geometry)
                 .map((f, i) => ({
                     ...f,
+                    id: f.id || newFeatureId(),
                     properties: {
                         ...f.properties,
                         name: f.properties?.name ?? f.properties?.NAME ?? f.properties?.nombre ?? `Feature ${i + 1}`,
@@ -300,6 +420,7 @@ function ProjectApp() {
 
             const normalized = features.map((f, i) => ({
                 ...f,
+                id: f.id || newFeatureId(),
                 properties: {
                     ...f.properties,
                     name: f.properties?.name ?? f.properties?.NAME ?? f.properties?.nombre ?? `Feature ${i + 1}`,
@@ -362,6 +483,7 @@ function ProjectApp() {
                                 : `Feature ${addedCount + 1}`;
                             newFeatures.push({
                                 type: 'Feature',
+                                id: newFeatureId(),
                                 geometry: geojson,
                                 properties: { name, color: generateColor() }
                             });
@@ -411,6 +533,7 @@ function ProjectApp() {
                     });
                     features.push({
                         type: 'Feature',
+                        id: newFeatureId(),
                         geometry: { type: 'Point', coordinates: [lng, lat] },
                         properties: { name, color: generateColor(), ...extra }
                     });
@@ -585,7 +708,10 @@ function ProjectApp() {
         );
     }
 
-    if (loading) return (
+    // Wait for BOTH auth and the project to load before rendering the editor.
+    // Otherwise isReadOnly defaults to true (no project yet) and the
+    // "View / Local changes only" badge flashes for a moment during load.
+    if (loading || !currentProject) return (
         <div className="flex h-screen w-screen items-center justify-center bg-slate-50">
             <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
         </div>
@@ -618,7 +744,7 @@ function ProjectApp() {
                 activeLayerId={activeLayerId}
                 setActiveLayerId={handleSetActiveLayerId}
                 onLoadProject={loadProject}
-                isSaving={isSaving}
+                isSaving={saveStatus === 'saving'}
                 isReadOnly={isReadOnly}
                 isImporting={isImporting}
                 // New Props
