@@ -109,7 +109,25 @@ export default function ApiDocsPage() {
                         <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Layers</h4>
                         <div className="space-y-6">
 
-                            <Endpoint method="POST" path="/api/v1/projects/{projectId}/layers" description="Create a new layer in a project. Optionally include features to populate it immediately.">
+                            <Endpoint method="GET" path="/api/v1/projects/{projectId}/layers" description="List all layers in the project (metadata only, no features).">
+                                <CodeBlock lang="curl">
+{`curl "${BASE}/api/v1/projects/abc123/layers" \\
+     -H "Authorization: Bearer wkt_live_xxxxxxxx"`}
+                                </CodeBlock>
+                                <CodeBlock lang="response">
+{`{
+  "layers": [
+    {
+      "id": "layer_1748000000000",
+      "name": "Lima polygons",
+      "visible": true
+    }
+  ]
+}`}
+                                </CodeBlock>
+                            </Endpoint>
+
+                            <Endpoint method="POST" path="/api/v1/projects/{projectId}/layers" description="Create a new layer in a project. Optionally include features to populate the features subcollection immediately.">
                                 <div>
                                     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Request body</p>
                                     <CodeBlock lang="json">
@@ -119,7 +137,10 @@ export default function ApiDocsPage() {
     {
       "type": "Feature",
       "geometry": { "type": "Polygon", "coordinates": [[...]] },
-      "properties": { "name": "Zone A" }
+      "properties": { 
+        "name": "Zone A",
+        "color": "#6366f1"
+      }
     }
   ]
 }`}
@@ -139,7 +160,10 @@ export default function ApiDocsPage() {
              "type": "Polygon",
              "coordinates": [[[-77.0428,-12.0464],[-77.0328,-12.0464],[-77.0328,-12.0364],[-77.0428,-12.0364],[-77.0428,-12.0464]]]
            },
-           "properties": { "name": "Plaza Mayor" }
+           "properties": { 
+             "name": "Plaza Mayor",
+             "color": "#ff5733"
+           }
          }
        ]
      }'`}
@@ -157,7 +181,7 @@ export default function ApiDocsPage() {
                         <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Features</h4>
                         <div className="space-y-6">
 
-                            <Endpoint method="GET" path="/api/v1/projects/{projectId}/features" description="Returns all features in a project as a GeoJSON FeatureCollection.">
+                            <Endpoint method="GET" path="/api/v1/projects/{projectId}/features" description="Returns all features in a project as a GeoJSON FeatureCollection with query filters.">
                                 <div>
                                     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Query parameters</p>
                                     <table className="w-full text-xs border border-slate-200 rounded-lg overflow-hidden">
@@ -187,6 +211,7 @@ export default function ApiDocsPage() {
   "features": [
     {
       "type": "Feature",
+      "id": "fid_1234567890abcdef",
       "geometry": { "type": "Polygon", "coordinates": [[...]] },
       "properties": {
         "name": "Zona 1",
@@ -196,7 +221,7 @@ export default function ApiDocsPage() {
       }
     }
   ],
-  "meta": { "total": 42, "limit": 50, "offset": 0, "hasMore": false }
+  "meta": { "total": 42, "limit": 50, "offset": 0, "hasMore": false, "projectId": "abc123", "projectName": "My Project" }
 }`}
                                 </CodeBlock>
                             </Endpoint>
@@ -211,7 +236,10 @@ export default function ApiDocsPage() {
     {
       "type": "Feature",
       "geometry": { "type": "Point", "coordinates": [-77.03, -12.04] },
-      "properties": { "name": "Lima Centro" }
+      "properties": { 
+        "name": "Lima Centro",
+        "color": "#ff5733"
+      }
     }
   ]
 }`}
@@ -221,32 +249,33 @@ export default function ApiDocsPage() {
 {`curl -X POST "${BASE}/api/v1/projects/abc123/features" \\
      -H "Authorization: Bearer wkt_live_xxxxxxxx" \\
      -H "Content-Type: application/json" \\
-     -d '{"layerId":"layer_1234","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[-77.03,-12.04]},"properties":{"name":"Lima Centro"}}]}'`}
+     -d '{"layerId":"layer_1234","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[-77.03,-12.04]},"properties":{"name":"Lima Centro","color":"#ff5733"}}]}'`}
                                 </CodeBlock>
                                 <CodeBlock lang="response">
-{`{ "added": 1, "total": 43 }`}
+{`{ "added": 1, "total": 43, "featureIds": ["fid_1234567890abcdef"] }`}
                                 </CodeBlock>
                             </Endpoint>
 
-                            <Endpoint method="DELETE" path="/api/v1/projects/{projectId}/features" description="Delete a single feature by index. Only the project owner can delete.">
+                            <Endpoint method="DELETE" path="/api/v1/projects/{projectId}/features" description="Delete a single feature by featureId (recommended) or index (deprecated).">
                                 <div>
                                     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Request body</p>
                                     <CodeBlock lang="json">
 {`{
   "layerId": "layer_1234",
+  "featureId": "fid_1234567890abcdef",
   "featureIndex": 0
 }`}
                                     </CodeBlock>
-                                    <p className="text-xs text-slate-400 mt-2"><code className="bg-slate-100 px-1 rounded">featureIndex</code> is zero-based. Use GET first to identify the index of the feature you want to remove.</p>
+                                    <p className="text-xs text-slate-400 mt-2"><code className="bg-slate-100 px-1 rounded">featureId</code> is the recommended identifier. If using <code className="bg-slate-100 px-1 rounded">featureIndex</code>, it is zero-based and deprecated.</p>
                                 </div>
                                 <CodeBlock lang="curl">
 {`curl -X DELETE "${BASE}/api/v1/projects/abc123/features" \\
      -H "Authorization: Bearer wkt_live_xxxxxxxx" \\
      -H "Content-Type: application/json" \\
-     -d '{"layerId":"layer_1234","featureIndex":0}'`}
+     -d '{"layerId":"layer_1234","featureId":"fid_1234567890abcdef"}'`}
                                 </CodeBlock>
                                 <CodeBlock lang="response">
-{`{ "deleted": true, "remaining": 42 }`}
+{`{ "deleted": true, "featureId": "fid_1234567890abcdef" }`}
                                 </CodeBlock>
                             </Endpoint>
 

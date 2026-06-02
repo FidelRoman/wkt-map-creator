@@ -58,14 +58,37 @@
         },
         "required": ["type", "features"]
       },
-      "Layer": {
+      "FeaturesListResponse": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string", "enum": ["FeatureCollection"] },
+          "features": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Feature" }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "total": { "type": "integer" },
+              "limit": { "type": "integer" },
+              "offset": { "type": "integer" },
+              "hasMore": { "type": "boolean" },
+              "projectId": { "type": "string" },
+              "projectName": { "type": "string" }
+            },
+            "required": ["total", "limit", "offset", "hasMore", "projectId", "projectName"]
+          }
+        },
+        "required": ["type", "features", "meta"]
+      },
+      "LayerMetadata": {
         "type": "object",
         "properties": {
           "id": { "type": "string" },
           "name": { "type": "string" },
-          "visible": { "type": "boolean" },
-          "features": { "$ref": "#/components/schemas/FeatureCollection" }
-        }
+          "visible": { "type": "boolean" }
+        },
+        "required": ["id", "name", "visible"]
       },
       "ErrorResponse": {
         "type": "object",
@@ -88,21 +111,49 @@
       ],
       "get": {
         "summary": "List features",
-        "description": "Returns all features from all layers in the project as a GeoJSON FeatureCollection.",
+        "description": "Returns features from all layers in the project as a GeoJSON FeatureCollection with meta data.",
         "operationId": "listFeatures",
         "tags": ["Features"],
         "parameters": [
           {
-            "name": "layerId",
+            "name": "layer",
             "in": "query",
             "required": false,
             "schema": { "type": "string" },
             "description": "Filter results to a single layer by ID"
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" },
+            "description": "Filter results by name case-insensitive substring match"
+          },
+          {
+            "name": "bbox",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" },
+            "description": "Geographic bounding box filter: minLng,minLat,maxLng,maxLat"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer" },
+            "description": "Max results per page. Default 100, max 1000."
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer" },
+            "description": "Pagination offset. Default 0."
           }
         ],
         "responses": {
           "200": {
-            "description": "A GeoJSON FeatureCollection",
+            "description": "A GeoJSON FeatureCollection with metadata",
             "headers": {
               "X-Rate-Limit-Remaining": {
                 "schema": { "type": "integer" },
@@ -111,19 +162,34 @@
             },
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/FeatureCollection" },
+                "schema": { "$ref": "#/components/schemas/FeaturesListResponse" },
                 "example": {
                   "type": "FeatureCollection",
                   "features": [
                     {
                       "type": "Feature",
+                      "id": "feature_abc123",
                       "geometry": {
                         "type": "Polygon",
                         "coordinates": [[[-77.03,-12.04],[-77.02,-12.04],[-77.02,-12.03],[-77.03,-12.03],[-77.03,-12.04]]]
                       },
-                      "properties": { "name": "Zone A", "color": "#6366f1" }
+                      "properties": {
+                        "name": "Zone A",
+                        "color": "#6366f1",
+                        "_layerId": "layer_1",
+                        "_layerName": "Capa 1",
+                        "_wkt": "POLYGON((-77.03 -12.04, -77.02 -12.04, -77.02 -12.03, -77.03 -12.03, -77.03 -12.04))"
+                      }
                     }
-                  ]
+                  ],
+                  "meta": {
+                    "total": 1,
+                    "limit": 100,
+                    "offset": 0,
+                    "hasMore": false,
+                    "projectId": "abc123",
+                    "projectName": "My Logistics Project"
+                  }
                 }
               }
             }
@@ -135,9 +201,9 @@
         }
       },
       "post": {
-        "summary": "Add a feature",
-        "description": "Adds a GeoJSON Feature to a specific layer in the project.",
-        "operationId": "addFeature",
+        "summary": "Add features",
+        "description": "Adds GeoJSON Features to a specific layer in the project.",
+        "operationId": "addFeatures",
         "tags": ["Features"],
         "requestBody": {
           "required": true,
@@ -145,36 +211,65 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["layerId", "feature"],
+                "required": ["layerId", "features"],
                 "properties": {
-                  "layerId": { "type": "string", "description": "The layer to add the feature to" },
-                  "feature": { "$ref": "#/components/schemas/Feature" }
+                  "layerId": { "type": "string", "description": "The layer to add the features to" },
+                  "features": {
+                    "type": "array",
+                    "items": { "$ref": "#/components/schemas/Feature" },
+                    "description": "An array of GeoJSON Features to add"
+                  }
                 }
               },
               "example": {
                 "layerId": "layer_1",
-                "feature": {
-                  "type": "Feature",
-                  "geometry": { "type": "Point", "coordinates": [-77.03, -12.04] },
-                  "properties": { "name": "My point" }
-                }
+                "features": [
+                  {
+                    "type": "Feature",
+                    "geometry": { "type": "Point", "coordinates": [-77.03, -12.04] },
+                    "properties": { 
+                      "name": "My point",
+                      "color": "#ff5733"
+                    }
+                  }
+                ]
               }
             }
           }
         },
         "responses": {
           "201": {
-            "description": "Feature added successfully",
-            "content": { "application/json": { "schema": { "type": "object", "properties": { "success": { "type": "boolean" } } } } }
+            "description": "Features added successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "added": { "type": "integer" },
+                    "total": { "type": "integer" },
+                    "featureIds": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    }
+                  }
+                },
+                "example": {
+                  "added": 1,
+                  "total": 5,
+                  "featureIds": ["fid_1234567890abcdef"]
+                }
+              }
+            }
           },
-          "400": { "description": "Invalid GeoJSON", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "400": { "description": "Invalid JSON or parameter shape", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
           "401": { "description": "Missing or invalid API key", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "422": { "description": "Limit exceeded", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
           "429": { "description": "Monthly API limit reached", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       },
       "delete": {
         "summary": "Delete a feature",
-        "description": "Removes a feature from a layer by index.",
+        "description": "Removes a feature from a layer by id or index (deprecated).",
         "operationId": "deleteFeature",
         "tags": ["Features"],
         "requestBody": {
@@ -183,17 +278,39 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["layerId", "featureIndex"],
+                "required": ["layerId"],
                 "properties": {
                   "layerId": { "type": "string" },
-                  "featureIndex": { "type": "integer", "description": "Zero-based index of the feature to delete" }
+                  "featureId": { "type": "string", "description": "Firestore document ID of the feature to delete (recommended)" },
+                  "featureIndex": { "type": "integer", "description": "Zero-based index of the feature to delete (deprecated; use featureId)" }
                 }
+              },
+              "example": {
+                "layerId": "layer_1",
+                "featureId": "fid_1234567890abcdef"
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Feature deleted", "content": { "application/json": { "schema": { "type": "object", "properties": { "success": { "type": "boolean" } } } } } },
+          "200": {
+            "description": "Feature deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deleted": { "type": "boolean" },
+                    "featureId": { "type": "string" }
+                  }
+                },
+                "example": {
+                  "deleted": true,
+                  "featureId": "fid_1234567890abcdef"
+                }
+              }
+            }
+          },
           "401": { "description": "Missing or invalid API key", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
           "404": { "description": "Project or feature not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
@@ -215,14 +332,22 @@
         "tags": ["Layers"],
         "responses": {
           "200": {
-            "description": "Array of layers",
+            "description": "Array of layers (metadata only)",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "layers": { "type": "array", "items": { "$ref": "#/components/schemas/Layer" } }
+                    "layers": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/LayerMetadata" }
+                    }
                   }
+                },
+                "example": {
+                  "layers": [
+                    { "id": "layer_123", "name": "Lima polygons", "visible": true }
+                  ]
                 }
               }
             }
@@ -232,7 +357,7 @@
       },
       "post": {
         "summary": "Create a layer",
-        "description": "Creates a new layer in the project, optionally pre-populated with features.",
+        "description": "Creates a new layer in the project, optionally pre-populated with features stored in the features subcollection.",
         "operationId": "createLayer",
         "tags": ["Layers"],
         "requestBody": {
@@ -247,7 +372,7 @@
                   "features": {
                     "type": "array",
                     "items": { "$ref": "#/components/schemas/Feature" },
-                    "description": "Optional initial features"
+                    "description": "Optional initial features to store in the subcollection"
                   }
                 }
               },
@@ -258,7 +383,23 @@
         "responses": {
           "201": {
             "description": "Layer created",
-            "content": { "application/json": { "schema": { "type": "object", "properties": { "layerId": { "type": "string" } } } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "layerId": { "type": "string" },
+                    "name": { "type": "string" },
+                    "featuresAdded": { "type": "integer" }
+                  }
+                },
+                "example": {
+                  "layerId": "layer_1748000000000",
+                  "name": "Lima polygons",
+                  "featuresAdded": 0
+                }
+              }
+            }
           },
           "401": { "description": "Unauthorized" }
         }

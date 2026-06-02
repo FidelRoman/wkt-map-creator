@@ -595,7 +595,7 @@ function Dashboard() {
     if (!actionProject) return;
     setActionLoading(true);
     try {
-      await deleteProject(actionProject.id!);
+      await deleteProject(actionProject.id!, actionProject.ownerId);
       setDeleteModalOpen(false);
       loadProjects();
     } catch (e) {

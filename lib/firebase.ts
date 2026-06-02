@@ -381,6 +381,8 @@ export async function updateProjectName(projectId: string, newName: string) {
 // Delete Project
 export async function deleteProject(projectId: string, ownerId?: string) {
     try {
+        // Purge the features subcollection to avoid orphaned data in Firestore
+        await deleteProjectFeaturesCascade(projectId);
         await deleteDoc(doc(db, PROJECTS_COLLECTION, projectId));
         if (ownerId) await incrementProjectCount(ownerId, -1);
     } catch (error) {
@@ -595,9 +597,14 @@ export async function bulkWriteChangeset(
     projectId: string,
     cs: FeatureChangeset,
     layerOrderMap: Record<string, number>, // layerId → base order (for creates)
+    metadata?: {
+        bbox: [number, number, number, number] | null;
+        featureCount: number;
+        layerFeatureCounts: Record<string, number>;
+    },
     createdBy = 'editor'
 ): Promise<void> {
-    if (!cs.creates.length && !cs.updates.length && !cs.deletes.length) return;
+    if (!cs.creates.length && !cs.updates.length && !cs.deletes.length && !metadata) return;
 
     const OPS_PER_BATCH = 450;
     let batch = writeBatch(db);
@@ -605,6 +612,17 @@ export async function bulkWriteChangeset(
 
     const flush = async () => { await batch.commit(); batch = writeBatch(db); opCount = 0; };
     const tick = async () => { opCount++; if (opCount >= OPS_PER_BATCH) await flush(); };
+
+    // Update project metadata atomically if pre-computed on the client
+    if (metadata) {
+        batch.update(doc(db, PROJECTS_COLLECTION, projectId), {
+            bbox: metadata.bbox,
+            featureCount: metadata.featureCount,
+            layerFeatureCounts: metadata.layerFeatureCounts,
+            updatedAt: serverTimestamp(),
+        });
+        await tick();
+    }
 
     for (const f of cs.creates) {
         const order = (layerOrderMap[f.__layerId] ?? 0) + (Date.now() % 1_000_000);
@@ -634,9 +652,10 @@ export async function bulkWriteChangeset(
     }
     if (opCount > 0) await flush();
 
-    // Bump project metadata (updatedAt, bbox, featureCount)
-    // Computed from the full current feature set — done async, best-effort
-    _bumpProjectMeta(projectId).catch(e => console.error('[bulkWriteChangeset] meta update failed', e));
+    // Only query all features from Firestore to bump metadata if not pre-computed on client
+    if (!metadata) {
+        _bumpProjectMeta(projectId).catch(e => console.error('[bulkWriteChangeset] meta update failed', e));
+    }
 }
 
 async function _bumpProjectMeta(projectId: string): Promise<void> {

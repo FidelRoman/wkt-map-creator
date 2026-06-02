@@ -8,7 +8,7 @@ import AuthWrapper, { useAuth } from '@/components/AuthWrapper';
 import { Project, Layer, getUserProjects, getProjectWithFeatures, subscribeToProjectFeatures, bulkWriteChangeset, saveLayersMeta, forkProject } from '@/lib/firebase';
 import VersionHistoryPanel from '@/components/VersionHistoryPanel';
 import { analytics } from '@/lib/analytics';
-import { parseWKT, generateColor, newFeatureId, ensureFeatureIds, diffFeatures } from '@/lib/map-utils';
+import { parseWKT, generateColor, newFeatureId, ensureFeatureIds, diffFeatures, computeBbox } from '@/lib/map-utils';
 import { useUndoableState } from '@/lib/useUndoableState';
 import { parseCSVLine } from '@/lib/csv-utils';
 import Modal from '@/components/Modal';
@@ -275,6 +275,19 @@ function ProjectApp() {
 
             if (!featuresDirty && !layersDirty) return;
 
+            // Compute metadata client-side to avoid O(N) database reads on the server
+            const calculatedBbox = computeBbox(allNext);
+            const calculatedFeatureCount = allNext.length;
+            const calculatedLayerFeatureCounts: Record<string, number> = {};
+            layers.forEach(l => {
+                calculatedLayerFeatureCounts[l.id] = l.features?.features?.length ?? 0;
+            });
+            const metadata = {
+                bbox: calculatedBbox,
+                featureCount: calculatedFeatureCount,
+                layerFeatureCounts: calculatedLayerFeatureCounts,
+            };
+
             if (process.env.NODE_ENV === 'development') {
                 console.debug('[autosave]', {
                     creates: cs.creates.length, updates: cs.updates.length, deletes: cs.deletes.length,
@@ -295,7 +308,7 @@ function ProjectApp() {
                     layers.forEach(l => {
                         layerOrderMap[l.id] = (l.features?.features?.length ?? 0) * 1024;
                     });
-                    await bulkWriteChangeset(projectId, cs, layerOrderMap);
+                    await bulkWriteChangeset(projectId, cs, layerOrderMap, metadata);
                 }
                 lastPersistedRef.current = allNext.filter((f: any) => f.id);
                 lastLayersMetaRef.current = layersMetaSig;
@@ -331,8 +344,10 @@ function ProjectApp() {
         setActiveLayerId(loadedLayers[0].id);
         setIsSaving(false);
         // Seed lastPersistedRef so the first autosave diff is accurate.
-        // Plain array — avoids the Turbopack HMR Map prototype-chain issue.
-        const allFeatures = loadedLayers.flatMap((l: any) => l.features?.features ?? []);
+        // Map features to include __layerId so that layer moves can be diffed correctly.
+        const allFeatures = loadedLayers.flatMap((l: any) =>
+            (l.features?.features ?? []).map((f: any) => ({ ...f, __layerId: l.id }))
+        );
         lastPersistedRef.current = allFeatures.filter((f: any) => f.id);
         // Seed layer-meta signature so we don't re-save unchanged layers on load.
         lastLayersMetaRef.current = JSON.stringify(loadedLayers.map((l: any, i: number) => ({
