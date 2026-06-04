@@ -18,6 +18,7 @@ import ErrorBoundary from '@/components/ErrorBoundary';
 import CsvImportModal, { type CsvImportConfig } from '@/components/CsvImportModal';
 import { stringify } from 'wellknown';
 import { checkLimit, hasFeature } from '@/lib/plans';
+import PasswordGate from '@/components/PasswordGate';
 
 
 // Dynamically import Map to avoid SSR window issues
@@ -211,6 +212,8 @@ function ProjectApp() {
 
     // Access Control
     const [accessDenied, setAccessDenied] = useState(false);
+    const [passwordUnlocked, setPasswordUnlocked] = useState(false);
+    const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
 
     useEffect(() => {
@@ -413,6 +416,7 @@ function ProjectApp() {
             const layerName = file.name.replace(/\.(geojson|json)$/i, '') || 'GeoJSON Layer';
             setLayersUndoable(prev => [...prev, { id: newLayerId, name: layerName, visible: true, features: { type: 'FeatureCollection', features: normalized } }]);
             setActiveLayerId(newLayerId);
+            analytics.featureAdded('import');
             showToast(`Imported ${normalized.length} features from "${layerName}".`, 'success');
         } catch {
             showToast('Error reading GeoJSON file. Make sure it is valid JSON.', 'error');
@@ -447,6 +451,7 @@ function ProjectApp() {
             const layerName = file.name.replace(/\.shp$/i, '') || 'Shapefile';
             setLayersUndoable(prev => [...prev, { id: newLayerId, name: layerName, visible: true, features: { type: 'FeatureCollection', features: normalized } }]);
             setActiveLayerId(newLayerId);
+            analytics.featureAdded('import');
             showToast(`Imported ${normalized.length} features from "${layerName}".`, 'success');
         } catch (err) {
             console.error(err);
@@ -469,6 +474,7 @@ function ProjectApp() {
     const handleConfirmCsvImport = async (config: CsvImportConfig) => {
         if (!csvImportPending) return;
         const { file, headers } = csvImportPending;
+        analytics.importStarted(config.importType);
         setCsvImportPending(null);
         setIsImporting(true);
         try {
@@ -517,6 +523,7 @@ function ProjectApp() {
                     };
                     setLayersUndoable(prev => [...prev, newLayer]);
                     setActiveLayerId(newLayerId);
+                    analytics.featureAdded('import');
                     showToast(`Imported ${addedCount} features into new layer "${newLayer.name}".`, 'success');
                 } else {
                     showToast('No valid WKT geometries found in the selected column.', 'warning');
@@ -563,6 +570,7 @@ function ProjectApp() {
                     features: { type: 'FeatureCollection', features }
                 }]);
                 setActiveLayerId(newLayerId);
+                analytics.featureAdded('import');
                 showToast(`Imported ${features.length} points from "${layerName}".`, 'success');
             }
         } finally {
@@ -723,6 +731,20 @@ function ProjectApp() {
         );
     }
 
+    // Password gate: show for public password-protected projects when not the owner
+    const isOwnerForPw = user && currentProject && user.uid === currentProject.ownerId;
+    const needsPassword =
+        !isOwnerForPw &&
+        currentProject &&
+        (currentProject as any).isPasswordProtected &&
+        !passwordUnlocked &&
+        typeof sessionStorage !== 'undefined' &&
+        !sessionStorage.getItem(`pw-unlocked-${projectId}`);
+
+    if (!loading && currentProject && needsPassword) {
+        return <PasswordGate projectId={projectId} onUnlocked={() => setPasswordUnlocked(true)} />;
+    }
+
     // Wait for BOTH auth and the project to load before rendering the editor.
     // Otherwise isReadOnly defaults to true (no project yet) and the
     // "View / Local changes only" badge flashes for a moment during load.
@@ -783,8 +805,20 @@ function ProjectApp() {
                 onRedo={!isReadOnly ? redo : undefined}
                 canUndo={canUndo}
                 canRedo={canRedo}
+                isMobileOpen={isMobileSidebarOpen}
+                onCloseMobile={() => setIsMobileSidebarOpen(false)}
             />
             <div className={`flex-1 relative ${isReadOnly && currentProject ? 'pt-8' : ''}`}>
+                {/* Mobile hamburger button */}
+                <button
+                    onClick={() => setIsMobileSidebarOpen(true)}
+                    className="md:hidden absolute bottom-6 left-4 z-30 bg-white dark:bg-slate-800 shadow-lg rounded-full p-3 border border-slate-200 dark:border-slate-700"
+                    aria-label="Open sidebar"
+                >
+                    <svg className="w-5 h-5 text-slate-700 dark:text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                </button>
                 {canFork && !isReadOnly && (
                     <div className="absolute top-3 left-1/2 -translate-x-1/2 z-400">
                         <button

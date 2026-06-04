@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore, collection, addDoc, serverTimestamp, query, where, orderBy, limit, getDocs, doc, updateDoc, getDoc, deleteDoc, setDoc, onSnapshot, writeBatch, type Unsubscribe } from "firebase/firestore";
+import bcrypt from 'bcryptjs';
 import type { PlanId } from './plans';
 
 const firebaseConfig = {
@@ -717,4 +718,13 @@ export async function deleteProjectFeaturesCascade(projectId: string): Promise<v
         if (count >= OPS) { await batch.commit(); batch = writeBatch(db); count = 0; }
     }
     if (count > 0) await batch.commit();
+}
+
+export async function setProjectPassword(projectId: string, plainPassword: string): Promise<void> {
+    const hash = await bcrypt.hash(plainPassword, 10);
+    await updateDoc(doc(db, PROJECTS_COLLECTION, projectId), { passwordHash: hash, isPasswordProtected: true });
+}
+
+export async function removeProjectPassword(projectId: string): Promise<void> {
+    await updateDoc(doc(db, PROJECTS_COLLECTION, projectId), { passwordHash: null, isPasswordProtected: false });
 }

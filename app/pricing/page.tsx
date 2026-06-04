@@ -72,7 +72,7 @@ export default function PricingPage() {
                         </svg>
                         WKT Studio
                     </Link>
-                    <Link href="/editor" className="text-sm text-slate-500 hover:text-slate-800 transition-colors">
+                    <Link href="/wkt-viewer" className="text-sm text-slate-500 hover:text-slate-800 transition-colors">
                         Open editor →
                     </Link>
                 </div>
@@ -120,7 +120,7 @@ export default function PricingPage() {
                             ))}
                         </ul>
                         <Link
-                            href="/editor"
+                            href="/wkt-viewer"
                             className="w-full py-2.5 rounded-xl font-semibold text-sm text-center bg-slate-100 text-slate-800 hover:bg-slate-200 transition-all"
                         >
                             Get started free
@@ -196,7 +196,7 @@ export default function PricingPage() {
             <footer className="border-t border-slate-100 py-8 mt-8">
                 <div className="max-w-5xl mx-auto px-6 flex flex-wrap gap-4 justify-center text-sm text-slate-400">
                     <Link href="/" className="hover:text-slate-600">Home</Link>
-                    <Link href="/editor" className="hover:text-slate-600">Editor</Link>
+                    <Link href="/wkt-viewer" className="hover:text-slate-600">Editor</Link>
                     <Link href="/terms" className="hover:text-slate-600">Terms</Link>
                     <Link href="/privacy" className="hover:text-slate-600">Privacy</Link>
                     <a href="mailto:support@wktstudio.com" className="hover:text-slate-600">Support</a>

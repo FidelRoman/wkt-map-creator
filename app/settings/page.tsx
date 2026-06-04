@@ -8,6 +8,7 @@ import { auth } from '@/lib/firebase';
 import { updateUserProfile, addApiKeyToIndex, removeApiKeyFromIndex } from '@/lib/firebase';
 import AuthWrapper, { useAuth } from '@/components/AuthWrapper';
 import UpgradeModal from '@/components/UpgradeModal';
+import { analytics } from '@/lib/analytics';
 import Modal from '@/components/Modal';
 import { PLAN_LIMITS, type PlanId } from '@/lib/plans';
 import { getUserProjects } from '@/lib/firebase';
@@ -187,6 +188,7 @@ function SettingsContent() {
                 addApiKeyToIndex(newKey, user.uid),  // O(1) index for fast server-side lookup
             ]);
             await refreshProfile();
+            analytics.apiKeyGenerated();
             setNewKeyName('');
             showToast('API key generated successfully.', 'success');
         } catch (error) {

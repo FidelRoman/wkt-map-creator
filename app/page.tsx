@@ -132,10 +132,10 @@ function LandingPage() {
             <Link href="/explore" className="text-sm text-slate-600 hover:text-slate-800 font-medium px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors hidden md:block">
               Explore
             </Link>
-            <Link href="/convert" className="text-sm text-slate-600 hover:text-slate-800 font-medium px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors hidden md:block">
+            <Link href="/wkt-converter" className="text-sm text-slate-600 hover:text-slate-800 font-medium px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors hidden md:block">
               Converter
             </Link>
-            <Link href="/editor" className="text-sm text-slate-600 hover:text-slate-800 font-medium px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors">
+            <Link href="/wkt-viewer" className="text-sm text-slate-600 hover:text-slate-800 font-medium px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors">
               Try free
             </Link>
             <button
@@ -168,7 +168,7 @@ function LandingPage() {
         </p>
         <div className="flex items-center justify-center gap-4 flex-wrap">
           <Link
-            href="/editor"
+            href="/wkt-viewer"
             className="bg-indigo-600 text-white font-semibold px-6 py-3 rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200"
           >
             Open editor — free, no signup
@@ -317,7 +317,7 @@ function LandingPage() {
                 ))}
               </ul>
               <Link
-                href="/editor"
+                href="/wkt-viewer"
                 className="w-full py-2.5 rounded-xl font-semibold text-sm text-center bg-slate-100 text-slate-800 hover:bg-slate-200 transition-all"
               >
                 Get started free
@@ -468,7 +468,7 @@ function LandingPage() {
             <span className="hidden md:inline">© 2025 WKT Studio. All rights reserved.</span>
           </div>
           <div className="flex items-center gap-6 flex-wrap justify-center">
-            <Link href="/convert" className="hover:text-slate-600 transition-colors">WKT / GeoJSON Converter</Link>
+            <Link href="/wkt-converter" className="hover:text-slate-600 transition-colors">WKT / GeoJSON Converter</Link>
             <Link href="/explore" className="hover:text-slate-600 transition-colors">Explore maps</Link>
             <Link href="/templates" className="hover:text-slate-600 transition-colors">Templates</Link>
             <Link href="/api-docs" className="hover:text-slate-600 transition-colors">API Docs</Link>
@@ -596,6 +596,7 @@ function Dashboard() {
     setActionLoading(true);
     try {
       await deleteProject(actionProject.id!, actionProject.ownerId);
+      analytics.projectDeleted();
       setDeleteModalOpen(false);
       loadProjects();
     } catch (e) {

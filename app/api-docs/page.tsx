@@ -1,5 +1,15 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
+
+export const metadata: Metadata = {
+  title: 'REST API Documentation — Spatial Data API',
+  description: 'WKT Studio REST API: read and write GeoJSON features and layers via HTTP. Authenticate with an API key. Free plan includes 10 requests/month; Pro includes 1,000.',
+  openGraph: {
+    title: 'WKT Studio REST API Documentation',
+    description: 'Integrate spatial data into your app with the WKT Studio REST API. GeoJSON, layers, and features endpoints.',
+  },
+};
 
 const BASE = 'https://wktstudio.com';
 
@@ -103,6 +113,55 @@ export default function ApiDocsPage() {
                 {/* Endpoints */}
                 <section className="space-y-8">
                     <h3 className="text-lg font-semibold text-slate-800">Endpoints</h3>
+
+                    {/* Projects */}
+                    <div>
+                        <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Projects</h4>
+                        <div className="space-y-6">
+
+                            <Endpoint method="POST" path="/api/v1/projects" description="Create a new project. Returns the project ID immediately — use it with the layers and features endpoints.">
+                                <div>
+                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Request body</p>
+                                    <CodeBlock lang="json">
+{`{
+  "name": "My project",
+  "isPublic": false
+}`}
+                                    </CodeBlock>
+                                    <table className="w-full text-xs border border-slate-200 rounded-lg overflow-hidden mt-3">
+                                        <thead className="bg-slate-100 text-slate-600">
+                                            <tr>
+                                                <th className="px-3 py-1.5 text-left font-semibold">Field</th>
+                                                <th className="px-3 py-1.5 text-left font-semibold">Type</th>
+                                                <th className="px-3 py-1.5 text-left font-semibold">Description</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white divide-y divide-slate-100 font-mono">
+                                            <tr><td className="px-3 py-1.5">name</td><td className="px-3 py-1.5">string</td><td className="px-3 py-1.5 font-sans">Required. Project display name.</td></tr>
+                                            <tr><td className="px-3 py-1.5">isPublic</td><td className="px-3 py-1.5">boolean</td><td className="px-3 py-1.5 font-sans">Optional. Default <code className="bg-slate-100 px-1 rounded">false</code>. If true, the project is visible on your public profile.</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <CodeBlock lang="curl">
+{`curl -X POST "${BASE}/api/v1/projects" \\
+     -H "Authorization: Bearer wkt_live_xxxxxxxx" \\
+     -H "Content-Type: application/json" \\
+     -d '{"name":"Lima boundaries","isPublic":false}'`}
+                                </CodeBlock>
+                                <CodeBlock lang="response">
+{`{
+  "id": "vDiwpjtwJ4Ci4LspDjFF",
+  "name": "Lima boundaries",
+  "ownerId": "uid_1234",
+  "isPublic": false,
+  "createdAt": "2026-06-03T22:00:00.000Z"
+}`}
+                                </CodeBlock>
+                                <p className="text-xs text-slate-400">The new project comes with one empty default layer. Use <code className="bg-slate-100 px-1 rounded">POST /api/v1/projects/{'{id}'}/layers</code> to add more layers or populate them with features.</p>
+                            </Endpoint>
+
+                        </div>
+                    </div>
 
                     {/* Layers */}
                     <div>

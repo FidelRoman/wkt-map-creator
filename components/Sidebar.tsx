@@ -35,6 +35,7 @@ import { generatePostgisSQL } from "@/lib/export-utils";
 import LayerStyleEditor from "@/components/map/LayerStyleEditor";
 import type { LayerStyle } from "@/lib/firebase";
 import type { ToastType } from "@/components/Toast";
+import { analytics } from "@/lib/analytics";
 
 const PLAN_COLORS: Record<string, string> = { free: '#6b7280', pro: '#6366f1' };
 const PLAN_LABELS: Record<string, string> = { free: 'Free', pro: 'Pro' };
@@ -75,6 +76,8 @@ interface SidebarProps {
     canUndo?: boolean;
     canRedo?: boolean;
     isImporting?: boolean;
+    isMobileOpen?: boolean;
+    onCloseMobile?: () => void;
 }
 
 const FeatureListItem = memo(function FeatureListItem({
@@ -159,6 +162,8 @@ export default function Sidebar({
     canUndo = false,
     canRedo = false,
     isImporting = false,
+    isMobileOpen = false,
+    onCloseMobile,
 }: SidebarProps) {
     const { user, userProfile } = useAuth();
     const { dark, toggle: toggleDark } = useDarkMode();
@@ -173,23 +178,34 @@ export default function Sidebar({
     const importFileRef = useRef<HTMLInputElement>(null);
     const [showImportMenu, setShowImportMenu] = useState(false);
 
-    // ── 80% feature-limit warning ──────────────────────────────────────────────
-    const warnedLayersRef = useRef<Set<string>>(new Set());
+    // ── 80% feature-limit warning (persisted in localStorage across reloads) ────
+    const LS_WARN_KEY = 'wkt-warned-layers';
+    const getWarnedLayers = (): Set<string> => {
+        try { return new Set(JSON.parse(localStorage.getItem(LS_WARN_KEY) ?? '[]')); } catch { return new Set(); }
+    };
+    const setWarnedLayers = (s: Set<string>) => {
+        try { localStorage.setItem(LS_WARN_KEY, JSON.stringify([...s])); } catch {}
+    };
     useEffect(() => {
         if (!activeLayerId || !onShowToast || sandboxMode) return;
         const activeLayer = layers.find(l => l.id === activeLayerId);
         const count = activeLayer?.features?.features?.length ?? 0;
         const max = PLAN_LIMITS[plan].maxFeaturesPerLayer;
-        if (max === null) return; // Pro unlimited — no warning needed
+        if (max === null) return;
         const pct = count / max;
-        if (pct >= 0.8 && pct < 1 && !warnedLayersRef.current.has(activeLayerId)) {
-            warnedLayersRef.current.add(activeLayerId);
+        const warned = getWarnedLayers();
+        if (pct >= 0.8 && pct < 1 && !warned.has(activeLayerId)) {
+            warned.add(activeLayerId);
+            setWarnedLayers(warned);
             onShowToast(
                 `You've used ${count}/${max} features (${Math.round(pct * 100)}%). Upgrade to Pro for unlimited.`,
                 'warning'
             );
         }
-        if (pct < 0.8) warnedLayersRef.current.delete(activeLayerId); // reset if they free up space
+        if (pct < 0.8 && warned.has(activeLayerId)) {
+            warned.delete(activeLayerId);
+            setWarnedLayers(warned);
+        }
     }, [layers, activeLayerId, plan, sandboxMode, onShowToast]);
 
     // Modal States
@@ -288,8 +304,9 @@ export default function Sidebar({
     };
 
     const handleLogout = async () => {
+        analytics.signOut();
         await signOut(auth);
-        window.location.href = "/"; // Go to dashboard
+        window.location.href = "/";
     };
 
     const openNewProjectModal = () => {
@@ -398,6 +415,7 @@ export default function Sidebar({
             setLayers(prev => prev.map(l => l.id === activeLayerId ? { ...l, features: newFeatures } : l));
         }
 
+        analytics.featureAdded('wkt_paste');
         setWktInput("");
         setPasteModalOpen(false);
     };
@@ -460,7 +478,20 @@ export default function Sidebar({
 
     return (
         <>
-            <div className="sidebar">
+            {/* Mobile backdrop */}
+            {isMobileOpen && (
+                <div
+                    className="fixed inset-0 bg-black/40 z-40 md:hidden"
+                    onClick={onCloseMobile}
+                />
+            )}
+            <div className={`sidebar md:relative md:translate-y-0 md:flex ${isMobileOpen ? 'translate-y-0' : 'translate-y-full'} fixed bottom-0 left-0 right-0 z-50 md:z-auto transition-transform duration-300 ease-in-out`}
+                style={{ maxHeight: '80vh' } as React.CSSProperties}
+            >
+                {/* Mobile drag handle */}
+                <div className="md:hidden flex justify-center pt-2 pb-1 shrink-0">
+                    <div className="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
+                </div>
                 {/* Header: Proyectos */}
                 <div className="project-header" style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-color)' }}>
                     {sandboxMode ? (

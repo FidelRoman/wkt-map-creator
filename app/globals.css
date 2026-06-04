@@ -550,6 +550,20 @@ body {
   z-index: 2;
   box-shadow: 4px 0 24px rgba(0, 0, 0, 0.05);
   flex-shrink: 0;
+  overflow-y: auto;
+}
+
+@media (max-width: 767px) {
+  .sidebar {
+    width: 100%;
+    height: auto;
+    border-right: none;
+    border-top: 1px solid var(--border-color);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.12);
+    max-height: 80vh;
+    overflow-y: auto;
+  }
 }
 
 .sidebar-header {

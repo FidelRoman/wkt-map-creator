@@ -1,6 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  async redirects() {
+    return [
+      { source: '/editor', destination: '/wkt-viewer', permanent: true },
+      { source: '/convert', destination: '/wkt-converter', permanent: true },
+    ];
+  },
   images: {
     remotePatterns: [
       // Mapbox static API (project thumbnails)

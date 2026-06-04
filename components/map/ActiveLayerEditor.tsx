@@ -2,6 +2,7 @@ import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { FeatureGroup, useMap } from 'react-leaflet';
 import { EditControl } from 'react-leaflet-draw';
 import L from 'leaflet';
+import { analytics } from '@/lib/analytics';
 
 // Lazy-loaded once and cached — avoids including 150KB turf in the initial bundle
 let turfCache: typeof import('@turf/turf') | null = null;
@@ -324,6 +325,7 @@ export default function ActiveLayerEditor({
             const geojson = featureGroupRef.current.toGeoJSON();
             featureGroupRef.current.removeLayer(layer);
             onUpdateLayer(activeLayerId, ensureFeatureIds(geojson));
+            analytics.featureAdded('draw');
         }
     }, []);
 

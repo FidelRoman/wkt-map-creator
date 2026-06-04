@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import Modal from "./Modal";
-import { Project, updateProjectSharing } from "@/lib/firebase";
-import { UserPlusIcon, LinkIcon, XMarkIcon, CodeBracketIcon, SparklesIcon } from "@heroicons/react/24/outline";
+import { Project, updateProjectSharing, setProjectPassword, removeProjectPassword } from "@/lib/firebase";
+import { analytics } from "@/lib/analytics";
+import { UserPlusIcon, LinkIcon, XMarkIcon, CodeBracketIcon, SparklesIcon, LockClosedIcon, LockOpenIcon } from "@heroicons/react/24/outline";
 import { checkLimit, hasFeature, type PlanId } from "@/lib/plans";
 import type { ToastType } from "./Toast";
 
@@ -27,12 +28,42 @@ export default function ShareModal({ isOpen, onClose, project, onUpdate, plan = 
     const [emailError, setEmailError] = useState("");
     const [loading, setLoading] = useState(false);
     const [embedCopied, setEmbedCopied] = useState(false);
+    const [passwordProtected, setPasswordProtected] = useState(!!(project as any).isPasswordProtected);
+    const [newPassword, setNewPassword] = useState('');
+    const [savingPassword, setSavingPassword] = useState(false);
 
     useEffect(() => {
         setIsPublic(project.isPublic);
         setCollaborators(project.collaborators || []);
         setRoles(project.roles || {});
+        setPasswordProtected(!!(project as any).isPasswordProtected);
     }, [project]);
+
+    const handleTogglePassword = async (enable: boolean) => {
+        if (!enable) {
+            setSavingPassword(true);
+            try {
+                await removeProjectPassword(project.id!);
+                setPasswordProtected(false);
+                setNewPassword('');
+                onShowToast?.('Password removed.', 'success');
+            } catch { onShowToast?.('Error removing password.', 'error'); }
+            finally { setSavingPassword(false); }
+        } else {
+            setPasswordProtected(true);
+        }
+    };
+
+    const handleSavePassword = async () => {
+        if (!newPassword.trim()) return;
+        setSavingPassword(true);
+        try {
+            await setProjectPassword(project.id!, newPassword);
+            setNewPassword('');
+            onShowToast?.('Password set successfully.', 'success');
+        } catch { onShowToast?.('Error setting password.', 'error'); }
+        finally { setSavingPassword(false); }
+    };
 
     const handleSave = async () => {
         setLoading(true);
@@ -83,6 +114,7 @@ export default function ShareModal({ isOpen, onClose, project, onUpdate, plan = 
 
     const handleCopyEmbed = () => {
         navigator.clipboard.writeText(embedCode);
+        analytics.embedCodeCopied();
         setEmbedCopied(true);
         setTimeout(() => setEmbedCopied(false), 2000);
     };
@@ -143,6 +175,38 @@ export default function ShareModal({ isOpen, onClose, project, onUpdate, plan = 
                             <div className="mt-3 flex items-center gap-2">
                                 <input type="text" readOnly value={publicLink} className="flex-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-xs rounded p-2 overflow-hidden text-ellipsis" />
                                 <button onClick={() => { navigator.clipboard.writeText(publicLink); onShowToast?.('Link copied', 'success'); }} className="text-indigo-600 hover:text-indigo-700 text-xs font-medium">Copy</button>
+                            </div>
+                        )}
+                        {isPublic && (
+                            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        {passwordProtected
+                                            ? <LockClosedIcon className="w-4 h-4 text-amber-500" />
+                                            : <LockOpenIcon className="w-4 h-4 text-slate-400" />}
+                                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Password protection</span>
+                                    </div>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" className="sr-only peer" checked={passwordProtected}
+                                            onChange={e => handleTogglePassword(e.target.checked)} disabled={savingPassword} />
+                                        <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+                                    </label>
+                                </div>
+                                {passwordProtected && (
+                                    <div className="mt-2 flex gap-2">
+                                        <input
+                                            type="password"
+                                            placeholder={(project as any).isPasswordProtected ? 'Set new password' : 'Enter password'}
+                                            value={newPassword}
+                                            onChange={e => setNewPassword(e.target.value)}
+                                            className="flex-1 px-3 py-1.5 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-400"
+                                        />
+                                        <button onClick={handleSavePassword} disabled={savingPassword || !newPassword.trim()}
+                                            className="text-xs px-3 py-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-medium rounded-lg transition-colors">
+                                            {savingPassword ? 'Saving…' : 'Save'}
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
