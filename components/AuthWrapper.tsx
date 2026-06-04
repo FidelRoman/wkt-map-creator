@@ -42,6 +42,11 @@ export default function AuthWrapper({ children }: { children: React.ReactNode })
             identify(firebaseUser.uid, { email: firebaseUser.email ?? '', plan: profile.plan });
             if (isNewUser) {
                 analytics.signUp();
+                fetch('/api/email/welcome', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: firebaseUser.email, name: firebaseUser.displayName }),
+                }).catch(() => {});
             } else {
                 analytics.signIn(profile.plan);
             }

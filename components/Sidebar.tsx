@@ -201,6 +201,14 @@ export default function Sidebar({
                 `You've used ${count}/${max} features (${Math.round(pct * 100)}%). Upgrade to Pro for unlimited.`,
                 'warning'
             );
+            if (user?.email) {
+                const projectName = currentProject?.name ?? 'your project';
+                fetch('/api/email/usage-warning', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: user.email, name: user.displayName, uid: user.uid, projectName, count, max }),
+                }).catch(() => {});
+            }
         }
         if (pct < 0.8 && warned.has(activeLayerId)) {
             warned.delete(activeLayerId);
@@ -925,6 +933,7 @@ export default function Sidebar({
                         if (onUpdateProject) onUpdateProject(updated);
                     }}
                     onShowToast={onShowToast}
+                    inviterName={user?.displayName ?? user?.email ?? 'Someone'}
                 />
             )}
 

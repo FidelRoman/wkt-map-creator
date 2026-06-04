@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { paddleVerifyWebhook } from '@/lib/paddle';
 import type { UserProfile } from '@/lib/firebase';
+import { sendUpgradeEmail } from '@/lib/email';
 
 export const runtime = 'nodejs';
 
@@ -52,13 +53,21 @@ export async function POST(request: NextRequest) {
                 if (!uid) break;
                 const status = data.status ?? 'active';
                 const plan = (status === 'active' || status === 'trialing') ? 'pro' : 'free';
+                const periodEnd = data.current_billing_period?.ends_at ?? null;
                 await updateUser(uid, {
                     plan,
                     paddleCustomerId: data.customer_id ?? null,
                     paddleSubscriptionId: subscriptionId,
                     subscriptionStatus: mapStatus(status),
-                    currentPeriodEnd: data.current_billing_period?.ends_at ?? null,
+                    currentPeriodEnd: periodEnd,
                 });
+                if (plan === 'pro' && (status === 'active' || status === 'trialing')) {
+                    const userDoc = await getAdminDb().collection('users').doc(uid).get();
+                    const userData = userDoc.data();
+                    if (userData?.email) {
+                        sendUpgradeEmail(userData.email, userData.displayName ?? '', periodEnd).catch(() => {});
+                    }
+                }
                 break;
             }
 

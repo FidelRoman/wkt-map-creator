@@ -14,11 +14,12 @@ interface ShareModalProps {
     plan?: PlanId;
     onUpgradeRequired?: (reason: any) => void;
     onShowToast?: (message: string, type?: ToastType) => void;
+    inviterName?: string;
 }
 
 type Tab = 'link' | 'collaborators' | 'embed' | 'api';
 
-export default function ShareModal({ isOpen, onClose, project, onUpdate, plan = 'free', onUpgradeRequired, onShowToast }: ShareModalProps) {
+export default function ShareModal({ isOpen, onClose, project, onUpdate, plan = 'free', onUpgradeRequired, onShowToast, inviterName = 'Someone' }: ShareModalProps) {
     const [tab, setTab] = useState<Tab>('link');
     const [isPublic, setIsPublic] = useState(project.isPublic);
     const [collaborators, setCollaborators] = useState<string[]>(project.collaborators || []);
@@ -70,6 +71,27 @@ export default function ShareModal({ isOpen, onClose, project, onUpdate, plan = 
         try {
             await updateProjectSharing(project.id!, isPublic, collaborators, roles);
             onUpdate({ ...project, isPublic, collaborators, roles });
+
+            // Send invite emails to newly added collaborators
+            const existingCollaborators = new Set(project.collaborators ?? []);
+            const newCollaborators = collaborators.filter(c => !existingCollaborators.has(c));
+            if (newCollaborators.length > 0) {
+                const projectUrl = `${window.location.origin}/${project.id}`;
+                for (const email of newCollaborators) {
+                    fetch('/api/email/invite', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            inviteeEmail: email,
+                            inviterName,
+                            projectName: project.name,
+                            projectUrl,
+                            role: roles[email] ?? 'editor',
+                        }),
+                    }).catch(() => {});
+                }
+            }
+
             onClose();
         } catch (error) {
             console.error(error);
