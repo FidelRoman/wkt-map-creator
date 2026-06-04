@@ -486,7 +486,6 @@ export default function Sidebar({
                 />
             )}
             <div className={`sidebar md:relative md:translate-y-0 md:flex ${isMobileOpen ? 'translate-y-0' : 'translate-y-full'} fixed bottom-0 left-0 right-0 z-50 md:z-auto transition-transform duration-300 ease-in-out`}
-                style={{ maxHeight: '80vh' } as React.CSSProperties}
             >
                 {/* Mobile drag handle */}
                 <div className="md:hidden flex justify-center pt-2 pb-1 shrink-0">

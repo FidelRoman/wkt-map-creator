@@ -30,19 +30,6 @@ async function verifyApiKey(apiKey: string): Promise<{ uid: string; plan: string
         }
     }
 
-    // Legacy fallback
-    const proSnapshot = await db.collection('users').where('plan', '==', 'pro').get();
-    for (const userDoc of proSnapshot.docs) {
-        const userData = userDoc.data();
-        const found = (userData.apiKeys ?? []).find((k: any) => k.key === apiKey);
-        if (found) {
-            await db.collection('apiKeyIndex').doc(apiKey).set({ uid: userDoc.id, createdAt: found.createdAt ?? new Date() });
-            const result = { uid: userDoc.id, plan: userData.plan ?? 'pro', displayName: userData.displayName ?? '', email: userData.email ?? '' };
-            apiKeyCache.set(apiKey, { result, expiresAt: Date.now() + API_KEY_CACHE_TTL_MS });
-            return result;
-        }
-    }
-
     apiKeyCache.set(apiKey, { result: null, expiresAt: Date.now() + API_KEY_CACHE_TTL_MS });
     return null;
 }

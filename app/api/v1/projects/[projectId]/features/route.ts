@@ -57,20 +57,6 @@ async function verifyApiKey(apiKey: string): Promise<{ uid: string; plan: string
         }
     }
 
-    // ── Legacy fallback: scan Pro users (old keys without index entry) ────────
-    const proSnapshot = await db.collection('users').where('plan', '==', 'pro').get();
-    for (const userDoc of proSnapshot.docs) {
-        const userData = userDoc.data();
-        const apiKeys: any[] = userData.apiKeys ?? [];
-        const found = apiKeys.find((k: any) => k.key === apiKey);
-        if (found) {
-            await db.collection('apiKeyIndex').doc(apiKey).set({ uid: userDoc.id, createdAt: found.createdAt ?? new Date() });
-            const result = { uid: userDoc.id, plan: userData.plan ?? 'pro' };
-            apiKeyCache.set(apiKey, { result, expiresAt: Date.now() + API_KEY_CACHE_TTL_MS });
-            return result;
-        }
-    }
-
     apiKeyCache.set(apiKey, { result: null, expiresAt: Date.now() + API_KEY_CACHE_TTL_MS });
     return null;
 }
