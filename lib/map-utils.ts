@@ -99,6 +99,40 @@ export function generateColor(): string {
     return color;
 }
 
+// Extracts a complete WKT geometry from a line of text by counting parenthesis depth,
+// avoiding regex greedy/non-greedy issues with nested parens like POLYGON ((...)).
+export function extractWKTFromLine(line: string): string | null {
+    const m = line.match(/\b(POLYGON|MULTIPOLYGON|POINT|MULTIPOINT|LINESTRING|MULTILINESTRING|GEOMETRYCOLLECTION)\s*(?=\()/i);
+    if (!m || m.index === undefined) return null;
+    const start = m.index;
+    const parenStart = start + m[0].length;
+    let depth = 0;
+    for (let i = parenStart; i < line.length; i++) {
+        if (line[i] === '(') depth++;
+        else if (line[i] === ')') { depth--; if (depth === 0) return line.slice(start, i + 1); }
+    }
+    return null;
+}
+
+// Explodes a WKT into individual geometries.
+// GEOMETRYCOLLECTION is split into its parts; empty geometries (e.g. POLYGON ()) are dropped.
+// Any other WKT type is returned as a single-element array.
+export function explodeWKT(wkt: string): string[] {
+    if (!/^GEOMETRYCOLLECTION\s*\(/i.test(wkt.trim())) return [wkt];
+    const inner = wkt.slice(wkt.indexOf('(') + 1, wkt.lastIndexOf(')'));
+    const results: string[] = [];
+    let remaining = inner;
+    while (remaining.trim()) {
+        const sub = extractWKTFromLine(remaining);
+        if (!sub) break;
+        // Skip empty geometries like POLYGON () or POINT ()
+        if (!/^\w+\s*\(\s*\)$/.test(sub.trim())) results.push(sub);
+        const pos = remaining.indexOf(sub);
+        remaining = remaining.slice(pos + sub.length).replace(/^\s*,\s*/, '');
+    }
+    return results;
+}
+
 export function parseWKT(wkt: string) {
     try {
         const geojson = parse(wkt);

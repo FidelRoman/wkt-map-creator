@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import AuthWrapper, { useAuth } from '@/components/AuthWrapper';
 import { Project, Layer, getUserProjects, getProjectWithFeatures, subscribeToProjectFeatures, bulkWriteChangeset, saveLayersMeta, forkProject } from '@/lib/firebase';
@@ -37,6 +37,8 @@ function ProjectApp() {
     const plan = userProfile?.plan ?? 'free';
     const [upgradeModalReason, setUpgradeModalReason] = useState<React.ComponentProps<typeof UpgradeModal>['reason']>(undefined);
     const params = useParams();
+    const searchParams = useSearchParams();
+    const router = useRouter();
     const projectId = params.projectId as string;
 
     const [projects, setProjects] = useState<Project[]>([]);
@@ -138,6 +140,14 @@ function ProjectApp() {
         previewRows: string[][];
         importType: 'wkt' | 'latlng';
     } | null>(null);
+
+    // Show welcome toast when arriving from sandbox save flow
+    useEffect(() => {
+        if (searchParams.get('welcome') === '1') {
+            showToast('Your map is saved! Welcome to WKT Studio.', 'success');
+            router.replace(`/${projectId}`, { scroll: false });
+        }
+    }, []);
 
     // Initial Load Projects for Sidebar context
     useEffect(() => {

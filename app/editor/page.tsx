@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic';
 import Toast from '@/components/Toast';
 import Sidebar from '@/components/Sidebar';
 import AuthWrapper, { useAuth } from '@/components/AuthWrapper';
-import { generateColor, parseWKT } from '@/lib/map-utils';
+import { generateColor, parseWKT, extractWKTFromLine, explodeWKT } from '@/lib/map-utils';
 import { parseCSVLine } from '@/lib/csv-utils';
 import { auth, googleProvider, createProject, saveProjectWithFeatures } from '@/lib/firebase';
 import { signInWithPopup, onAuthStateChanged, type User } from 'firebase/auth';
@@ -127,11 +127,18 @@ function SandboxEditor() {
             const line = lines[i].trim();
             if (!line) continue;
             const cols = parseCSVLine(line);
-            const wktMatch = line.match(/\b(POLYGON|MULTIPOLYGON|POINT|LINESTRING|MULTILINESTRING|MULTIPOINT)\s*\(.*?\)/i);
-            if (!wktMatch) continue;
-            const geojson = parseWKT(wktMatch[0]);
-            if (!geojson) continue;
-            newFeatures.push({ type: 'Feature', geometry: geojson, properties: { name: cols[1] || `Feature ${i}`, color: generateColor() } });
+            for (let c = 0; c < cols.length; c++) {
+                const val = cols[c].trim().replace(/^"|"$/g, '');
+                const wktStr = extractWKTFromLine(val);
+                if (!wktStr) continue;
+                const nameVal = cols[c === 0 ? 1 : 0]?.replace(/^"|"$/g, '') || `Feature ${i}`;
+                let added = false;
+                for (const sub of explodeWKT(wktStr)) {
+                    const geojson = parseWKT(sub);
+                    if (geojson) { newFeatures.push({ type: 'Feature', geometry: geojson, properties: { name: nameVal, color: generateColor() } }); added = true; }
+                }
+                if (added) break;
+            }
         }
         if (newFeatures.length === 0) {
             setToast('No WKT geometries found in the CSV. Make sure rows contain POLYGON, POINT, etc.');

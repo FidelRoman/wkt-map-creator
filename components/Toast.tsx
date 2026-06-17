@@ -9,6 +9,8 @@ interface ToastProps {
     type?: ToastType;
     onClose: () => void;
     duration?: number;
+    action?: { label: string; onClick: () => void };
+    className?: string;
 }
 
 const STYLES: Record<ToastType, { bg: string; Icon: React.ElementType }> = {
@@ -18,7 +20,7 @@ const STYLES: Record<ToastType, { bg: string; Icon: React.ElementType }> = {
     info:    { bg: 'bg-slate-800',   Icon: InformationCircleIcon },
 };
 
-export default function Toast({ message, type = 'info', onClose, duration = 3500 }: ToastProps) {
+export default function Toast({ message, type = 'info', onClose, duration = 3500, action, className }: ToastProps) {
     useEffect(() => {
         const timer = setTimeout(onClose, duration);
         return () => clearTimeout(timer);
@@ -27,9 +29,17 @@ export default function Toast({ message, type = 'info', onClose, duration = 3500
     const { bg, Icon } = STYLES[type];
 
     return (
-        <div className={`fixed bottom-5 right-5 ${bg} text-white pl-3 pr-2 py-2.5 rounded-xl shadow-xl flex items-center gap-2.5 z-[99999] animate-fade-in-up max-w-sm`}>
+        <div className={`fixed bottom-5 right-5 ${bg} text-white pl-3 pr-2 py-2.5 rounded-xl shadow-xl flex items-center gap-2.5 z-[99999] animate-fade-in-up max-w-sm ${className ?? ''}`}>
             <Icon className="w-4 h-4 flex-shrink-0" />
             <span className="text-sm font-medium flex-1">{message}</span>
+            {action && (
+                <button
+                    onClick={() => { action.onClick(); onClose(); }}
+                    className="ml-1 text-xs font-semibold whitespace-nowrap underline underline-offset-2 hover:no-underline flex-shrink-0"
+                >
+                    {action.label}
+                </button>
+            )}
             <button
                 onClick={onClose}
                 className="ml-1 p-0.5 rounded hover:bg-white/20 transition-colors flex-shrink-0"

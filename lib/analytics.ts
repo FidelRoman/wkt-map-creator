@@ -62,4 +62,10 @@ export const analytics = {
 
   onboardingCompleted: () => capture('onboarding_completed'),
   onboardingSkipped: (step: number) => capture('onboarding_skipped', { step }),
+
+  sandboxFirstFeatureAdded: () => capture('sandbox_first_feature_added'),
+  sandboxSaveClicked: () => capture('sandbox_save_clicked'),
+  sandboxPopupCancelled: () => capture('sandbox_popup_cancelled'),
+  sandboxLimitReached: () => capture('sandbox_limit_reached'),
+  sandboxNudgeShown: (trigger: string) => capture('sandbox_nudge_shown', { trigger }),
 };

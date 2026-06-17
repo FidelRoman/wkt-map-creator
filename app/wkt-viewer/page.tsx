@@ -4,12 +4,13 @@ import dynamic from 'next/dynamic';
 import Toast from '@/components/Toast';
 import Sidebar from '@/components/Sidebar';
 import AuthWrapper, { useAuth } from '@/components/AuthWrapper';
-import { generateColor, parseWKT } from '@/lib/map-utils';
+import { generateColor, parseWKT, extractWKTFromLine, explodeWKT } from '@/lib/map-utils';
 import { parseCSVLine } from '@/lib/csv-utils';
 import { auth, googleProvider, createProject, saveProjectWithFeatures } from '@/lib/firebase';
 import { signInWithPopup, onAuthStateChanged, type User } from 'firebase/auth';
 import { stringify } from 'wellknown';
 import { useRouter } from 'next/navigation';
+import { analytics } from '@/lib/analytics';
 
 const SANDBOX_STORAGE_KEY = 'wkt_sandbox_layer';
 const SANDBOX_LIMITS = { maxFeatures: 50 };
@@ -34,6 +35,7 @@ function SandboxEditor() {
     const [layers, setLayers] = useState([makeSandboxLayer()]);
     const [activeLayerId] = useState('sandbox_layer');
     const [toast, setToast] = useState<string | null>(null);
+    const [nudgeToast, setNudgeToast] = useState<{ message: string; action?: { label: string; onClick: () => void } } | null>(null);
     const [saving, setSaving] = useState(false);
     const [drawRequest, setDrawRequest] = useState<{ type: 'polygon' | 'point'; id: number } | null>(null);
     const [flyToRequest, setFlyToRequest] = useState<any | null>(null);
@@ -42,6 +44,10 @@ function SandboxEditor() {
     // Ref so the auth callback can read the latest layers without stale closure
     const layersRef = useRef(layers);
     layersRef.current = layers;
+
+    const isRedirectingRef = useRef(false);
+    const hasShownFirstNudgeRef = useRef(false);
+    const shownNudgeThresholdsRef = useRef<Set<number>>(new Set());
 
     // If user is already logged in, redirect to dashboard
     useEffect(() => {
@@ -63,6 +69,55 @@ function SandboxEditor() {
         }
     }, [layers]);
 
+    // Nudges based on feature count progression
+    useEffect(() => {
+        const count = layers[0]?.features?.features?.length ?? 0;
+
+        // First feature nudge — fires once, prompts to save
+        if (count === 1 && !hasShownFirstNudgeRef.current) {
+            hasShownFirstNudgeRef.current = true;
+            analytics.sandboxFirstFeatureAdded();
+            analytics.sandboxNudgeShown('first_feature');
+            setNudgeToast({
+                message: 'Your work is only saved locally — sign in free to keep it forever.',
+                action: { label: 'Save now →', onClick: () => handleSave() },
+            });
+        }
+
+        // Intermediate nudges at 25 and 40 features
+        const thresholds = [25, 40];
+        for (const t of thresholds) {
+            if (count >= t && !shownNudgeThresholdsRef.current.has(t)) {
+                shownNudgeThresholdsRef.current.add(t);
+                const message = t === 25
+                    ? `You're halfway to the demo limit — save to continue without limits.`
+                    : `Almost at the limit! Save your project free to keep adding.`;
+                analytics.sandboxNudgeShown(`threshold_${t}`);
+                setNudgeToast({ message, action: { label: 'Save free →', onClick: () => handleSave() } });
+                break;
+            }
+        }
+
+        // Limit reached
+        if (count >= SANDBOX_LIMITS.maxFeatures && !shownNudgeThresholdsRef.current.has(50)) {
+            shownNudgeThresholdsRef.current.add(50);
+            analytics.sandboxLimitReached();
+        }
+    }, [layers]);
+
+    // Warn before closing tab if there are unsaved features
+    useEffect(() => {
+        const count = layers[0]?.features?.features?.length ?? 0;
+        const handler = (e: BeforeUnloadEvent) => {
+            if (count > 0 && !isRedirectingRef.current) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        };
+        window.addEventListener('beforeunload', handler);
+        return () => window.removeEventListener('beforeunload', handler);
+    }, [layers]);
+
     const migrateAndRedirect = useCallback(async (user: User) => {
         setSaving(true);
         try {
@@ -81,7 +136,8 @@ function SandboxEditor() {
             }
 
             localStorage.removeItem(SANDBOX_STORAGE_KEY);
-            window.location.href = `/${id}`;
+            isRedirectingRef.current = true;
+            window.location.href = `/${id}?welcome=1`;
         } catch (err) {
             console.error(err);
             setSaving(false);
@@ -91,6 +147,7 @@ function SandboxEditor() {
 
     const handleSave = useCallback(async () => {
         if (saving) return;
+        analytics.sandboxSaveClicked();
 
         if (auth.currentUser) {
             await migrateAndRedirect(auth.currentUser);
@@ -108,7 +165,9 @@ function SandboxEditor() {
             });
             await signInWithPopup(auth, googleProvider);
         } catch (err: any) {
-            if (err?.code !== 'auth/popup-closed-by-user' && err?.code !== 'auth/cancelled-popup-request') {
+            if (err?.code === 'auth/popup-closed-by-user' || err?.code === 'auth/cancelled-popup-request') {
+                analytics.sandboxPopupCancelled();
+            } else {
                 setToast('Sign-in failed. Please try again.');
             }
             setSaving(false);
@@ -127,11 +186,19 @@ function SandboxEditor() {
             const line = lines[i].trim();
             if (!line) continue;
             const cols = parseCSVLine(line);
-            const wktMatch = line.match(/\b(POLYGON|MULTIPOLYGON|POINT|LINESTRING|MULTILINESTRING|MULTIPOINT)\s*\(.*?\)/i);
-            if (!wktMatch) continue;
-            const geojson = parseWKT(wktMatch[0]);
-            if (!geojson) continue;
-            newFeatures.push({ type: 'Feature', geometry: geojson, properties: { name: cols[1] || `Feature ${i}`, color: generateColor() } });
+            for (let c = 0; c < cols.length; c++) {
+                const val = cols[c].trim().replace(/^"|"$/g, '');
+                const wktStr = extractWKTFromLine(val);
+                if (!wktStr) continue;
+                const nameVal = cols[c === 0 ? 1 : 0]?.replace(/^"|"$/g, '') || `Feature ${i}`;
+                // Explode GEOMETRYCOLLECTION into individual geometries, dropping empty ones
+                let added = false;
+                for (const sub of explodeWKT(wktStr)) {
+                    const geojson = parseWKT(sub);
+                    if (geojson) { newFeatures.push({ type: 'Feature', geometry: geojson, properties: { name: nameVal, color: generateColor() } }); added = true; }
+                }
+                if (added) break;
+            }
         }
         if (newFeatures.length === 0) {
             setToast('No WKT geometries found in the CSV. Make sure rows contain POLYGON, POINT, etc.');
@@ -349,6 +416,15 @@ function SandboxEditor() {
             </div>
 
             {toast && <Toast message={toast} onClose={() => setToast(null)} duration={4000} />}
+            {nudgeToast && !toast && (
+                <Toast
+                    message={nudgeToast.message}
+                    type="info"
+                    action={nudgeToast.action}
+                    onClose={() => setNudgeToast(null)}
+                    duration={8000}
+                />
+            )}
         </div>
     );
 }

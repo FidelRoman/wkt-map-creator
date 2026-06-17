@@ -173,6 +173,18 @@ export default function Sidebar({
     const [showUpgradeModal, setShowUpgradeModal] = useState(false);
     const plan = userProfile?.plan ?? 'free';
 
+    // Sandbox save button pulse animation — fires once when first feature is added
+    const sandboxFeatureCount = sandboxMode ? (layers[0]?.features?.features?.length ?? 0) : 0;
+    const hasPulsedSaveRef = useRef(false);
+    const [savePulse, setSavePulse] = useState(false);
+    useEffect(() => {
+        if (sandboxMode && sandboxFeatureCount > 0 && !hasPulsedSaveRef.current) {
+            hasPulsedSaveRef.current = true;
+            setSavePulse(true);
+            setTimeout(() => setSavePulse(false), 3000);
+        }
+    }, [sandboxMode, sandboxFeatureCount]);
+
     // File Input Ref
     const fileInputRef = useRef<HTMLInputElement>(null);
     const importFileRef = useRef<HTMLInputElement>(null);
@@ -794,7 +806,11 @@ export default function Sidebar({
                         <button
                             onClick={onSandboxSave}
                             disabled={isSandboxSaving}
-                            className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors disabled:opacity-60"
+                            className={`w-full flex items-center justify-center gap-2 text-sm font-semibold py-2.5 rounded-xl transition-colors disabled:opacity-60 ${
+                                sandboxFeatureCount === 0
+                                    ? 'border border-slate-300 text-slate-500 bg-white hover:bg-slate-50'
+                                    : `bg-indigo-600 hover:bg-indigo-700 text-white${savePulse ? ' animate-pulse' : ''}`
+                            }`}
                         >
                             {isSandboxSaving ? (
                                 <>
