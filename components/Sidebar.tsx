@@ -503,10 +503,12 @@ export default function Sidebar({
                 <div className="project-header" style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-color)' }}>
                     {sandboxMode ? (
                         <div className="flex items-center gap-2">
-                            <svg className="w-5 h-5 text-indigo-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                            </svg>
-                            <span className="font-bold text-slate-800 dark:text-slate-100 text-base">WKT Studio</span>
+                            <a href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                                <svg className="w-5 h-5 text-indigo-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                                </svg>
+                                <span className="font-bold text-slate-800 dark:text-slate-100 text-base">WKT Studio</span>
+                            </a>
                             <span className="text-[10px] bg-slate-100 text-slate-500 border border-slate-200 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium ml-auto">
                                 Demo
                             </span>
@@ -515,7 +517,7 @@ export default function Sidebar({
                         <>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                                 <a href="/" className="text-sm text-blue-600 hover:underline flex items-center gap-1">
-                                    &larr; Volver al Dashboard
+                                    &larr; Back to Dashboard
                                 </a>
                                 {!isReadOnly && (
                                     <div className="flex items-center gap-1">
@@ -800,12 +802,12 @@ export default function Sidebar({
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                                     </svg>
-                                    Guardando...
+                                    Saving...
                                 </>
                             ) : (
                                 <>
                                     <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="G" width="14" height="14" />
-                                    Guardar con Google
+                                    Save with Google
                                 </>
                             )}
                         </button>

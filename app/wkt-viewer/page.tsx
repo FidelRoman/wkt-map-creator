@@ -22,7 +22,7 @@ const Map = dynamic(() => import('@/components/Map'), {
 function makeSandboxLayer() {
     return {
         id: 'sandbox_layer',
-        name: 'Mi Mapa',
+        name: 'My Map',
         visible: true,
         features: { type: 'FeatureCollection', features: [] as any[] }
     };
@@ -70,7 +70,7 @@ function SandboxEditor() {
             const hasFeatures = (currentLayer?.features?.features?.length ?? 0) > 0;
 
             const { id } = await createProject(
-                'Mi Primer Mapa',
+                'My First Map',
                 user.uid,
                 user.displayName ?? 'Anonymous',
                 user.email ?? ''
