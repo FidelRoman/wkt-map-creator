@@ -81,7 +81,7 @@ function SandboxEditor() {
             }
 
             localStorage.removeItem(SANDBOX_STORAGE_KEY);
-            window.location.href = `/${id}`;
+            window.location.href = `/p/${id}`;
         } catch (err) {
             console.error(err);
             setSaving(false);

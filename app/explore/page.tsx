@@ -53,7 +53,7 @@ function ProjectCard({ project, onFork, isForking }: { project: Project; onFork:
 
                 <div className="flex gap-2 mt-3">
                     <Link
-                        href={`/${project.id}`}
+                        href={`/p/${project.id}`}
                         className="flex-1 text-center text-xs font-medium px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
                     >
                         View map →
@@ -99,7 +99,7 @@ export default function ExplorePage() {
         try {
             const newId = await forkProject(projectId, user.uid, user.displayName ?? 'User', user.email ?? '');
             showToast('Project forked. Opening…', 'success');
-            setTimeout(() => { window.location.href = `/${newId}`; }, 1200);
+            setTimeout(() => { window.location.href = `/p/${newId}`; }, 1200);
         } catch {
             showToast('Error forking project', 'error');
         } finally {

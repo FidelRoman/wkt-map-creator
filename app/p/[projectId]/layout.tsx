@@ -40,7 +40,7 @@ export async function generateMetadata({ params }: { params: Promise<{ projectId
   const title = project.name ?? 'Untitled Map';
   const featureCount: number = project.featureCount ?? 0;
   const description = `Interactive map with ${featureCount} feature${featureCount !== 1 ? 's' : ''}. Created with WKT Studio — the GIS map editor for developers.`;
-  const url = `${APP_URL}/${projectId}`;
+  const url = `${APP_URL}/p/${projectId}`;
 
   return {
     title,
@@ -70,7 +70,7 @@ export default async function ProjectLayout({ params, children }: Props) {
         '@type': 'Dataset',
         name: project.name ?? 'Untitled Map',
         description: `Spatial dataset with ${project.featureCount ?? 0} features, created with WKT Studio.`,
-        url: `${APP_URL}/${projectId}`,
+        url: `${APP_URL}/p/${projectId}`,
         creator: {
           '@type': 'Person',
           name: project.ownerName ?? 'WKT Studio User',

@@ -145,7 +145,7 @@ function ProjectApp() {
     useEffect(() => {
         if (searchParams.get('welcome') === '1') {
             showToast('Your map is saved! Welcome to WKT Studio.', 'success');
-            router.replace(`/${projectId}`, { scroll: false });
+            router.replace(`/p/${projectId}`, { scroll: false });
         }
     }, []);
 
@@ -718,7 +718,7 @@ function ProjectApp() {
             const newId = await forkProject(currentProject.id, user.uid, user.displayName ?? 'Anonymous', user.email ?? '');
             analytics.projectForked();
             showToast('Project forked to your account. Opening…', 'success');
-            setTimeout(() => { window.location.href = `/${newId}`; }, 1200);
+            setTimeout(() => { window.location.href = `/p/${newId}`; }, 1200);
         } catch (e) {
             showToast('Error forking project', 'error');
             setIsForkingProject(false);

@@ -109,7 +109,7 @@ function TemplatesApp() {
             }]);
 
             showToast(`Project "${template.name}" created. Opening…`, 'success');
-            setTimeout(() => { window.location.href = `/${id}`; }, 1000);
+            setTimeout(() => { window.location.href = `/p/${id}`; }, 1000);
         } catch (e) {
             console.error(e);
             showToast('Error creating project from template', 'error');

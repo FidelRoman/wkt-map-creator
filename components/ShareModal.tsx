@@ -76,7 +76,7 @@ export default function ShareModal({ isOpen, onClose, project, onUpdate, plan = 
             const existingCollaborators = new Set(project.collaborators ?? []);
             const newCollaborators = collaborators.filter(c => !existingCollaborators.has(c));
             if (newCollaborators.length > 0) {
-                const projectUrl = `${window.location.origin}/${project.id}`;
+                const projectUrl = `${window.location.origin}/p/${project.id}`;
                 for (const email of newCollaborators) {
                     fetch('/api/email/invite', {
                         method: 'POST',
@@ -131,7 +131,7 @@ export default function ShareModal({ isOpen, onClose, project, onUpdate, plan = 
     };
 
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://yourapp.com';
-    const publicLink = `${origin}/${project.id}`;
+    const publicLink = `${origin}/p/${project.id}`;
     const embedCode = `<iframe\n  src="${origin}/embed/${project.id}"\n  width="800"\n  height="500"\n  style="border:none;border-radius:8px"\n  allowfullscreen\n></iframe>`;
 
     const handleCopyEmbed = () => {

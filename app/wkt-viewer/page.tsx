@@ -137,7 +137,7 @@ function SandboxEditor() {
 
             localStorage.removeItem(SANDBOX_STORAGE_KEY);
             isRedirectingRef.current = true;
-            window.location.href = `/${id}?welcome=1`;
+            window.location.href = `/p/${id}?welcome=1`;
         } catch (err) {
             console.error(err);
             setSaving(false);

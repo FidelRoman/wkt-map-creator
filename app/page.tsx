@@ -567,7 +567,7 @@ function Dashboard() {
         user.email || ""
       );
       analytics.projectCreated(newProjectName);
-      router.push(`/${id}`);
+      router.push(`/p/${id}`);
     } catch (e) {
       console.error(e);
       showToast('Error creating project. Please try again.', 'error');
@@ -734,7 +734,7 @@ function Dashboard() {
             {projects.map(project => (
               <div key={project.id} className="relative group">
                 <Link
-                  href={`/${project.id}`}
+                  href={`/p/${project.id}`}
                   className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-500 hover:shadow-md transition-all cursor-pointer flex flex-col overflow-hidden"
                 >
                   <ProjectThumbnail project={project} />
@@ -825,7 +825,7 @@ function Dashboard() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {sharedProjects.map(project => (
                 <Link
-                  href={`/${project.id}`}
+                  href={`/p/${project.id}`}
                   key={project.id}
                   className="group bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-green-300 dark:hover:border-green-600 hover:shadow-md transition-all cursor-pointer flex flex-col overflow-hidden"
                 >

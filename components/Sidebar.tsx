@@ -351,7 +351,7 @@ export default function Sidebar({
         if (modalAction === 'newProject' && user) {
             try {
                 const { id } = await createProject(inputValue, user.uid, user.displayName || 'Anonymous', user.email || '');
-                window.location.href = `/${id}`;
+                window.location.href = `/p/${id}`;
             } catch (e) {
                 console.error(e);
                 onShowToast?.('Error creating project. Please try again.', 'error');
