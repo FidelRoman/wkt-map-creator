@@ -521,9 +521,15 @@ export default function Sidebar({
                                 </svg>
                                 <span className="font-bold text-slate-800 dark:text-slate-100 text-base">WKT Studio</span>
                             </a>
-                            <span className="text-[10px] bg-slate-100 text-slate-500 border border-slate-200 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium ml-auto">
-                                Demo
-                            </span>
+                            {user ? (
+                                <a href="/" title="Your projects" className="ml-auto text-[11px] font-medium text-slate-500 hover:text-indigo-600 transition-colors">
+                                    Your projects →
+                                </a>
+                            ) : (
+                                <span className="text-[10px] bg-slate-100 text-slate-500 border border-slate-200 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium ml-auto">
+                                    Demo
+                                </span>
+                            )}
                         </div>
                     ) : (
                         <>
@@ -820,14 +826,22 @@ export default function Sidebar({
                                     </svg>
                                     Saving...
                                 </>
+                            ) : user ? (
+                                'Save project'
                             ) : (
                                 <>
                                     <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="G" width="14" height="14" />
-                                    Save with Google
+                                    Sign in to save
                                 </>
                             )}
                         </button>
-                        <p className="text-[10px] text-slate-400 text-center mt-1.5">Free · No credit card required</p>
+                        {user ? (
+                            <a href="/" className="block text-center text-[11px] text-slate-400 hover:text-indigo-600 mt-1.5 transition-colors">
+                                Go to your projects →
+                            </a>
+                        ) : (
+                            <p className="text-[10px] text-slate-400 text-center mt-1.5">Free · No credit card required</p>
+                        )}
                     </div>
                 ) : (
                     <div className="user-profile">

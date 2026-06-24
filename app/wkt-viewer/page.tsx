@@ -49,10 +49,20 @@ function SandboxEditor() {
     const hasShownFirstNudgeRef = useRef(false);
     const shownNudgeThresholdsRef = useRef<Set<number>>(new Set());
 
-    // If user is already logged in, redirect to dashboard
+    // The viewer is always capped to the demo limit, signed in or not — to go beyond, save it as a project
+    const featureLimit = SANDBOX_LIMITS.maxFeatures;
+
+    // One-time hint so a logged-in user knows this is a scratch map, not one of their saved projects
+    const shownLoggedInHintRef = useRef(false);
     useEffect(() => {
-        if (user) router.replace('/');
-    }, [user]);
+        if (user && !shownLoggedInHintRef.current) {
+            shownLoggedInHintRef.current = true;
+            setNudgeToast({
+                message: `You're signed in — this is a quick scratch map. Your saved maps live in your dashboard.`,
+                action: { label: 'Your projects →', onClick: () => router.push('/') },
+            });
+        }
+    }, [user, router]);
 
     // Load from localStorage on mount
     useEffect(() => {
@@ -69,8 +79,9 @@ function SandboxEditor() {
         }
     }, [layers]);
 
-    // Nudges based on feature count progression
+    // Nudges based on feature count progression — only for anonymous users (conversion funnel)
     useEffect(() => {
+        if (user) return;
         const count = layers[0]?.features?.features?.length ?? 0;
 
         // First feature nudge — fires once, prompts to save
@@ -103,7 +114,7 @@ function SandboxEditor() {
             shownNudgeThresholdsRef.current.add(50);
             analytics.sandboxLimitReached();
         }
-    }, [layers]);
+    }, [layers, user]);
 
     // Warn before closing tab if there are unsaved features
     useEffect(() => {
@@ -118,17 +129,25 @@ function SandboxEditor() {
         return () => window.removeEventListener('beforeunload', handler);
     }, [layers]);
 
-    const migrateAndRedirect = useCallback(async (user: User) => {
+    // Derive a sensible default name from the first feature, so logged-in users don't get a name prompt
+    const deriveProjectName = useCallback(() => {
+        const feats = layersRef.current[0]?.features?.features ?? [];
+        const first = feats[0]?.properties?.name;
+        return first && String(first).trim() ? String(first).trim() : 'Untitled map';
+    }, []);
+
+    // fresh = brand-new account created from this save (anonymous funnel); otherwise an existing signed-in user
+    const saveToAccount = useCallback(async (account: User, opts: { fresh: boolean }) => {
         setSaving(true);
         try {
             const currentLayer = layersRef.current[0];
             const hasFeatures = (currentLayer?.features?.features?.length ?? 0) > 0;
 
             const { id } = await createProject(
-                'My First Map',
-                user.uid,
-                user.displayName ?? 'Anonymous',
-                user.email ?? ''
+                opts.fresh ? 'My First Map' : deriveProjectName(),
+                account.uid,
+                account.displayName ?? 'Anonymous',
+                account.email ?? ''
             );
 
             if (hasFeatures) {
@@ -137,20 +156,21 @@ function SandboxEditor() {
 
             localStorage.removeItem(SANDBOX_STORAGE_KEY);
             isRedirectingRef.current = true;
-            window.location.href = `/p/${id}?welcome=1`;
+            window.location.href = opts.fresh ? `/p/${id}?welcome=1` : `/p/${id}`;
         } catch (err) {
             console.error(err);
             setSaving(false);
             setToast('Error saving. Please try again.');
         }
-    }, []);
+    }, [deriveProjectName]);
 
     const handleSave = useCallback(async () => {
         if (saving) return;
         analytics.sandboxSaveClicked();
 
+        // Already signed in → save straight to their account with a derived name (no popup, no onboarding)
         if (auth.currentUser) {
-            await migrateAndRedirect(auth.currentUser);
+            await saveToAccount(auth.currentUser, { fresh: false });
             return;
         }
 
@@ -160,7 +180,7 @@ function SandboxEditor() {
             const unsubscribe = onAuthStateChanged(auth, (u) => {
                 if (u) {
                     unsubscribe();
-                    migrateAndRedirect(u);
+                    saveToAccount(u, { fresh: true });
                 }
             });
             await signInWithPopup(auth, googleProvider);
@@ -172,7 +192,7 @@ function SandboxEditor() {
             }
             setSaving(false);
         }
-    }, [saving, migrateAndRedirect]);
+    }, [saving, saveToAccount]);
 
     const handleImportCsv = async (file: File) => {
         const text = await file.text();
@@ -205,7 +225,7 @@ function SandboxEditor() {
             return;
         }
         const currentCount = layersRef.current[0]?.features?.features?.length ?? 0;
-        const remaining = SANDBOX_LIMITS.maxFeatures - currentCount;
+        const remaining = featureLimit - currentCount;
         const toAdd = newFeatures.slice(0, remaining);
         setLayers(prev => [{
             ...prev[0],
@@ -221,7 +241,7 @@ function SandboxEditor() {
     const handleImportFile = async (file: File) => {
         const ext = file.name.split('.').pop()?.toLowerCase();
         const currentCount = layersRef.current[0]?.features?.features?.length ?? 0;
-        const remaining = SANDBOX_LIMITS.maxFeatures - currentCount;
+        const remaining = featureLimit - currentCount;
 
         if (ext === 'geojson' || ext === 'json') {
             try {
@@ -359,7 +379,7 @@ function SandboxEditor() {
     };
 
     const featureCount = layers[0]?.features?.features?.length ?? 0;
-    const limitReached = featureCount >= SANDBOX_LIMITS.maxFeatures;
+    const limitReached = featureCount >= featureLimit;
 
     return (
         <div className="flex flex-col h-screen w-screen overflow-hidden">
@@ -367,10 +387,12 @@ function SandboxEditor() {
             {limitReached && (
                 <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center justify-between text-sm flex-shrink-0 z-20">
                     <span className="text-amber-800">
-                        Demo limit: {SANDBOX_LIMITS.maxFeatures} features. Save your project to continue without limits.
+                        {user
+                            ? `Quick-map limit: ${SANDBOX_LIMITS.maxFeatures} features. Save it as a project to keep adding.`
+                            : `Demo limit: ${SANDBOX_LIMITS.maxFeatures} features. Save your project to continue.`}
                     </span>
                     <button onClick={handleSave} className="ml-4 text-indigo-600 font-semibold hover:underline flex-shrink-0">
-                        Save for free →
+                        {user ? 'Save project →' : 'Save for free →'}
                     </button>
                 </div>
             )}
