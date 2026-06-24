@@ -30,7 +30,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useDarkMode } from "@/lib/useDarkMode";
 import ShareModal from "@/components/ShareModal";
-import { generateColor, parseWKT, newFeatureId } from "@/lib/map-utils";
+import { generateColor, parseWKT, newFeatureId, explodeGeometry } from "@/lib/map-utils";
 import { generatePostgisSQL } from "@/lib/export-utils";
 import LayerStyleEditor from "@/components/map/LayerStyleEditor";
 import type { LayerStyle } from "@/lib/firebase";
@@ -405,12 +405,6 @@ export default function Sidebar({
         }
         const activeLayer = layers.find(l => l.id === activeLayerId);
         const featureCount = activeLayer?.features?.features?.length ?? 0;
-        const check = checkLimit(plan, 'maxFeaturesPerLayer', featureCount);
-        if (!check.allowed) {
-            setUpgradeModal({ type: 'limit', limitKey: 'maxFeaturesPerLayer', current: featureCount, limit: check.limit!, requiredPlan: check.upgradeRequired! });
-            setPasteModalOpen(false);
-            return;
-        }
 
         const geojson = parseWKT(wktInput);
         if (!geojson) {
@@ -418,21 +412,38 @@ export default function Sidebar({
             return;
         }
 
-        const newFeature = {
+        // Split multipart geometries (MULTIPOLYGON, MULTILINESTRING, MULTIPOINT,
+        // GEOMETRYCOLLECTION) into one feature per part so each stays editable.
+        const geometries = explodeGeometry(geojson);
+        if (geometries.length === 0) {
+            onShowToast?.('Invalid or unsupported WKT', 'error');
+            return;
+        }
+
+        // Limit is checked against the resulting feature count, not just +1.
+        const check = checkLimit(plan, 'maxFeaturesPerLayer', featureCount + geometries.length - 1);
+        if (!check.allowed) {
+            setUpgradeModal({ type: 'limit', limitKey: 'maxFeaturesPerLayer', current: featureCount, limit: check.limit!, requiredPlan: check.upgradeRequired! });
+            setPasteModalOpen(false);
+            return;
+        }
+
+        const baseName = `WKT Feature ${Date.now().toString().slice(-4)}`;
+        const newFeatures = geometries.map((geometry, i) => ({
             type: "Feature",
             id: newFeatureId(),
             properties: {
-                name: `WKT Feature ${Date.now().toString().slice(-4)}`,
+                name: geometries.length > 1 ? `${baseName} (${i + 1})` : baseName,
                 color: generateColor(),
             },
-            geometry: geojson
-        };
+            geometry
+        }));
         if (activeLayer) {
-            const newFeatures = {
+            const updatedFeatures = {
                 ...activeLayer.features,
-                features: [...(activeLayer.features.features || []), newFeature]
+                features: [...(activeLayer.features.features || []), ...newFeatures]
             };
-            setLayers(prev => prev.map(l => l.id === activeLayerId ? { ...l, features: newFeatures } : l));
+            setLayers(prev => prev.map(l => l.id === activeLayerId ? { ...l, features: updatedFeatures } : l));
         }
 
         analytics.featureAdded('wkt_paste');

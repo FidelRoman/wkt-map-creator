@@ -133,6 +133,25 @@ export function explodeWKT(wkt: string): string[] {
     return results;
 }
 
+// Explodes a multipart GeoJSON geometry into its single-part geometries so each
+// can live as its own (editable) feature. Single-part geometries are returned
+// unchanged in a one-element array. GeometryCollection is flattened recursively.
+export function explodeGeometry(geometry: any): any[] {
+    if (!geometry || !geometry.type) return [];
+    switch (geometry.type) {
+        case 'MultiPolygon':
+            return geometry.coordinates.map((coordinates: any) => ({ type: 'Polygon', coordinates }));
+        case 'MultiLineString':
+            return geometry.coordinates.map((coordinates: any) => ({ type: 'LineString', coordinates }));
+        case 'MultiPoint':
+            return geometry.coordinates.map((coordinates: any) => ({ type: 'Point', coordinates }));
+        case 'GeometryCollection':
+            return (geometry.geometries || []).flatMap((g: any) => explodeGeometry(g));
+        default:
+            return [geometry];
+    }
+}
+
 export function parseWKT(wkt: string) {
     try {
         const geojson = parse(wkt);

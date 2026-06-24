@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic';
 import Toast from '@/components/Toast';
 import Sidebar from '@/components/Sidebar';
 import AuthWrapper, { useAuth } from '@/components/AuthWrapper';
-import { generateColor, parseWKT, extractWKTFromLine, explodeWKT } from '@/lib/map-utils';
+import { generateColor, parseWKT, extractWKTFromLine, explodeWKT, explodeGeometry } from '@/lib/map-utils';
 import { parseCSVLine } from '@/lib/csv-utils';
 import { auth, googleProvider, createProject, saveProjectWithFeatures } from '@/lib/firebase';
 import { signInWithPopup, onAuthStateChanged, type User } from 'firebase/auth';
@@ -135,7 +135,12 @@ function SandboxEditor() {
                 let added = false;
                 for (const sub of explodeWKT(wktStr)) {
                     const geojson = parseWKT(sub);
-                    if (geojson) { newFeatures.push({ type: 'Feature', geometry: geojson, properties: { name: nameVal, color: generateColor() } }); added = true; }
+                    if (!geojson) continue;
+                    // Split multipart geometries (MULTIPOLYGON, etc.) into one feature per part
+                    for (const geometry of explodeGeometry(geojson)) {
+                        newFeatures.push({ type: 'Feature', geometry, properties: { name: nameVal, color: generateColor() } });
+                        added = true;
+                    }
                 }
                 if (added) break;
             }

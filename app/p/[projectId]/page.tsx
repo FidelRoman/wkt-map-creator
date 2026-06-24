@@ -8,7 +8,7 @@ import AuthWrapper, { useAuth } from '@/components/AuthWrapper';
 import { Project, Layer, getUserProjects, getProjectWithFeatures, subscribeToProjectFeatures, bulkWriteChangeset, saveLayersMeta, forkProject } from '@/lib/firebase';
 import VersionHistoryPanel from '@/components/VersionHistoryPanel';
 import { analytics } from '@/lib/analytics';
-import { parseWKT, generateColor, newFeatureId, ensureFeatureIds, diffFeatures, computeBbox } from '@/lib/map-utils';
+import { parseWKT, generateColor, newFeatureId, ensureFeatureIds, diffFeatures, computeBbox, explodeGeometry } from '@/lib/map-utils';
 import { useUndoableState } from '@/lib/useUndoableState';
 import { parseCSVLine } from '@/lib/csv-utils';
 import Modal from '@/components/Modal';
@@ -509,16 +509,20 @@ function ProjectApp() {
                     if (wktMatch) {
                         const geojson = parseWKT(wktMatch);
                         if (geojson) {
-                            const name = nameIdx !== -1 && cols[nameIdx]
+                            const baseName = nameIdx !== -1 && cols[nameIdx]
                                 ? cols[nameIdx].trim().replace(/^"|"$/g, '')
                                 : `Feature ${addedCount + 1}`;
-                            newFeatures.push({
-                                type: 'Feature',
-                                id: newFeatureId(),
-                                geometry: geojson,
-                                properties: { name, color: generateColor() }
+                            // Split multipart geometries (MULTIPOLYGON, etc.) into one feature per part
+                            const parts = explodeGeometry(geojson);
+                            parts.forEach((geometry, p) => {
+                                newFeatures.push({
+                                    type: 'Feature',
+                                    id: newFeatureId(),
+                                    geometry,
+                                    properties: { name: parts.length > 1 ? `${baseName} (${p + 1})` : baseName, color: generateColor() }
+                                });
+                                addedCount++;
                             });
-                            addedCount++;
                         }
                     }
                 }
