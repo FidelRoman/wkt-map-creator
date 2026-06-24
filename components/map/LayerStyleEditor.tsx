@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import type { Layer, LayerStyle } from "@/lib/firebase";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 
@@ -70,6 +71,8 @@ export default function LayerStyleEditor({ layer, onUpdate, onClose }: Props) {
     const [strokeWidth, setStrokeWidth] = useState(s.strokeWidth ?? 2);
     const [strokeOpacity, setStrokeOpacity] = useState(s.strokeOpacity ?? 1);
     const [pointRadius, setPointRadius] = useState(s.pointRadius ?? 6);
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => { setMounted(true); }, []);
 
     const apply = (patch: Partial<LayerStyle>) => {
         onUpdate({ fillColor, fillOpacity, strokeColor, strokeWidth, strokeOpacity, pointRadius, ...patch });
@@ -80,7 +83,9 @@ export default function LayerStyleEditor({ layer, onUpdate, onClose }: Props) {
         apply({ [key]: v });
     };
 
-    return (
+    if (!mounted) return null;
+
+    return createPortal(
         <div className="fixed right-4 top-4 z-[600] bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 w-80 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700">
                 <div>
@@ -111,6 +116,7 @@ export default function LayerStyleEditor({ layer, onUpdate, onClose }: Props) {
                     <SliderRow label="Radius" value={pointRadius} min={2} max={20} step={1} onChange={field('pointRadius', setPointRadius)} format={v => `${v}px`} />
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }
